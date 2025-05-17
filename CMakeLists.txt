@@ -1,8 +1,20 @@
-cmake_minimum_required(VERSION 3.10)
+cmake_minimum_required(VERSION 3.12)
 project(base_shell VERSION 0.1)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+
+# Check for filesystem support
+find_package(Filesystem QUIET)
+if(NOT Filesystem_FOUND)
+  # Fallback to compiler-specific filesystem libraries if needed
+  if(CMAKE_CXX_COMPILER_ID MATCHES "GNU")
+    link_libraries(stdc++fs)
+  elseif(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+    link_libraries(c++fs)
+  endif()
+endif()
 
 include("cmake/CPM.cmake")
 
@@ -20,9 +32,13 @@ add_executable(base_shell src/main.cpp)
 # Enable testing
 enable_testing()
 
-# Add test executable
+# Add test executables
 add_executable(shell_test tests/shell_test.cpp)
 target_link_libraries(shell_test gtest_main gmock)
 
-# Add test to CTest
+add_executable(features_test tests/features_test.cpp)
+target_link_libraries(features_test gtest_main gmock)
+
+# Add tests to CTest
 add_test(NAME ShellTest COMMAND shell_test)
+add_test(NAME FeaturesTest COMMAND features_test)
