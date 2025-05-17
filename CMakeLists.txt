@@ -1,10 +1,6 @@
 cmake_minimum_required(VERSION 3.12)
 project(foundation_shell VERSION 1.0)
 
-set(CMAKE_CXX_STANDARD 17)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
-set(CMAKE_CXX_EXTENSIONS OFF)
-
 # Check for filesystem support
 if(APPLE)
   # MacOS has built-in filesystem support without a separate library
@@ -38,10 +34,14 @@ add_executable(foundation_shell
     src/main.cpp
     src/config.cpp
     src/command.cpp
+    src/command_async.cpp
+    src/shell.cpp
     src/history.cpp
     src/job.cpp
     src/alias.cpp
 )
+
+target_compile_features(foundation_shell PUBLIC cxx_std_23)
 
 # Set include directory
 target_include_directories(foundation_shell PRIVATE include)

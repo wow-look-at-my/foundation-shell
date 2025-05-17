@@ -7,6 +7,8 @@
 #include <sys/wait.h>
 #include <fcntl.h>
 #include <memory>
+#include "task.hpp"	  // Include the Task type
+#include "config.hpp" // Include ShellConfig
 
 #undef stdin
 #undef stdout
@@ -151,8 +153,8 @@ public:
 	std::shared_ptr<ISource> stdout;
 	std::shared_ptr<ISource> stderr;
 
-	// Execute the command with optional I/O redirection
-	bool execute() const;
+	// Execute the command with optional I/O redirection (async)
+	Task<bool> execute(int inputFd = STDIN_FILENO, int outputFd = STDOUT_FILENO) const;
 
 private:
 	// Helper method to handle built-in commands
@@ -203,8 +205,8 @@ struct CommandChain
 // Function to parse input into commands with redirections and chains
 CommandChain parseCommandChain(const std::vector<std::string> &tokens);
 
-// Function to execute a command chain
-int executeCommandChain(const CommandChain &commandChain);
+// Async version of executeCommandChain
+Task<int> executeCommandChainAsync(CommandChain commandChain, const ShellConfig &config);
 
 // Legacy function to parse input into commands with redirections and pipes (for backward compatibility)
 std::vector<Command> parseCommand(const std::vector<std::string> &tokens);

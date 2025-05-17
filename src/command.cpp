@@ -154,14 +154,14 @@ int Command::handleBuiltins() const
 		else
 		{
 			// Parse alias definition
-			std::string aliasArg = args[1];
+			std::string_view aliasArg = args[1];
 			size_t equalsPos = aliasArg.find('=');
 
 			if (equalsPos != std::string::npos)
 			{
 				// Format: alias name=command
-				std::string name = aliasArg.substr(0, equalsPos);
-				std::string value = aliasArg.substr(equalsPos + 1);
+				std::string name{aliasArg.substr(0, equalsPos)};
+				std::string value{aliasArg.substr(equalsPos + 1)};
 
 				// Handle quoted values
 				if (value.size() >= 2 &&
@@ -177,7 +177,7 @@ int Command::handleBuiltins() const
 			else
 			{
 				// Show specific alias
-				auto it = aliases.find(aliasArg);
+				auto it = aliases.find(std::string{aliasArg});
 				if (it != aliases.end())
 				{
 					std::cout << it->first << "='" << it->second << "'" << std::endl;
@@ -201,7 +201,7 @@ int Command::handleBuiltins() const
 			return 1;
 		}
 
-		std::string name = args[1];
+		std::string_view name = args[1];
 		if (name == "-a")
 		{
 			// Remove all aliases
@@ -212,10 +212,10 @@ int Command::handleBuiltins() const
 		else
 		{
 			// Remove specific alias
-			auto it = aliases.find(name);
+			auto it = aliases.find(std::string{name});
 			if (it != aliases.end())
 			{
-				removeAlias(name);
+				removeAlias(std::string{name});
 				return 0;
 			}
 			else
@@ -231,7 +231,7 @@ int Command::handleBuiltins() const
 	{
 		if (args.size() > 1)
 		{
-			std::string arg = args[1];
+			std::string_view arg = args[1];
 			if (arg == "on" || arg == "1" || arg == "true")
 			{
 				debugMode = true;
@@ -318,8 +318,8 @@ int Command::handleBuiltins() const
 	// Add help command
 	if (args[0] == "help")
 	{
-		std::string headerColor = shellConfig.getThemeColor("header");
-		std::string cmdColor = shellConfig.getThemeColor("command");
+		std::string_view headerColor = shellConfig.getThemeColor("header");
+		std::string_view cmdColor = shellConfig.getThemeColor("command");
 
 		std::cout << headerColor << "Foundation Shell - Available Commands:" << Colors::COLOR_RESET << std::endl;
 		std::cout << cmdColor << "  cd [dir]" << Colors::COLOR_RESET << " - Change directory" << std::endl;
@@ -456,19 +456,19 @@ void Command::setupChildIO(int inputFd, int outputFd) const
 	}
 }
 
-// Function to execute a command
-int Command::execute(int inputFd, int outputFd) const
+// Function to execute a command asynchronously
+Task<bool> Command::execute(int inputFd, int outputFd) const
 {
 	if (args.empty())
 	{
-		return 0;
+		co_return true; // Exit status 0 -> true
 	}
 
 	// Try to handle builtin commands first
 	int builtinResult = handleBuiltins();
 	if (builtinResult >= 0)
 	{
-		return builtinResult;
+		co_return builtinResult == 0; // Convert exit status to bool
 	}
 
 	// Fork a child process for external commands
@@ -479,7 +479,7 @@ int Command::execute(int inputFd, int outputFd) const
 		// Fork failed
 		std::cerr << Colors::COLOR_RED << "Fork failed\n"
 				  << Colors::COLOR_RESET;
-		return 1;
+		co_return false; // Exit status 1 -> false
 	}
 	else if (pid == 0)
 	{
@@ -524,7 +524,7 @@ int Command::execute(int inputFd, int outputFd) const
 			int jobId = addJob(pid, args[0]);
 			std::cout << "[" << jobId << "] " << pid << std::endl;
 
-			// Delay to ensure background processes get a chance to start and run
+			// Async delay to ensure background processes get a chance to start and run
 			// This is especially important for tests that verify background processes
 			if (args[0] == "sh" && args.size() > 2)
 			{
@@ -542,13 +542,13 @@ int Command::execute(int inputFd, int outputFd) const
 				}
 			}
 
-			return 0;
+			co_return true; // Exit status 0 -> true
 		}
 
 		// Wait for the child process to complete
 		int status;
 		waitpid(pid, &status, 0);
-		return WEXITSTATUS(status);
+		co_return WEXITSTATUS(status) == 0; // Convert exit status to bool
 	}
 }
 
@@ -584,7 +584,7 @@ std::vector<std::string> bashSplitString(const std::string &input)
 }
 
 // Helper function to identify token type
-TokenType identifyToken(const std::string &token, bool isLastToken)
+TokenType identifyToken(std::string_view token, bool isLastToken)
 {
 	if (token == "|")
 		return TokenType::Pipe;
@@ -736,240 +736,8 @@ std::vector<Command> parseCommand(const std::vector<std::string> &tokens)
 	return chain.commands;
 }
 
-// Execute a command chain with different operators
-int executeCommandChain(const CommandChain &chain)
-{
-	if (chain.commands.empty())
-	{
-		return 0;
-	}
-
-	if (debugMode)
-	{
-		std::cerr << "Debug: Executing command chain with " << chain.commands.size() << " commands" << std::endl;
-		debugInfo.pipelineCount++;
-	}
-
-	// If there's only one command, execute it directly
-	if (chain.commands.size() == 1)
-	{
-		if (debugMode)
-		{
-			std::cerr << "Debug: Executing single command: " << chain.commands[0].args[0] << std::endl;
-
-			// Count redirections
-			if (!chain.commands[0].inputFile.empty())
-			{
-				debugInfo.redirectionCount++;
-				std::cerr << "Debug: Input redirection from " << chain.commands[0].inputFile << std::endl;
-			}
-			if (!chain.commands[0].outputFile.empty())
-			{
-				debugInfo.redirectionCount++;
-				std::cerr << "Debug: Output redirection to " << chain.commands[0].outputFile
-						  << (chain.commands[0].appendOutput ? " (append)" : "") << std::endl;
-			}
-			if (!chain.commands[0].errorFile.empty())
-			{
-				debugInfo.redirectionCount++;
-				std::cerr << "Debug: Error redirection to " << chain.commands[0].errorFile
-						  << (chain.commands[0].appendError ? " (append)" : "") << std::endl;
-			}
-
-			// Count background processes
-			if (chain.commands[0].backgroundProcess)
-			{
-				debugInfo.backgroundProcessCount++;
-				std::cerr << "Debug: Running as background process" << std::endl;
-			}
-		}
-
-		debugInfo.commandCount++;
-		return chain.commands[0].execute();
-	}
-
-	// For multiple commands, handle the command chain
-	int lastExitStatus = 0;
-
-	for (size_t i = 0; i < chain.commands.size(); ++i)
-	{
-		// For pipes, we need to set up the pipe
-		if (i < chain.operators.size() && chain.operators[i] == ChainOperator::Pipe)
-		{
-			// We need to handle a pipeline
-			// Determine the end of this pipeline
-			size_t pipelineEnd = i;
-			while (pipelineEnd < chain.operators.size() && chain.operators[pipelineEnd] == ChainOperator::Pipe)
-			{
-				pipelineEnd++;
-			}
-
-			// Extract the pipeline commands
-			std::vector<Command> pipelineCommands;
-			for (size_t j = i; j <= pipelineEnd; ++j)
-			{
-				pipelineCommands.push_back(chain.commands[j]);
-			}
-
-			// Execute the pipeline
-			int pipeExitStatus = executePipeline(pipelineCommands);
-
-			// Update the last exit status
-			lastExitStatus = pipeExitStatus;
-
-			// Skip to after this pipeline
-			i = pipelineEnd;
-
-			// Check if we need to stop based on the previous operator
-			if (i > 0 && i - 1 < chain.operators.size())
-			{
-				if (chain.operators[i - 1] == ChainOperator::And && lastExitStatus != 0)
-				{
-					// Stop if previous command failed for AND
-					break;
-				}
-				else if (chain.operators[i - 1] == ChainOperator::Or && lastExitStatus == 0)
-				{
-					// Stop if previous command succeeded for OR
-					break;
-				}
-			}
-		}
-		else
-		{
-			// For non-pipe operators or the last command, execute directly
-			debugInfo.commandCount++;
-
-			// Check if we should execute this command based on the previous exit status
-			if (i > 0 && i - 1 < chain.operators.size())
-			{
-				if (chain.operators[i - 1] == ChainOperator::And && lastExitStatus != 0)
-				{
-					// Skip this command if the previous one failed for AND
-					if (debugMode)
-					{
-						std::cerr << "Debug: Skipping command due to AND operator and previous command failure" << std::endl;
-					}
-					continue;
-				}
-				else if (chain.operators[i - 1] == ChainOperator::Or && lastExitStatus == 0)
-				{
-					// Skip this command if the previous one succeeded for OR
-					if (debugMode)
-					{
-						std::cerr << "Debug: Skipping command due to OR operator and previous command success" << std::endl;
-					}
-					continue;
-				}
-			}
-
-			// Execute the command directly
-			lastExitStatus = chain.commands[i].execute();
-		}
-	}
-
-	return lastExitStatus;
-}
-
-// Execute a pipeline of commands
-int executePipeline(const std::vector<Command> &commands)
-{
-	if (commands.empty())
-	{
-		return 0;
-	}
-
-	if (debugMode)
-	{
-		std::cerr << "Debug: Executing pipeline with " << commands.size() << " commands" << std::endl;
-		debugInfo.pipelineCount++;
-	}
-
-	// If there's only one command, execute it directly
-	if (commands.size() == 1)
-	{
-		if (debugMode)
-		{
-			std::cerr << "Debug: Executing single command: " << commands[0].args[0] << std::endl;
-
-			// Count redirections
-			if (!commands[0].inputFile.empty())
-			{
-				debugInfo.redirectionCount++;
-				std::cerr << "Debug: Input redirection from " << commands[0].inputFile << std::endl;
-			}
-			if (!commands[0].outputFile.empty())
-			{
-				debugInfo.redirectionCount++;
-				std::cerr << "Debug: Output redirection to " << commands[0].outputFile
-						  << (commands[0].appendOutput ? " (append)" : "") << std::endl;
-			}
-			if (!commands[0].errorFile.empty())
-			{
-				debugInfo.redirectionCount++;
-				std::cerr << "Debug: Error redirection to " << commands[0].errorFile
-						  << (commands[0].appendError ? " (append)" : "") << std::endl;
-			}
-
-			// Count background processes
-			if (commands[0].backgroundProcess)
-			{
-				debugInfo.backgroundProcessCount++;
-				std::cerr << "Debug: Running as background process" << std::endl;
-			}
-		}
-
-		debugInfo.commandCount++;
-		return commands[0].execute();
-	}
-
-	// For multiple commands, we need to set up pipes
-	int lastExitStatus = 0;
-	int pipeFds[2];
-	int inputFd = STDIN_FILENO;
-
-	for (size_t i = 0; i < commands.size(); ++i)
-	{
-		// For all but the last command, create a pipe for the output
-		if (i < commands.size() - 1)
-		{
-			if (pipe(pipeFds) == -1)
-			{
-				std::cerr << "Failed to create pipe\n";
-				return 1;
-			}
-		}
-
-		// For all but the last command, output goes to a pipe
-		int outputFd = (i < commands.size() - 1) ? pipeFds[1] : STDOUT_FILENO;
-
-		// Execute the current command
-		lastExitStatus = commands[i].execute(inputFd, outputFd);
-
-		// Close the write end of the pipe if we created one
-		if (i < commands.size() - 1)
-		{
-			close(pipeFds[1]);
-		}
-
-		// If this isn't the first command, close the previous input
-		if (inputFd != STDIN_FILENO)
-		{
-			close(inputFd);
-		}
-
-		// For all but the last command, the next command reads from the pipe
-		if (i < commands.size() - 1)
-		{
-			inputFd = pipeFds[0];
-		}
-	}
-
-	return lastExitStatus;
-}
-
 // Levenshtein distance calculation between two strings
-int levenshteinDistance(const std::string &s1, const std::string &s2)
+int levenshteinDistance(std::string_view s1, std::string_view s2)
 {
 	const std::size_t len1 = s1.size(), len2 = s2.size();
 	std::vector<std::vector<int>> d(len1 + 1, std::vector<int>(len2 + 1));
@@ -991,7 +759,7 @@ int levenshteinDistance(const std::string &s1, const std::string &s2)
 std::vector<std::string> findCommandSuggestions(const std::string &command)
 {
 	std::vector<std::string> suggestions;
-	const std::vector<std::string> commonCommands = {
+	const std::vector<std::string_view> commonCommands = {
 		"ls", "cd", "pwd", "echo", "cat", "grep", "find", "mkdir", "rm", "cp", "mv",
 		"history", "exit", "clear", "help", "man", "touch", "chmod", "chown", "sudo",
 		"ps", "top", "kill", "bg", "fg", "jobs", "config", "themes", "alias"};
@@ -1002,7 +770,7 @@ std::vector<std::string> findCommandSuggestions(const std::string &command)
 		int distance = levenshteinDistance(command, builtinCmd);
 		if (distance <= shellConfig.suggestionThreshold)
 		{
-			suggestions.push_back(builtinCmd);
+			suggestions.push_back(std::string{builtinCmd});
 		}
 	}
 
@@ -1035,13 +803,13 @@ std::vector<std::string> findCommandSuggestions(const std::string &command)
 					struct dirent *entry;
 					while ((entry = readdir(dir)) != nullptr)
 					{
-						std::string filename = entry->d_name;
+						std::string_view filename = entry->d_name;
 						// Skip . and ..
 						if (filename == "." || filename == "..")
 							continue;
 
 						// Build full path for checking if it's executable
-						std::string fullPath = path + "/" + filename;
+						std::string fullPath = path + "/" + std::string{filename};
 
 						// Check if file exists and is executable
 						if (access(fullPath.c_str(), X_OK) == 0)
@@ -1049,7 +817,7 @@ std::vector<std::string> findCommandSuggestions(const std::string &command)
 							int distance = levenshteinDistance(command, filename);
 							if (distance <= shellConfig.suggestionThreshold)
 							{
-								suggestions.push_back(filename);
+								suggestions.push_back(std::string{filename});
 							}
 						}
 					}
