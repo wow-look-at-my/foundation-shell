@@ -13,40 +13,40 @@ This document outlines planned features for the Base Shell project while maintai
 ## Planned Features
 
 ### Input/Output Operations
-- [ ] Input redirection `<`
-- [ ] Output redirection `>` and `>>`
-- [ ] Pipe support `|`
-- [ ] Error redirection `2>` and `2>>`
+- [x] Input redirection `<`
+- [x] Output redirection `>` and `>>`
+- [x] Pipe support `|`
+- [x] Error redirection `2>` and `2>>`
 
 ### UI Improvements
-- [ ] Colorful output (syntax highlighting, colorized prompt)
-- [ ] Improved prompt with current directory and exit code
-- [ ] Command history with file storage (to maintain statelessness)
+- [x] Colorful output (syntax highlighting, colorized prompt)
+- [x] Improved prompt with current directory and exit code
+- [x] Command history with file storage (to maintain statelessness)
 - [ ] Tab completion for commands and files
 - [ ] Line editing capabilities (arrow keys, delete, etc.)
-- [ ] Clear screen command `clear`
+- [x] Clear screen command `clear`
 
 ### Command Enhancements
-- [ ] Additional built-in commands (`pwd`, `help`, etc.)
+- [x] Additional built-in commands (`pwd`, `help`, etc.)
 - [ ] Wildcards and filename expansion
-- [ ] Aliases loaded from config file (maintaining statelessness)
-- [ ] Command suggestions for mistyped commands
+- [x] Aliases loaded from config file (maintaining statelessness)
+- [x] Command suggestions for mistyped commands
 
 ### Process Management
-- [ ] Background processes with `&`
-- [ ] Jobs control (fg, bg, jobs commands)
-- [ ] Signal handling (Ctrl+C, Ctrl+Z, etc.)
-- [ ] Process groups management
+- [x] Background processes with `&`
+- [x] Jobs control (fg, bg, jobs commands)
+- [x] Signal handling (Ctrl+C, Ctrl+Z, etc.)
+- [x] Process groups management
 
 ### Configuration
-- [ ] Config file for customization
-- [ ] Themes support
-- [ ] Custom prompt definition
+- [x] Config file for customization
+- [x] Themes support
+- [x] Custom prompt definition
 
 ### Error Handling
-- [ ] Improved error messages
-- [ ] Command not found suggestions
-- [ ] Debug mode with verbose output
+- [x] Improved error messages
+- [x] Command not found suggestions
+- [x] Debug mode with verbose output
 
 ## Implementation Notes
 

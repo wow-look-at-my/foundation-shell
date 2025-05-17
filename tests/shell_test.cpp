@@ -46,7 +46,7 @@ std::string runShellCommand(const std::string& command) {
         close(stderr_pipe[1]);
 
         // Execute the shell
-        execl("./base_shell", "base_shell", nullptr);
+        execl("./foundation_shell", "foundation_shell", nullptr);
 
         // If execl returns, there was an error
         perror("Error executing shell");

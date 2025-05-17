@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.12)
-project(base_shell VERSION 0.1)
+project(foundation_shell VERSION 1.0)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -34,7 +34,17 @@ CPMAddPackage(
 )
 
 # Main executable
-add_executable(base_shell src/main.cpp)
+add_executable(foundation_shell
+    src/main.cpp
+    src/config.cpp
+    src/command.cpp
+    src/history.cpp
+    src/job.cpp
+    src/alias.cpp
+)
+
+# Set include directory
+target_include_directories(foundation_shell PRIVATE include)
 
 # Enable testing
 enable_testing()
@@ -42,9 +52,11 @@ enable_testing()
 # Add test executables
 add_executable(shell_test tests/shell_test.cpp)
 target_link_libraries(shell_test gtest_main gmock)
+target_include_directories(shell_test PRIVATE include)
 
 add_executable(features_test tests/features_test.cpp)
 target_link_libraries(features_test gtest_main gmock)
+target_include_directories(features_test PRIVATE include)
 
 # Add tests to CTest
 add_test(NAME ShellTest COMMAND shell_test)
