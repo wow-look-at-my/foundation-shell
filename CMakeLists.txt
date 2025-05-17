@@ -6,13 +6,20 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
 # Check for filesystem support
-find_package(Filesystem QUIET)
-if(NOT Filesystem_FOUND)
-  # Fallback to compiler-specific filesystem libraries if needed
-  if(CMAKE_CXX_COMPILER_ID MATCHES "GNU")
-    link_libraries(stdc++fs)
-  elseif(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-    link_libraries(c++fs)
+if(APPLE)
+  # MacOS has built-in filesystem support without a separate library
+  # Only define a preprocessor macro to identify we're on macOS
+  add_compile_definitions(FILESYSTEM_APPLE)
+else()
+  # For Linux and other systems, try to find filesystem library
+  find_package(Filesystem QUIET)
+  if(NOT Filesystem_FOUND)
+    # Fallback to compiler-specific filesystem libraries if needed
+    if(CMAKE_CXX_COMPILER_ID MATCHES "GNU")
+      link_libraries(stdc++fs)
+    elseif(CMAKE_CXX_COMPILER_ID MATCHES "Clang" AND NOT APPLE)
+      link_libraries(c++fs)
+    endif()
   endif()
 endif()
 
