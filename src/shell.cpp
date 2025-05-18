@@ -117,10 +117,10 @@ Task<int> Shell::runAsync()
 		std::vector<std::string> tokens = bashSplitString(expandedInput);
 
 		// Parse the command with potential redirections, pipes, and command chains
-		CommandChain commandChain = parseCommandChain(tokens);
+		CommandChain commandChain(tokens);
 
 		// Execute the command chain asynchronously
-		lastExitStatus = co_await executeCommandChainAsync(std::move(commandChain), shellConfig);
+		lastExitStatus = co_await commandChain.executeAsync(shellConfig);
 	}
 
 	co_return lastExitStatus;

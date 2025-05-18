@@ -1,6 +1,6 @@
 #pragma once
 
-#include "ISink.hpp"
+#include "io/ISink.hpp"
 #include <cstdint>
 
 // Forward declaration
@@ -56,7 +56,7 @@ public:
      * Get the native file descriptor handle
      * @return The file descriptor
      */
-    NativeHandle getNativeHandle() const { return fd; }
+    NativeHandle getNativeHandle() const override { return static_cast<NativeHandle>(fd); }
 
 private:
     NativeHandle fd;  // The file descriptor

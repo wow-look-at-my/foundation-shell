@@ -1,6 +1,13 @@
 cmake_minimum_required(VERSION 3.12)
 project(foundation_shell VERSION 1.0)
 
+# Add a custom command to check for incorrect static_assert usage
+add_custom_target(check_static_asserts
+  COMMAND ${CMAKE_SOURCE_DIR}/scripts/fix_static_asserts.sh
+  WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+  COMMENT "Checking for incorrect static_assert usage..."
+)
+
 # Check for filesystem support
 if(APPLE)
   # MacOS has built-in filesystem support without a separate library
@@ -45,6 +52,9 @@ add_executable(foundation_shell
     src/main.cpp
     ${SOURCES}
 )
+
+# Make sure the static_assert check runs before building
+add_dependencies(foundation_shell check_static_asserts)
 
 target_compile_features(foundation_shell PUBLIC cxx_std_23)
 

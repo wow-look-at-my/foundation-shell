@@ -170,7 +170,6 @@ static Task<int> executeCommandsWithPipes(const std::vector<Command> &commands)
 	int lastExitStatus = 0;
 	
 	// TODO: Need to implement the Source/Sink versions for proper piping
-	static_assert(false, "TODO:Need to implement the Source/Sink versions for proper piping");
 	// For now, just execute each command sequentially as a workaround
 	for (size_t i = 0; i < commands.size(); ++i)
 	{

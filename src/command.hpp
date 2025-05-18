@@ -2,19 +2,12 @@
 
 #include <string>
 #include <vector>
-#include <unistd.h>
-#include <sys/types.h>
-#include <sys/wait.h>
-#include <fcntl.h>
 #include <memory>
-#include "task.hpp"       // Include the Task type
-#include "config.hpp"     // Include ShellConfig
-#include "io/ISink.hpp"   // Include ISink interface
-#include "io/ISource.hpp" // Include ISource interface
-
-#undef stdin
-#undef stdout
-#undef stderr
+#include "task.hpp"          // Include the Task type
+#include "config.hpp"        // Include ShellConfig
+#include "io/ISink.hpp"      // Include ISink interface
+#include "io/ISource.hpp"    // Include ISource interface
+#include "process/IProcess.hpp" // Include IProcess interface
 
 // Token types for lexical analysis
 enum class TokenType
@@ -62,15 +55,6 @@ public:
 private:
 	// Helper method to handle built-in commands
 	int handleBuiltins() const;
-
-	// Common I/O setup for child process
-	void setupChildIO(int inputFd, int outputFd) const;
-
-	// Convert vector of strings to array of C-strings
-	char **vectorToCharArray(const std::vector<std::string> &args) const;
-
-	// Free memory allocated for char array
-	void freeCharArray(char **array, int size) const;
 };
 
 // Function to split a string into tokens respecting quotes and escapes

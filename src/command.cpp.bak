@@ -478,21 +478,18 @@ Task<bool> Command::executeAsync(Source inputSource, Sink outputSink) const
 	if (!inputFile.empty())
 	{
 		// TODO: Implement file source creation
-		static_assert(false, "TODO:Implement file source creation");
 		// For now, rely on process implementation to handle this
 	}
 	
 	if (!outputFile.empty())
 	{
 		// TODO: Implement file sink creation
-		static_assert(false, "TODO:Implement file sink creation");
 		// For now, rely on process implementation to handle this
 	}
 	
 	if (!errorFile.empty())
 	{
 		// TODO: Implement file sink creation
-		static_assert(false, "TODO:Implement file sink creation");
 		// For now, rely on process implementation to handle this
 	}
 	

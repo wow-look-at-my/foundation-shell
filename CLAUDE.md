@@ -108,3 +108,4 @@ The shell supports:
 - Do not write code that encourages or easily allows the creation of invalid states. For example, an "index" value cannot logically be negative for an array type, so you would use an unsigned integer. For a class constructor, it should throw for any invalid states.
 - Format your code properly. If you do not format it to match the codebase style, expect it to get randomly autoformatted out from under you at some point in the future. Then you'll have reread the file and reorient yourself.
 - Always use include paths that are relative to the project root. Avoid "../" in include paths at all costs. For files that are in the same directory, just #include the filename with no relative path.
+- If you're going to add todos, use `static_assert(false, "TODO: <the todo>");` or `throw new std::runtime_error("TODO: <the todo>");`

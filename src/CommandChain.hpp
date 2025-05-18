@@ -29,26 +29,11 @@ public:
     Task<int> executeAsync(const ShellConfig& config) const;
     
     // Start a new chain with a single command
-    explicit CommandChain(Command firstCommand) {
-        if (firstCommand.args.empty()) {
-            throw std::invalid_argument("Cannot add empty command to chain");
-        }
-        commands_.push_back(std::move(firstCommand));
-    }
+    explicit CommandChain(Command firstCommand);
     
     // Add a command with its operator to the chain
     // This is the only way to add more commands after the first one
-    void appendCommand(Command nextCommand, TokenType op) {
-        if (commands_.empty()) {
-            throw std::logic_error("Cannot append command to empty chain - use the constructor with a command first");
-        }
-        if (nextCommand.args.empty()) {
-            throw std::invalid_argument("Cannot add empty command to chain");
-        }
-        
-        operators_.push_back(op);
-        commands_.push_back(std::move(nextCommand));
-    }
+    void appendCommand(Command nextCommand, TokenType op);
     
     // Accessors
     const std::vector<Command>& commands() const { return commands_; }
@@ -74,6 +59,9 @@ public:
     
 
 private:
+    // Execute a sequence of piped commands asynchronously
+    Task<int> executeCommandsWithPipesAsync(const std::vector<Command>& commands) const;
+    
     std::vector<Command> commands_;
     std::vector<TokenType> operators_; // operators_[i] is the operator between commands_[i] and commands_[i+1]
 };

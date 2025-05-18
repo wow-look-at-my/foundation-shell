@@ -2,7 +2,8 @@
   "permissions": {
     "allow": [
       "Bash(ls:*)",
-      "Bash(/Users/mhaynie/repos/vscode-base-shell/build.sh:*)"
+      "Bash(/Users/mhaynie/repos/vscode-base-shell/build.sh:*)",
+      "Bash(grep:*)"
     ],
     "deny": []
   }
