@@ -45,7 +45,7 @@ foreach ($File in $CppFiles)
 			# Check for "../" in include paths
 			if ($IncludePath -match '\.\.\/')
 			{
-				Write-Host "$($File.FullName):$LineNumber: $($Red)Error: Include with '../' found: $IncludePath$($Reset)"
+				Write-Host "$($File.FullName):${LineNumber}: $($Red)Error: Include with '../' found: $IncludePath$($Reset)"
 				$ErrorCount++
 			}
 
@@ -57,7 +57,7 @@ foreach ($File in $CppFiles)
 
 				if (Test-Path -Path $LocalFilePath)
 				{
-					Write-Host "$($File.FullName):$LineNumber: $($Red)Error: Include uses path for file in same directory: $IncludePath$($Reset)"
+					Write-Host "$($File.FullName):${LineNumber}: $($Red)Error: Include uses path for file in same directory: $IncludePath$($Reset)"
 					$ErrorCount++
 				}
 			}

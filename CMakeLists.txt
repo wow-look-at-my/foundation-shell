@@ -1,4 +1,11 @@
 cmake_minimum_required(VERSION 3.12)
+
+# Set compiler to Homebrew Clang for macOS
+if(APPLE)
+  set(CMAKE_C_COMPILER "/opt/homebrew/bin/clang")
+  set(CMAKE_CXX_COMPILER "/opt/homebrew/bin/clang++")
+endif()
+
 project(foundation_shell VERSION 1.0)
 
 # Add a custom command to check for incorrect static_assert usage
@@ -42,6 +49,17 @@ endif()
 
 include("cmake/CPM.cmake")
 
+# Set up mh-cmake-common
+# Make the package findable
+set(CMAKE_PREFIX_PATH "${CMAKE_SOURCE_DIR}/extern/vcpkg-registry/ports")
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/extern/vcpkg-registry/ports/mh-cmake-common")
+
+# Add MH stuff submodule
+add_subdirectory(extern/mh_stuff)
+
+# Add platform implementation library
+add_subdirectory(platform_impl)
+
 # Add GoogleTest using CPM
 CPMAddPackage(
   NAME googletest
@@ -61,19 +79,31 @@ file(GLOB_RECURSE SOURCES CONFIGURE_DEPENDS
 # Remove main.cpp from the sources as it will be added directly to the executable
 list(FILTER SOURCES EXCLUDE REGEX ".*main\\.cpp$")
 
+# Create library with all sources
+add_library(foundation_shell_lib ${SOURCES})
+target_compile_features(foundation_shell_lib PUBLIC cxx_std_23)
+
+# Link against dependencies
+target_link_libraries(foundation_shell_lib PUBLIC mh-stuff platform_impl)
+
+# Enable coroutine support
+if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+  # GCC and Clang already have coroutine support in C++20/C++23
+endif()
+
+# Set include directories for library
+target_include_directories(foundation_shell_lib PUBLIC src)
+
 # Main executable
 add_executable(foundation_shell
     src/main.cpp
-    ${SOURCES}
 )
+
+# Link executable against the library
+target_link_libraries(foundation_shell PRIVATE foundation_shell_lib)
 
 # Make sure all checks run before building
 add_dependencies(foundation_shell check_static_asserts check_casing check_includes)
-
-target_compile_features(foundation_shell PUBLIC cxx_std_23)
-
-# Set include directories
-target_include_directories(foundation_shell PRIVATE src)
 
 # Enable testing
 enable_testing()
@@ -85,8 +115,11 @@ file(GLOB_RECURSE TEST_FILES CONFIGURE_DEPENDS
 
 # Create a single test executable for all tests
 add_executable(unit_tests ${TEST_FILES})
-target_link_libraries(unit_tests gtest_main gmock)
-target_include_directories(unit_tests PRIVATE src)
+target_link_libraries(unit_tests
+    foundation_shell_lib
+    gtest_main
+    gmock
+)
 
 # Add the test to CTest
 add_test(NAME UnitTests COMMAND unit_tests)

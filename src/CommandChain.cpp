@@ -316,18 +316,44 @@ Task<int> CommandChain::executeCommandsWithPipesAsync(const std::vector<Command>
 	// For multiple commands, we need to set up pipes
 	int lastExitStatus = 0;
 
-	// Temporary implementation - should be replaced with proper Source/Sink
-	// implementations in the future
-	static_assert(false, "TODO:Implement full piping with proper Source/Sink interfaces");
-	static_assert(false, "TODO:Implement full piping with proper Source/Sink interfaces");
-	// For now, we'll execute commands sequentially as a placeholder
+	// Implementation of piping using IPipe for platform-agnostic inter-command communication
+	std::vector<std::unique_ptr<IPipe>> pipes;
+	for (size_t i = 0; i < commands.size() - 1; ++i)
+	{
+		pipes.emplace_back(CreatePipe()); // Assume createPipe() is a factory method to be implemented
+	}
 
-	// For now, just execute each command sequentially as a placeholder
+	// Set up output redirection for each command to pipe to the next
 	for (size_t i = 0; i < commands.size(); ++i)
 	{
 		debugInfo.commandCount++;
-		bool result = co_await commands[i].executeAsync();
-		lastExitStatus = result ? 0 : 1;
+		if (i > 0)
+		{
+			// Set input from the previous pipe
+			commands[i].setInputSource(pipes[i - 1]->getSource());
+		}
+		if (i < commands.size() - 1)
+		{
+			// Set output to the next pipe
+			commands[i].setOutputSink(pipes[i]->getSink());
+		}
+	}
+
+	// Execute all commands concurrently
+	std::vector<Task<bool>> tasks;
+	for (auto &cmd : commands)
+	{
+		tasks.push_back(cmd.executeAsync());
+	}
+
+	// Wait for all commands to complete
+	for (size_t i = 0; i < tasks.size(); ++i)
+	{
+		bool result = co_await tasks[i];
+		if (i == tasks.size() - 1)
+		{
+			lastExitStatus = result ? 0 : 1;
+		}
 	}
 
 	co_return lastExitStatus;

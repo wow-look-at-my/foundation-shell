@@ -3,28 +3,19 @@
 #include <string>
 #include <vector>
 #include <memory>
-#include "Task.hpp"          // Include the Task type
-#include "Config.hpp"        // Include ShellConfig
-#include "io/ISink.hpp"      // Include ISink interface
-#include "io/ISource.hpp"    // Include ISource interface
+#include "Task.hpp"				// Include the Task type
+#include "Config.hpp"			// Include ShellConfig
+#include "io/ISink.hpp"			// Include ISink interface
+#include "io/ISource.hpp"		// Include ISource interface
 #include "process/IProcess.hpp" // Include IProcess interface
+#include "TokenType.hpp"		// Include TokenType enum
 
-// Token types for lexical analysis
-enum class TokenType
-{
-	None,                       // No operator
-	Command,                    // Command
-	CommandArgument,
-	Pipe,                       // | (pipe)
-	And,                        // && (and)
-	Or,                         // || (or)
-	Background [[deprecated]],  // & (background)
-	RedirectStdIn,              // < (input redirection)
-	RedirectStdOut,             // > (output redirection)
-	RedirectStdOutAppend,       // >> (append redirection)
-	RedirectStdErr,             // 2> (error redirection)
-	RedirectStdErrAppend,       // 2>> (error append redirection)
-};
+#undef stdin
+#undef stdout
+#undef stderr
+
+// Async sleep function using the dispatcher
+Task<void> sleep_async(std::chrono::milliseconds duration);
 
 // Structure to represent a command with its I/O redirections
 class Command

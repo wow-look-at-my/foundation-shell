@@ -4,15 +4,20 @@
 #include <filesystem>
 #include <memory>
 
-// Platform-specific file source implementation
-#if defined(_WIN32) || defined(_WIN64)
-  // Windows implementation would go here in the future
-  #error "Windows implementation not yet available"
-#else
-  // Unix implementation
-  #include "unix/UnixFileSource.hpp"
-  using FileSource = UnixFileSource;
-#endif
+/**
+ * Platform-agnostic file source
+ * Acts as a facade for platform-specific implementations
+ */
+class FileSource
+{
+public:
+	/**
+	 * Create a file source
+	 * @param path Path to the file
+	 * @return Shared pointer to an ISource implementation
+	 */
+	static std::shared_ptr<ISource> create(const std::filesystem::path &path);
+};
 
-// Typedef for shared pointer to FileSource
-using FileSourcePtr = std::shared_ptr<FileSource>;
+// Typedef for shared pointer to ISource
+using FileSourcePtr = std::shared_ptr<ISource>;

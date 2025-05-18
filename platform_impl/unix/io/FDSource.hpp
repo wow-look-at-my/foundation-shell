@@ -15,8 +15,7 @@ using FDSourcePtr = std::shared_ptr<FDSource>;
  */
 class FDSource : public ISource {
 public:
-    // Type definition for native file descriptor handle
-    using NativeHandle = int;
+    // Native file descriptor type (must match ISource::NativeHandle)
     
     /**
      * Constructor that takes ownership of a file descriptor
@@ -49,11 +48,11 @@ public:
     
     /**
      * Get the native file descriptor handle
-     * @return The file descriptor
+     * @return The file descriptor as NativeHandle (intptr_t)
      */
     NativeHandle getNativeHandle() const override { return static_cast<NativeHandle>(fd); }
 
 private:
-    NativeHandle fd;  // The file descriptor
-    bool closed;      // Whether the file descriptor has been closed
+    int fd;          // The file descriptor
+    bool closed;     // Whether the file descriptor has been closed
 };

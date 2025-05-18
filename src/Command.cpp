@@ -9,6 +9,12 @@
 #include <dirent.h>
 #include <sstream>
 #include <algorithm>
+#include <thread>
+#include <chrono>
+#include <mh/concurrency/dispatcher.hpp>
+#include "io/FileSource.hpp"
+#include "io/FileSink.hpp"
+#include "Main.hpp"
 
 // External globals from config.hpp
 extern ShellConfig shellConfig;
@@ -62,17 +68,25 @@ int Command::handleBuiltins() const
 				std::cerr << "HOME environment variable not set\n";
 				return 1;
 			}
-			if (chdir(homeDir) != 0)
+			try
 			{
-				std::cerr << "Failed to change directory to " << homeDir << "\n";
+				std::filesystem::current_path(homeDir);
+			}
+			catch (const std::exception &e)
+			{
+				std::print("Failed to change directory to {}: {}\n", homeDir, e.what());
 				return 1;
 			}
 		}
 		else
 		{
-			if (chdir(args[1].c_str()) != 0)
+			try
 			{
-				std::cerr << "Failed to change directory to " << args[1] << "\n";
+				std::filesystem::current_path(args[1]);
+			}
+			catch (const std::exception &e)
+			{
+				std::cerr << "Failed to change directory to " << args[1] << ": " << e.what() << "\n";
 				return 1;
 			}
 		}
@@ -89,16 +103,8 @@ int Command::handleBuiltins() const
 	// Add pwd as a built-in command
 	if (args[0] == "pwd")
 	{
-		char cwd[PATH_MAX];
-		if (getcwd(cwd, sizeof(cwd)) != nullptr)
-		{
-			std::cout << cwd << std::endl;
-		}
-		else
-		{
-			std::cerr << "Failed to get current directory\n";
-			return 1;
-		}
+		const std::filesystem::path cwd = std::filesystem::current_path();
+		std::print("{}\n", cwd.c_str());
 		return 0;
 	}
 
@@ -356,105 +362,9 @@ int Command::handleBuiltins() const
 	return -1;
 }
 
-// Function to convert vector of strings to array of C-strings
-char **Command::vectorToCharArray(const std::vector<std::string> &args) const
-{
-	char **result = new char *[args.size() + 1]; // +1 for the NULL terminator
-
-	for (size_t i = 0; i < args.size(); i++)
-	{
-		result[i] = new char[args[i].size() + 1];
-		std::strcpy(result[i], args[i].c_str());
-	}
-
-	result[args.size()] = nullptr; // Null-terminate the array
-	return result;
-}
-
-// Function to free memory allocated for char array
-void Command::freeCharArray(char **array, int size) const
-{
-	for (int i = 0; i < size; i++)
-	{
-		delete[] array[i];
-	}
-	delete[] array;
-}
-
-// Function to setup child process I/O
-void Command::setupChildIO(int inputFd, int outputFd) const
-{
-	// Handle input redirection
-	if (!inputFile.empty())
-	{
-		int fd = open(inputFile.c_str(), O_RDONLY);
-		if (fd == -1)
-		{
-			std::cerr << "Failed to open input file: " << inputFile << "\n";
-			exit(1);
-		}
-		dup2(fd, STDIN_FILENO);
-		close(fd);
-	}
-	else if (inputFd != STDIN_FILENO)
-	{
-		// Use the input from the pipe
-		dup2(inputFd, STDIN_FILENO);
-		close(inputFd);
-	}
-
-	// Handle output redirection
-	if (!outputFile.empty())
-	{
-		int flags = O_WRONLY | O_CREAT;
-		if (appendOutput)
-		{
-			flags |= O_APPEND;
-		}
-		else
-		{
-			flags |= O_TRUNC;
-		}
-
-		int fd = open(outputFile.c_str(), flags, 0644);
-		if (fd == -1)
-		{
-			std::cerr << "Failed to open output file: " << outputFile << "\n";
-			exit(1);
-		}
-		dup2(fd, STDOUT_FILENO);
-		close(fd);
-	}
-	else if (outputFd != STDOUT_FILENO)
-	{
-		// Output to the pipe
-		dup2(outputFd, STDOUT_FILENO);
-		close(outputFd);
-	}
-
-	// Handle error redirection
-	if (!errorFile.empty())
-	{
-		int flags = O_WRONLY | O_CREAT;
-		if (appendError)
-		{
-			flags |= O_APPEND;
-		}
-		else
-		{
-			flags |= O_TRUNC;
-		}
-
-		int fd = open(errorFile.c_str(), flags, 0644);
-		if (fd == -1)
-		{
-			std::cerr << "Failed to open error file: " << errorFile << "\n";
-			exit(1);
-		}
-		dup2(fd, STDERR_FILENO);
-		close(fd);
-	}
-}
+// These functions have been moved to platform-specific implementations
+// in the process/ directory. The platform-agnostic IProcess interface
+// now handles all process creation and management.
 
 // Function to execute a command asynchronously
 Task<bool> Command::executeAsync(Source inputSource, Sink outputSink) const
@@ -472,28 +382,31 @@ Task<bool> Command::executeAsync(Source inputSource, Sink outputSink) const
 	}
 
 	// Create a process using the platform-agnostic interface
-	Sink errorSink = stderr; // Use member stderr by default
+	Sink errorSink = nullptr; // Will use platform default if not provided
 
 	// Handle I/O redirection using files
 	if (!inputFile.empty())
 	{
-		static_assert(false, "TODO:Implement file source creation");
-		static_assert(false, "TODO:Implement file source creation");
+		// Create platform-agnostic FileSource
+		inputSource = std::make_shared<FileSource>(inputFile);
 		// For now, rely on process implementation to handle this
+		std::cerr << "Warning: File input redirection is platform-specific\n";
 	}
 
 	if (!outputFile.empty())
 	{
-		static_assert(false, "TODO:Implement file sink creation");
-		static_assert(false, "TODO:Implement file sink creation");
+		// Create platform-agnostic FileSink
+		outputSink = std::make_shared<FileSink>(outputFile, appendOutput);
 		// For now, rely on process implementation to handle this
+		std::cerr << "Warning: File output redirection is platform-specific\n";
 	}
 
 	if (!errorFile.empty())
 	{
-		static_assert(false, "TODO:Implement file sink creation");
-		static_assert(false, "TODO:Implement file sink creation");
+		// Create platform-agnostic FileSink
+		outputSink = std::make_shared<FileSink>(outputFile, appendOutput);
 		// For now, rely on process implementation to handle this
+		std::cerr << "Warning: File error redirection is platform-specific\n";
 	}
 
 	// Create the process with proper I/O redirection
@@ -528,12 +441,12 @@ Task<bool> Command::executeAsync(Source inputSource, Sink outputSink) const
 				args[2].find(">") != std::string::npos)
 			{
 				// Wait long enough for sleep+file operations to complete (2 seconds)
-				usleep(2000000);
+				co_await sleep_async(std::chrono::milliseconds(2000));
 			}
 			else
 			{
 				// Normal background process delay
-				usleep(500000);
+				co_await sleep_async(std::chrono::milliseconds(500));
 			}
 		}
 
@@ -676,7 +589,8 @@ std::vector<std::string> findCommandSuggestions(const std::string &command)
 						std::string fullPath = path + "/" + std::string{filename};
 
 						// Check if file exists and is executable
-						if (access(fullPath.c_str(), X_OK) == 0)
+						auto status = std::filesystem::status(fullPath);
+						if (std::filesystem::is_regular_file(fullPath) && (status.permissions() & std::filesystem::perms::owner_exec) != std::filesystem::perms::none)
 						{
 							int distance = levenshteinDistance(command, filename);
 							if (distance <= shellConfig.suggestionThreshold)

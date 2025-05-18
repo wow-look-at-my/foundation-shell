@@ -3,12 +3,12 @@
 #include "ISink.hpp"
 
 // File descriptor implementation of ISink
-class FDSink final : public ISink
+class UnixFDSink final : public ISink
 {
 public:
 	// Create from an existing file descriptor
-	explicit FDSink(NativeHandle fd);
-	~FDSink() override;
+	explicit UnixFDSink(NativeHandle fd);
+	~UnixFDSink() override;
 
 	size_t write(const void *buffer, size_t size) override;
 	bool canWrite() const override;

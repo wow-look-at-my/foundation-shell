@@ -3,12 +3,12 @@
 #include "ISource.hpp"
 
 // File descriptor implementation of ISource
-class FDSource final : public ISource
+class UnixFDSource final : public ISource
 {
 public:
 	// Create from an existing file descriptor
-	explicit FDSource(NativeHandle fd);
-	~FDSource() override;
+	explicit UnixFDSource(NativeHandle fd);
+	~UnixFDSource() override;
 
 	size_t read(void *buffer, size_t size) override;
 	bool canRead() const override;
