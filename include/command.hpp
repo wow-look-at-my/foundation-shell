@@ -7,128 +7,14 @@
 #include <sys/wait.h>
 #include <fcntl.h>
 #include <memory>
-#include "task.hpp"	  // Include the Task type
-#include "config.hpp" // Include ShellConfig
+#include "task.hpp"       // Include the Task type
+#include "config.hpp"     // Include ShellConfig
+#include "io/ISink.hpp"   // Include ISink interface
+#include "io/ISource.hpp" // Include ISource interface
 
 #undef stdin
 #undef stdout
 #undef stderr
-
-// Platform-agnostic abstract handle type
-using NativeHandle = intptr_t;
-
-// Interface for data sources (e.g., stdout, stderr)
-class ISource
-{
-public:
-	virtual ~ISource() = default;
-
-	// Read data from source
-	virtual size_t read(void *buffer, size_t size) = 0;
-
-	// Check if there's data available to read
-	virtual bool canRead() const = 0;
-
-	// Close the source
-	virtual void close() = 0;
-
-	// Get native handle (file descriptor on Unix, HANDLE on Windows)
-	virtual NativeHandle getNativeHandle() const = 0;
-};
-
-// Interface for data sinks (e.g., stdin)
-class ISink
-{
-public:
-	virtual ~ISink() = default;
-
-	// Write data to sink
-	virtual size_t write(const void *buffer, size_t size) = 0;
-
-	// Check if sink can accept data
-	virtual bool canWrite() const = 0;
-
-	// Flush any buffered data
-	virtual void flush() = 0;
-
-	// Close the sink
-	virtual void close() = 0;
-
-	// Get native handle (file descriptor on Unix, HANDLE on Windows)
-	virtual NativeHandle getNativeHandle() const = 0;
-};
-
-// File-based implementation of ISource
-class FileSource : public ISource
-{
-public:
-	FileSource(const std::string &filename);
-	~FileSource() override;
-
-	size_t read(void *buffer, size_t size) override;
-	bool canRead() const override;
-	void close() override;
-	NativeHandle getNativeHandle() const override { return handle; }
-
-private:
-	NativeHandle handle;
-	bool closed = false;
-};
-
-// File-based implementation of ISink
-class FileSink : public ISink
-{
-public:
-	FileSink(const std::string &filename, bool append = false);
-	~FileSink() override;
-
-	size_t write(const void *buffer, size_t size) override;
-	bool canWrite() const override;
-	void flush() override;
-	void close() override;
-	NativeHandle getNativeHandle() const override { return handle; }
-
-private:
-	NativeHandle handle;
-	bool closed = false;
-};
-
-// Pipe implementations
-class PipeSource : public ISource
-{
-public:
-	PipeSource(NativeHandle handle);
-	~PipeSource() override;
-
-	size_t read(void *buffer, size_t size) override;
-	bool canRead() const override;
-	void close() override;
-	NativeHandle getNativeHandle() const override { return handle; }
-
-private:
-	NativeHandle handle;
-	bool closed = false;
-};
-
-class PipeSink : public ISink
-{
-public:
-	PipeSink(NativeHandle handle);
-	~PipeSink() override;
-
-	size_t write(const void *buffer, size_t size) override;
-	bool canWrite() const override;
-	void flush() override;
-	void close() override;
-	NativeHandle getNativeHandle() const override { return handle; }
-
-private:
-	NativeHandle handle;
-	bool closed = false;
-};
-
-// Function to create a pipe pair
-std::pair<std::shared_ptr<ISink>, std::shared_ptr<ISource>> createPipe();
 
 // Structure to represent a command with its I/O redirections
 class Command
