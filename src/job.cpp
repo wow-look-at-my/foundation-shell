@@ -1,5 +1,5 @@
-#include "../include/job.hpp"
-#include "../include/config.hpp"
+#include "job.hpp"
+#include "config.hpp"
 #include <iostream>
 #include <algorithm>
 #include <signal.h>

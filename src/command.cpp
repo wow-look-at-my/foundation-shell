@@ -1,5 +1,5 @@
-#include "../include/command.hpp"
-#include "../include/config.hpp"
+#include "command.hpp"
+#include "config.hpp"
 #include <iostream>
 #include <cstring>
 #include <wordexp.h>
@@ -457,7 +457,7 @@ void Command::setupChildIO(int inputFd, int outputFd) const
 }
 
 // Function to execute a command asynchronously
-Task<bool> Command::execute(int inputFd, int outputFd) const
+Task<bool> Command::executeAsync(Source inputSource, Sink outputSink) const
 {
 	if (args.empty())
 	{

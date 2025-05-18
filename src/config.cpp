@@ -1,4 +1,4 @@
-#include "../include/config.hpp"
+#include "config.hpp"
 #include <unistd.h>
 #include <limits.h>
 #include <cstdlib>

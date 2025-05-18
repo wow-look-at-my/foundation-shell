@@ -3,10 +3,16 @@
 #include "FDSource.hpp"
 #include <filesystem>
 
-// File-based implementation of ISource that wraps an FDSource
-class FileSource final : public FDSource
+/**
+ * Unix-specific implementation of ISource that reads from a file using file descriptors
+ */
+class UnixFileSource final : public FDSource
 {
 public:
-    // Open a file for reading using filesystem path
-    explicit FileSource(const std::filesystem::path& path);
+    /**
+     * Constructor that opens a file for reading
+     * @param path Path to the file to open
+     * @throws std::runtime_error if file cannot be opened
+     */
+    explicit UnixFileSource(const std::filesystem::path& path);
 };

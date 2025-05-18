@@ -8,29 +8,24 @@ This repository contains a stateless shell implementation in C++ called the "Fou
 
 ## Build and Test Commands
 
+This project uses [Justfiles](https://github.com/casey/just) for simple frequently-used commands.
+
 ### Building the Project
 
-```bash
-mkdir -p build
-cd build
-cmake ..
-make
+```sh
+just build
 ```
 
 ### Running the Shell
 
-```bash
-# From the build directory
-./foundation_shell
+```sh
+just run
 ```
 
 ### Running Tests
 
-```bash
-# From the build directory
-ctest                        # Run all tests
-./shell_test                 # Run just the shell tests
-./features_test              # Run just the feature tests
+```sh
+just test
 ```
 
 ## Architecture
@@ -78,7 +73,7 @@ ctest                        # Run all tests
 The shell supports:
 - Input redirection (`<`)
 - Output redirection (`>` and `>>`)
-- Error redirection (`2>` and `2>>`) 
+- Error redirection (`2>` and `2>>`)
 - Pipes for connecting commands (`|`)
 - Background processes (`&`)
 - Command chaining (`&&` and `||`)
@@ -102,3 +97,14 @@ The shell supports:
 - Files are stored in the user's home directory with `.foundation_shell_` prefix
 - This is a stateless shell by design, so there's no variable preservation
 - `foundation_shell` is the executable name (CMakeLists.txt uses this, not base_shell)
+
+## Code Maintenance Guidelines
+
+- Get rid of backwards compatibility. We do not want old dead code hanging around in this project. If you must break something, mark the old version with [[deprecated]].
+- Make sure all async functions' names end with Async
+- Never pass by reference to coroutine/async functions, its way too dangerous.
+- Keep this project platform agnostic. There shouldn't be any mention of file descriptors outside of unix/ directories
+- Always use std::print() and std::format() instead of stringstreams
+- Do not write code that encourages or easily allows the creation of invalid states. For example, an "index" value cannot logically be negative for an array type, so you would use an unsigned integer. For a class constructor, it should throw for any invalid states.
+- Format your code properly. If you do not format it to match the codebase style, expect it to get randomly autoformatted out from under you at some point in the future. Then you'll have reread the file and reorient yourself.
+- Always use include paths that are relative to the project root. Avoid "../" in include paths at all costs. For files that are in the same directory, just #include the filename with no relative path.

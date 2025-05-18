@@ -1,8 +1,9 @@
-#include "../include/shell.hpp"
-#include "../include/command.hpp"
-#include "../include/history.hpp"
-#include "../include/job.hpp"
-#include "../include/alias.hpp"
+#include "shell.hpp"
+#include "command.hpp"
+#include "CommandChain.hpp"
+#include "history.hpp"
+#include "job.hpp"
+#include "alias.hpp"
 #include <iostream>
 #include <string>
 #include <memory>

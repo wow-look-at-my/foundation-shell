@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstddef>
+#include <memory>
 
 // Platform-agnostic abstract handle type
 using NativeHandle = intptr_t;
@@ -26,3 +27,6 @@ public:
 	// Get native handle (file descriptor on Unix, HANDLE on Windows)
 	virtual NativeHandle getNativeHandle() const = 0;
 };
+
+// Shorthand for shared pointer to ISink
+using Sink = std::shared_ptr<ISink>;

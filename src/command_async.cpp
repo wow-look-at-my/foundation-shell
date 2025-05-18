@@ -1,5 +1,6 @@
-#include "../include/command.hpp"
-#include "../include/config.hpp"
+#include "command.hpp"
+#include "CommandChain.hpp"
+#include "config.hpp"
 #include <iostream>
 
 // External globals from config.hpp

@@ -1,5 +1,5 @@
-#include "../include/history.hpp"
-#include "../include/config.hpp"
+#include "history.hpp"
+#include "config.hpp"
 #include <fstream>
 #include <iostream>
 #include <cstdlib>

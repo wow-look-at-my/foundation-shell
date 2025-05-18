@@ -29,35 +29,40 @@ CPMAddPackage(
   OPTIONS "INSTALL_GTEST OFF" "gtest_force_shared_crt ON"
 )
 
+# Enable policy to correctly handle CONFIGURE_DEPENDS option
+cmake_policy(SET CMP0098 NEW)
+
+# Use glob_recurse to find all source files with CONFIGURE_DEPENDS to properly handle dependencies
+file(GLOB_RECURSE SOURCES CONFIGURE_DEPENDS
+    "src/*.cpp"
+)
+
+# Remove main.cpp from the sources as it will be added directly to the executable
+list(FILTER SOURCES EXCLUDE REGEX ".*main\\.cpp$")
+
 # Main executable
 add_executable(foundation_shell
     src/main.cpp
-    src/config.cpp
-    src/command.cpp
-    src/command_async.cpp
-    src/shell.cpp
-    src/history.cpp
-    src/job.cpp
-    src/alias.cpp
+    ${SOURCES}
 )
 
 target_compile_features(foundation_shell PUBLIC cxx_std_23)
 
-# Set include directory
-target_include_directories(foundation_shell PRIVATE include)
+# Set include directories
+target_include_directories(foundation_shell PRIVATE src)
 
 # Enable testing
 enable_testing()
 
-# Add test executables
-add_executable(shell_test tests/shell_test.cpp)
-target_link_libraries(shell_test gtest_main gmock)
-target_include_directories(shell_test PRIVATE include)
+# Find all test files
+file(GLOB_RECURSE TEST_FILES CONFIGURE_DEPENDS
+    "tests/*_test.cpp"
+)
 
-add_executable(features_test tests/features_test.cpp)
-target_link_libraries(features_test gtest_main gmock)
-target_include_directories(features_test PRIVATE include)
+# Create a single test executable for all tests
+add_executable(unit_tests ${TEST_FILES})
+target_link_libraries(unit_tests gtest_main gmock)
+target_include_directories(unit_tests PRIVATE src)
 
-# Add tests to CTest
-add_test(NAME ShellTest COMMAND shell_test)
-add_test(NAME FeaturesTest COMMAND features_test)
+# Add the test to CTest
+add_test(NAME UnitTests COMMAND unit_tests)

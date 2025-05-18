@@ -1,5 +1,5 @@
-#include "../include/alias.hpp"
-#include "../include/config.hpp"
+#include "alias.hpp"
+#include "config.hpp"
 #include <fstream>
 #include <iostream>
 #include <sstream>
