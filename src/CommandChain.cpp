@@ -1,5 +1,5 @@
 #include "CommandChain.hpp"
-#include "command.hpp"
+#include "Command.hpp"
 #include "Token.hpp"
 #include <iostream>
 #include <format>
@@ -318,7 +318,7 @@ Task<int> CommandChain::executeCommandsWithPipesAsync(const std::vector<Command>
 
 	// Temporary implementation - should be replaced with proper Source/Sink
 	// implementations in the future
-	// TODO: Implement full piping with proper Source/Sink interfaces
+	static_assert(false, "TODO:Implement full piping with proper Source/Sink interfaces");
 	static_assert(false, "TODO:Implement full piping with proper Source/Sink interfaces");
 	// For now, we'll execute commands sequentially as a placeholder
 

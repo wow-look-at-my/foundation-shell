@@ -3,6 +3,7 @@
 #include <limits.h>
 #include <cstdlib>
 #include <algorithm>
+static_assert(false, "File naming convention: This file should be renamed to Config.cpp");
 
 // Define color constants
 namespace Colors {

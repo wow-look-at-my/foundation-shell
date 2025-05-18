@@ -4,6 +4,7 @@
 #include <iostream>
 #include <cstdlib>
 #include <algorithm>
+static_assert(false, "File naming convention: This file should be renamed to History.cpp");
 
 // Function to get the history file path
 std::string getHistoryFilePath() {

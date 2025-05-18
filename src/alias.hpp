@@ -1,4 +1,5 @@
 #pragma once
+static_assert(false, "File naming convention: This file should be renamed to Alias.hpp");
 
 #include <string>
 #include <map>

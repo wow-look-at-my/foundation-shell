@@ -2,7 +2,8 @@
 #include <gmock/gmock.h>
 #include "../src/CommandChain.hpp"
 #include "../src/Token.hpp"
-#include "../src/command.hpp"
+// Use Command.hpp instead of command.hpp
+#include "../src/Command.hpp"
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -58,7 +59,7 @@ TEST(CommandChainTest, InvalidConstruction)
 {
     // Test creating chain with an empty command
     Command emptyCmd;
-    EXPECT_THROW(CommandChain(emptyCmd), std::invalid_argument);
+    EXPECT_THROW({CommandChain chain(emptyCmd);}, std::invalid_argument);
     
     // Test appending to an empty chain
     CommandChain emptyChain;

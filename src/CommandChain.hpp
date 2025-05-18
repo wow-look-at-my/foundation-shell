@@ -1,8 +1,9 @@
 #pragma once
 
-#include "command.hpp"
-#include "task.hpp"
-#include "config.hpp"
+// Rename to use PascalCase file names
+#include "Command.hpp"
+#include "Task.hpp"
+#include "Config.hpp"
 #include "Token.hpp"
 #include <vector>
 #include <string>

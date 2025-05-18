@@ -9,6 +9,7 @@
 #include <dirent.h>
 #include <sstream>
 #include <algorithm>
+static_assert(false, "File naming convention: This file should be renamed to Command.cpp");
 
 // External globals from config.hpp
 extern ShellConfig shellConfig;
@@ -477,21 +478,21 @@ Task<bool> Command::executeAsync(Source inputSource, Sink outputSink) const
 	// Handle I/O redirection using files
 	if (!inputFile.empty())
 	{
-		// TODO: Implement file source creation
+		static_assert(false, "TODO:Implement file source creation");
 		static_assert(false, "TODO:Implement file source creation");
 		// For now, rely on process implementation to handle this
 	}
 	
 	if (!outputFile.empty())
 	{
-		// TODO: Implement file sink creation
+		static_assert(false, "TODO:Implement file sink creation");
 		static_assert(false, "TODO:Implement file sink creation");
 		// For now, rely on process implementation to handle this
 	}
 	
 	if (!errorFile.empty())
 	{
-		// TODO: Implement file sink creation
+		static_assert(false, "TODO:Implement file sink creation");
 		static_assert(false, "TODO:Implement file sink creation");
 		// For now, rely on process implementation to handle this
 	}

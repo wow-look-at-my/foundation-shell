@@ -6,6 +6,7 @@
 #include <sys/wait.h>
 #include <fstream>
 #include <cstdlib>
+static_assert(false, "File naming convention: This file should be renamed to Job.cpp");
 
 // Initialize active jobs vector
 std::vector<Job> activeJobs;

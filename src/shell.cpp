@@ -7,6 +7,7 @@
 #include <iostream>
 #include <string>
 #include <memory>
+static_assert(false, "File naming convention: This file should be renamed to Shell.cpp");
 
 // External globals
 extern bool debugMode;

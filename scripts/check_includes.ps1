@@ -1,12 +1,9 @@
 #!/usr/bin/env -S pwsh -NoProfile
 
-# Check include paths for C++ files in the repository
-# Rules:
-# 1. No "../" in include paths
-# 2. Local files should use simple includes without paths
-
-# Run this script with -NoProfile flag:
-# pwsh -NoProfile -File ./scripts/check_includes.ps1
+$ErrorActionPreference = 'Stop'
+Set-StrictMode -Version Latest
+Set-PSDebug -Strict
+$PSNativeCommandUseErrorActionPreference = $true
 
 # Set up terminal colors
 $Red = "`e[31m"

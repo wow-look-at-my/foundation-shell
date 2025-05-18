@@ -8,6 +8,13 @@ add_custom_target(check_static_asserts
   COMMENT "Checking for incorrect static_assert usage..."
 )
 
+# Add a custom command to check for proper upper CamelCase (PascalCase) file naming
+add_custom_target(check_casing
+  COMMAND pwsh -File ${CMAKE_SOURCE_DIR}/scripts/check_casing.ps1
+  WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+  COMMENT "Checking for proper upper CamelCase (PascalCase) file naming..."
+)
+
 # Check for filesystem support
 if(APPLE)
   # MacOS has built-in filesystem support without a separate library
@@ -53,8 +60,8 @@ add_executable(foundation_shell
     ${SOURCES}
 )
 
-# Make sure the static_assert check runs before building
-add_dependencies(foundation_shell check_static_asserts)
+# Make sure the static_assert and casing checks run before building
+add_dependencies(foundation_shell check_static_asserts check_casing)
 
 target_compile_features(foundation_shell PUBLIC cxx_std_23)
 
