@@ -1,13 +1,12 @@
-#include "shell.hpp"
-#include "command.hpp"
+#include "Shell.hpp"
+#include "Command.hpp"
 #include "CommandChain.hpp"
-#include "history.hpp"
-#include "job.hpp"
-#include "alias.hpp"
+#include "History.hpp"
+#include "Job.hpp"
+#include "Alias.hpp"
 #include <iostream>
 #include <string>
 #include <memory>
-static_assert(false, "File naming convention: This file should be renamed to Shell.cpp");
 
 // External globals
 extern bool debugMode;

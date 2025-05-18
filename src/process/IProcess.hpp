@@ -5,7 +5,7 @@
 #include <memory>
 #include "../io/ISource.hpp"
 #include "../io/ISink.hpp"
-#include "../task.hpp"
+#include "../Task.hpp"
 
 // Forward declarations
 class IProcess;

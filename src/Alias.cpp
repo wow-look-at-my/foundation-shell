@@ -1,10 +1,9 @@
-#include "alias.hpp"
-#include "config.hpp"
+#include "Alias.hpp"
+#include "Config.hpp"
 #include <fstream>
 #include <iostream>
 #include <sstream>
 #include <cstdlib>
-static_assert(false, "File naming convention: This file should be renamed to Alias.cpp");
 
 // Initialize the aliases map
 std::map<std::string, std::string> aliases;

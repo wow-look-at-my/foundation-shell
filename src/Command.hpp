@@ -1,11 +1,10 @@
 #pragma once
-static_assert(false, "File naming convention: This file should be renamed to Command.hpp");
 
 #include <string>
 #include <vector>
 #include <memory>
-#include "task.hpp"          // Include the Task type
-#include "config.hpp"        // Include ShellConfig
+#include "Task.hpp"          // Include the Task type
+#include "Config.hpp"        // Include ShellConfig
 #include "io/ISink.hpp"      // Include ISink interface
 #include "io/ISource.hpp"    // Include ISource interface
 #include "process/IProcess.hpp" // Include IProcess interface

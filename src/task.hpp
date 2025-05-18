@@ -1,5 +1,4 @@
 #pragma once
-static_assert(false, "File naming convention: This file should be renamed to Task.hpp");
 
 #include <coroutine>
 #include <exception>

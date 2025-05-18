@@ -2,7 +2,6 @@
 #include <gmock/gmock.h>
 #include "../src/CommandChain.hpp"
 #include "../src/Token.hpp"
-// Use Command.hpp instead of command.hpp
 #include "../src/Command.hpp"
 #include <stdexcept>
 #include <string>

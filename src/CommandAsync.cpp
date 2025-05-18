@@ -1,6 +1,6 @@
-#include "command.hpp"
+#include "Command.hpp"
 #include "CommandChain.hpp"
-#include "config.hpp"
+#include "Config.hpp"
 #include <iostream>
 
 // External globals from config.hpp
@@ -169,7 +169,8 @@ static Task<int> executeCommandsWithPipes(const std::vector<Command> &commands)
 	// For multiple commands, we need to set up pipes
 	int lastExitStatus = 0;
 	
-	// TODO: Need to implement the Source/Sink versions for proper piping
+	static_assert(false, "TODO:Need to implement the Source/Sink versions for proper piping");
+	static_assert(false, "TODO:Need to implement the Source/Sink versions for proper piping");
 	// For now, just execute each command sequentially as a workaround
 	for (size_t i = 0; i < commands.size(); ++i)
 	{

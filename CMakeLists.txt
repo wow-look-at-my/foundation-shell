@@ -10,9 +10,16 @@ add_custom_target(check_static_asserts
 
 # Add a custom command to check for proper upper CamelCase (PascalCase) file naming
 add_custom_target(check_casing
-  COMMAND pwsh -File ${CMAKE_SOURCE_DIR}/scripts/check_casing.ps1
+  COMMAND ${CMAKE_SOURCE_DIR}/scripts/check_casing.ps1
   WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
   COMMENT "Checking for proper upper CamelCase (PascalCase) file naming..."
+)
+
+# Add a custom command to check for proper include paths
+add_custom_target(check_includes
+  COMMAND ${CMAKE_SOURCE_DIR}/scripts/check_includes.ps1
+  WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+  COMMENT "Checking for proper include paths..."
 )
 
 # Check for filesystem support
@@ -60,8 +67,8 @@ add_executable(foundation_shell
     ${SOURCES}
 )
 
-# Make sure the static_assert and casing checks run before building
-add_dependencies(foundation_shell check_static_asserts check_casing)
+# Make sure all checks run before building
+add_dependencies(foundation_shell check_static_asserts check_casing check_includes)
 
 target_compile_features(foundation_shell PUBLIC cxx_std_23)
 

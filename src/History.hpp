@@ -1,5 +1,4 @@
 #pragma once
-static_assert(false, "File naming convention: This file should be renamed to History.hpp");
 
 #include <string>
 #include <vector>

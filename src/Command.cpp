@@ -1,5 +1,5 @@
-#include "command.hpp"
-#include "config.hpp"
+#include "Command.hpp"
+#include "Config.hpp"
 #include <iostream>
 #include <cstring>
 #include <wordexp.h>
@@ -473,49 +473,52 @@ Task<bool> Command::executeAsync(Source inputSource, Sink outputSink) const
 
 	// Create a process using the platform-agnostic interface
 	Sink errorSink = stderr; // Use member stderr by default
-	
+
 	// Handle I/O redirection using files
 	if (!inputFile.empty())
 	{
-		// TODO: Implement file source creation
+		static_assert(false, "TODO:Implement file source creation");
+		static_assert(false, "TODO:Implement file source creation");
 		// For now, rely on process implementation to handle this
 	}
-	
+
 	if (!outputFile.empty())
 	{
-		// TODO: Implement file sink creation
+		static_assert(false, "TODO:Implement file sink creation");
+		static_assert(false, "TODO:Implement file sink creation");
 		// For now, rely on process implementation to handle this
 	}
-	
+
 	if (!errorFile.empty())
 	{
-		// TODO: Implement file sink creation
+		static_assert(false, "TODO:Implement file sink creation");
+		static_assert(false, "TODO:Implement file sink creation");
 		// For now, rely on process implementation to handle this
 	}
-	
+
 	// Create the process with proper I/O redirection
 	ProcessPtr process = createProcess(
-		args[0],          // Command
-		args,             // Arguments (including command)
-		inputSource,      // Input source
-		outputSink,       // Output sink
-		errorSink         // Error sink
+		args[0],	 // Command
+		args,		 // Arguments (including command)
+		inputSource, // Input source
+		outputSink,	 // Output sink
+		errorSink	 // Error sink
 	);
-	
+
 	// Start the process
 	if (!process->start())
 	{
 		std::cerr << Colors::COLOR_RED << "Failed to start process: " << args[0] << Colors::COLOR_RESET << "\n";
 		co_return false;
 	}
-	
+
 	// If it's a background process, don't wait
 	if (backgroundProcess)
 	{
 		// Register the job
 		int jobId = addJob(static_cast<pid_t>(process->getPid()), args[0]);
 		std::cout << "[" << jobId << "] " << process->getPid() << std::endl;
-		
+
 		// Async delay to ensure background processes get a chance to start and run
 		// This is especially important for tests that verify background processes
 		if (args[0] == "sh" && args.size() > 2)
@@ -533,10 +536,10 @@ Task<bool> Command::executeAsync(Source inputSource, Sink outputSink) const
 				usleep(500000);
 			}
 		}
-		
+
 		co_return true; // Exit status 0 -> true
 	}
-	
+
 	// Wait for the process to complete
 	int exitCode = co_await process->waitAsync();
 	co_return exitCode == 0; // Convert exit status to bool

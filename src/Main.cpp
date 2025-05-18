@@ -1,6 +1,5 @@
-#include "shell.hpp"
+#include "Shell.hpp"
 #include <iostream>
-static_assert(false, "File naming convention: This file should be renamed to Main.cpp");
 
 int main()
 {
