@@ -22,8 +22,8 @@ Shell::Shell()
 				   // Just print a newline and return to the prompt
 				   std::print(stderr, "\n"); });
 
-		// Basic SIGCHLD handler for background processes
-		signal(SIGCHLD, SIG_IGN);
+		// Don't ignore SIGCHLD - we need it for waitpid() to work properly
+		// signal(SIGCHLD, SIG_IGN);
 
 		// No SIGTSTP handler needed - we don't support background processes
 	}
