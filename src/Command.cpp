@@ -18,8 +18,8 @@
 #include <thread>
 
 #include "EnvManager.hpp"
-#include "LastCppInclude.hpp"
 #include "Main.hpp"
+#include "LastCppInclude.hpp"
 
 // Command implementation
 Command::Command() : appendOutput(false), appendError(false) {}

@@ -14,8 +14,8 @@
 #include <vector>
 
 #include "Command.hpp"
-#include "LastCppInclude.hpp"
 #include "Token.hpp"
+#include "LastCppInclude.hpp"
 
 // Constructor that parses tokens into a command chain
 CommandChain::CommandChain(const std::vector<std::string>& tokens)

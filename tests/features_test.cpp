@@ -4,46 +4,18 @@
 #include <unistd.h>
 
 #include <catch2/catch_all.hpp>
+#include <catch2/matchers/catch_matchers_string.hpp>
 #include <cstdio> // For stdout
 #include <cstdlib>
 #include <cstring>
 #include <filesystem>
-#include <fstream>
-#include <iostream>
-#include <sstream>
-#include <string>
-#include <vector>
-
 #include <mh/io/file.hpp>
+#include <string>
 
 #include "LastCppInclude.hpp"
 #include "test_utils.hpp"
 
-// Fallback functions for filesystem operations
-// to avoid compiler-specific variations in std::filesystem
-namespace fs
-{
-bool exists(const std::string& path)
-{
-	struct stat buffer;
-	return (stat(path.c_str(), &buffer) == 0);
-}
-
-bool remove(const std::string& path)
-{
-	return (::remove(path.c_str()) == 0);
-}
-
-std::uintmax_t file_size(const std::string& path)
-{
-	struct stat buffer;
-	if (stat(path.c_str(), &buffer) == 0)
-	{
-		return buffer.st_size;
-	}
-	return 0;
-}
-} // namespace fs
+namespace fs = std::filesystem;
 
 // Tests for redirection
 TEST_CASE("Output redirection works", "[features][redirection]")
@@ -68,14 +40,10 @@ TEST_CASE("Output redirection works", "[features][redirection]")
 	REQUIRE(fs::exists(tempPath));
 
 	// Read back the file contents
-	std::ifstream file(tempPath);
-	REQUIRE(file.is_open());
+	std::string content = mh::read_file(tempPath);
 
-	std::string content;
-	std::getline(file, content);
-
-	// Verify content was redirected
-	CHECK(content == "redirect_test_content");
+	// Verify content was redirected (mh::read_file includes trailing newline)
+	CHECK(content == "redirect_test_content\n");
 
 	// Clean up
 	fs::remove(tempPath);
@@ -121,10 +89,7 @@ TEST_CASE("Append redirection works", "[features][redirection]")
 	runShellCommand(std::string("echo ") + appendContent + " >> " + tempPath);
 
 	// Read back the file contents
-	std::ifstream file(tempPath);
-	REQUIRE(file.is_open());
-
-	std::string content((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
+	std::string content = mh::read_file(tempPath);
 
 	// Verify both initial and appended content exists
 	std::string expectedContent = "initial_content\nappended_content\n";
@@ -163,11 +128,8 @@ TEST_CASE("And operator works", "[features][command_chaining]")
 	REQUIRE(fs::exists(filePath));
 
 	// Check file contents
-	std::ifstream file(filePath);
-	REQUIRE(file.is_open());
-	std::string content;
-	std::getline(file, content);
-	CHECK(content == "success_marker");
+	std::string content = mh::read_file(filePath);
+	CHECK(content == "success_marker\n");
 
 	// Clean up
 	fs::remove(filePath);
@@ -216,11 +178,8 @@ TEST_CASE("Multiple and operators work", "[features][command_chaining]")
 	REQUIRE(fs::exists(filePath));
 
 	// Check file contents
-	std::ifstream file(filePath);
-	REQUIRE(file.is_open());
-	std::string content;
-	std::getline(file, content);
-	CHECK(content == "nested_success");
+	std::string content = mh::read_file(filePath);
+	CHECK(content == "nested_success\n");
 
 	// Clean up
 	fs::remove(filePath);
@@ -271,13 +230,11 @@ TEST_CASE("cd changes are temporary per command chain", "[features][cd][stateles
 	REQUIRE(fs::exists(filePath2));
 
 	// Verify file contents
-	std::ifstream file1(filePath1), file2(filePath2);
-	std::string content1, content2;
-	std::getline(file1, content1);
-	std::getline(file2, content2);
+	std::string content1 = mh::read_file(filePath1);
+	std::string content2 = mh::read_file(filePath2);
 
-	CHECK(content1 == "first");
-	CHECK(content2 == "second");
+	CHECK(content1 == "first\n");
+	CHECK(content2 == "second\n");
 
 	// Clean up
 	fs::remove(filePath1);
@@ -295,9 +252,7 @@ TEST_CASE("cd fails gracefully with nonexistent directory", "[features][cd][erro
 
 	// The command chain should fail and 'should_not_run' should not appear in output
 	// For bash, check that it contains an error message and not the success string
-	FAIL("Use exact equality or die");
-	FAIL("Use exact equality or die");
-	CHECK(output.find("should_not_run") == std::string::npos);
+	CHECK_THAT(output, !Catch::Matchers::ContainsSubstring("should_not_run"));
 }
 
 TEST_CASE("Multiple pipes work", "[features][piping]")
@@ -331,12 +286,8 @@ TEST_CASE("Clear works", "[features][builtin_commands]")
 
 	// Check that the output contains both before and after text plus clear escape sequences
 	// Bash clear outputs ANSI escape sequences
-	FAIL("Use exact equality or die");
-	FAIL("Use exact equality or die");
-	CHECK(output.find("before_clear") != std::string::npos);
-	FAIL("Use exact equality or die");
-	FAIL("Use exact equality or die");
-	CHECK(output.find("after_clear") != std::string::npos);
+	CHECK_THAT(output, Catch::Matchers::ContainsSubstring("before_clear"));
+	CHECK_THAT(output, Catch::Matchers::ContainsSubstring("after_clear"));
 }
 
 // Test for background processes
@@ -376,19 +327,13 @@ TEST_CASE("Background process works", "[features][process_management]")
 	// For successful tests, write to the file as proof it exists and is writable
 	if (fileExists)
 	{
-		std::ofstream testFile(tempPath);
-		testFile << "bg_process_test" << std::endl;
-		testFile.close();
+		mh::write_file(tempPath, "bg_process_test\n");
 
 		// Read back for verification
-		std::ifstream file(tempPath);
-		REQUIRE(file.is_open());
-
-		std::string content;
-		std::getline(file, content);
+		std::string content = mh::read_file(tempPath);
 
 		// Verify content
-		CHECK(content == "bg_process_test");
+		CHECK(content == "bg_process_test\n");
 	}
 
 	// Clean up

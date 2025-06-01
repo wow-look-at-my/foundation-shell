@@ -16,11 +16,21 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "Clang" OR CMAKE_CXX_COMPILER_ID MATCHES "GNU")
     add_compile_options(-Werror -fdiagnostics-color=always)
 endif()
 
+# Fix shebang lines in C# scripts first
+file(GLOB CS_SCRIPTS "${CMAKE_SOURCE_DIR}/scripts/*.cs")
+add_custom_target(fix_shebangs
+  COMMAND pwsh ${CMAKE_SOURCE_DIR}/scripts/fix_shebangs.ps1
+  WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+  COMMENT "Fixing shebang lines in C# checker scripts..."
+  DEPENDS ${CS_SCRIPTS}
+)
+
 # Add a custom command to check for incorrect static_assert usage
 add_custom_target(check_static_asserts
   COMMAND ${CMAKE_SOURCE_DIR}/scripts/fix_static_asserts.cs
   WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
   COMMENT "Checking for incorrect static_assert usage..."
+  DEPENDS fix_shebangs
 )
 
 # Add a custom command to check for proper upper CamelCase (PascalCase) file naming
@@ -28,6 +38,7 @@ add_custom_target(check_casing
   COMMAND ${CMAKE_SOURCE_DIR}/scripts/check_casing.cs
   WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
   COMMENT "Checking for proper upper CamelCase (PascalCase) file naming..."
+  DEPENDS fix_shebangs
 )
 
 # Add a custom command to check for proper include paths
@@ -35,6 +46,7 @@ add_custom_target(check_includes
   COMMAND ${CMAKE_SOURCE_DIR}/scripts/check_includes.cs ${CMAKE_SOURCE_DIR}
   WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
   COMMENT "Checking for proper include paths..."
+  DEPENDS fix_shebangs
 )
 
 # Add a custom command to check that LastCppInclude.hpp is the last include in all cpp files
@@ -42,6 +54,7 @@ add_custom_target(check_last_include
   COMMAND ${CMAKE_SOURCE_DIR}/scripts/check_last_include.cs
   WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
   COMMENT "Checking that LastCppInclude.hpp is the last include in all cpp files..."
+  DEPENDS fix_shebangs
 )
 
 # Check for filesystem support

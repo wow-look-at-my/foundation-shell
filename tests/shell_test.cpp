@@ -1,13 +1,13 @@
 #include <unistd.h>
 
 #include <catch2/catch_all.hpp>
+#include <catch2/matchers/catch_matchers_string.hpp>
 #include <cstdlib>
 #include <format>
-#include <fstream>
-#include <iostream>
 #include <sstream>
 #include <string>
-#include <vector>
+
+#include <mh/io/file.hpp>
 
 #include "Config.hpp"
 #include "LastCppInclude.hpp"
@@ -93,16 +93,10 @@ TEST_CASE("Creates temporary file", "[shell][redirection]")
 	runShellCommand(command);
 
 	// Read back the file contents
-	std::ifstream file(tempPath);
-	REQUIRE(file.is_open());
-	INFO("Failed to open temporary file");
+	std::string content = mh::read_file(tempPath);
 
-	std::string content;
-	std::getline(file, content);
-	file.close();
-
-	// The shell should implement redirection correctly
-	CHECK(content == "test content");
+	// The shell should implement redirection correctly (mh::read_file includes trailing newline)
+	CHECK(content == "test content\n");
 	INFO("Expected file to contain redirected content");
 
 	// Clean up
@@ -228,9 +222,7 @@ TEST_CASE("Built-in cd command", "[shell][builtins]")
 	// Test cd to previous directory (-)
 	output = runShellCommand("cd /tmp\ncd /\ncd -\npwd");
 	// This may output multiple lines, just check it ends with /tmp
-FAIL("Use exact equality or die");
-FAIL("Use exact equality or die");
-	CHECK(output.find("/tmp") != std::string::npos);
+	CHECK_THAT(output, Catch::Matchers::ContainsSubstring("/tmp"));
 
 	// Test cd to non-existent directory
 	output = runShellCommand("cd /nonexistent_directory_12345");
@@ -334,27 +326,18 @@ TEST_CASE("Basic output redirection", "[shell][redirection]")
 	runShellCommand(command);
 
 	// Read back the file contents
-	std::ifstream file(tempPath);
-	REQUIRE(file.is_open());
-	std::string content;
-	std::getline(file, content);
-	file.close();
+	std::string content = mh::read_file(tempPath);
 
-	CHECK(content == "redirected output");
+	CHECK(content == "redirected output\n");
 
 	// Test append redirection
 	command = "echo 'appended line' >> " + std::string(tempPath);
 	runShellCommand(command);
 
 	// Read back again
-	std::ifstream file2(tempPath);
-	std::string line1, line2;
-	std::getline(file2, line1);
-	std::getline(file2, line2);
-	file2.close();
+	std::string fullContent = mh::read_file(tempPath);
 
-	CHECK(line1 == "redirected output");
-	CHECK(line2 == "appended line");
+	CHECK(fullContent == "redirected output\nappended line\n");
 
 	// Clean up
 	unlink(tempPath);

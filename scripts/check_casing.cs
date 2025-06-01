@@ -12,18 +12,17 @@ class Program
         Console.WriteLine("Checking for proper upper CamelCase (PascalCase) naming convention...");
 
         var rootDir = args.Length > 0 ? args[0] : Directory.GetCurrentDirectory();
-        var srcDir = Path.Combine(rootDir, "src");
+        var directories = new[] { "src", "tests" };
 
-        if (!Directory.Exists(srcDir))
-        {
-            Console.WriteLine($"Source directory not found: {srcDir}");
-            return 1;
-        }
-
-        // Get all C++ files in the source directory (recursively)
-        var cppFiles = Directory.GetFiles(srcDir, "*", SearchOption.AllDirectories)
+        // Get all C++ files in the specified directories (recursively)
+        var cppFiles = directories
+            .Select(dir => Path.Combine(rootDir, dir))
+            .Where(Directory.Exists)
+            .SelectMany(dir => Directory.GetFiles(dir, "*", SearchOption.AllDirectories))
             .Where(f => f.EndsWith(".cpp") || f.EndsWith(".hpp"))
             .ToArray();
+
+        Console.WriteLine($"Checking {cppFiles.Length} C++ files for proper upper CamelCase (PascalCase) naming...");
 
         // Counter for issues found
         int issuesCount = 0;
