@@ -113,3 +113,7 @@ The shell supports:
 ## Design Principles
 
 - On any kind of error, anywhere along the pipe, we should throw an exception to bail out and return back to our normal steady state prompt (easy to do because we don't have any state!)
+
+## Coding Practices
+
+- We always use exact equality in string comparison checks in tests.

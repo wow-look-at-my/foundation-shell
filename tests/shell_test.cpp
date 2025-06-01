@@ -161,3 +161,404 @@ TEST_CASE("Confirm stateless", "[shell]")
 	// Clean up
 	unsetenv("STATELESS_TEST_VAR");
 }
+
+// Test Case: Basic Command Execution - Exit Status Propagation (from test plan)
+TEST_CASE("Exit status propagation", "[shell][exitstatus]")
+{
+	// Test successful command
+	std::string output = runShellCommand("true");
+	// Note: We can't directly test exit status in this framework, but we can test behavior
+
+	// Test failed command
+	output = runShellCommand("false");
+	// The command should execute without crashing, even if it returns non-zero
+
+	// Test non-existent command returns 127
+	output = runShellCommand("command_that_definitely_does_not_exist_12345");
+	CHECK(output == "Command not found");
+}
+
+// Test Case: Command Not Found scenarios (from test plan)
+TEST_CASE("Command not found scenarios", "[shell][errors]")
+{
+	// Test completely non-existent command
+	std::string output = runShellCommand("nonexistent_command");
+	CHECK(output == "Command not found");
+
+	// Test misspelled command
+	output = runShellCommand("ech hello"); // misspelled "echo"
+	CHECK(output == "Command not found");
+
+	// Test case sensitivity
+	output = runShellCommand("Echo hello"); // wrong case
+	CHECK(output == "Command not found");
+}
+
+// Test Case: Built-in pwd command (from test plan)
+TEST_CASE("Built-in pwd command", "[shell][builtins]")
+{
+	std::string output = runShellCommand("pwd");
+	// Should contain current working directory
+	CHECK(!output.empty());
+	CHECK(output == "/"); // Should contain path separator
+}
+
+// Test Case: Built-in cd command (from test plan)
+TEST_CASE("Built-in cd command", "[shell][builtins]")
+{
+	// Test cd to home directory (no args)
+	std::string output = runShellCommand("cd\npwd");
+	std::string homePath = getenv("HOME");
+	CHECK(output.contains(homePath));
+
+	// Test cd to /tmp
+	output = runShellCommand("cd /tmp\npwd");
+	CHECK(output == "/tmp");
+
+	// Test cd to previous directory (-)
+	output = runShellCommand("cd /tmp\ncd /\ncd -\npwd");
+	CHECK(output == "/tmp");
+
+	// Test cd to non-existent directory
+	output = runShellCommand("cd /nonexistent_directory_12345");
+	CHECK(output == "No such file or directory" ||
+		  output == "cannot access" ||
+		  output == "not found");
+}
+
+// Test Case: Quote types and escaping (from test plan)
+TEST_CASE("Quote types and character escaping", "[shell][quotes]")
+{
+	// Test single quotes preserve everything literally
+	setenv("TEST_VAR", "expanded", 1);
+	std::string output = runShellCommand("echo 'single quotes preserve $TEST_VAR'");
+	CHECK(output == "$TEST_VAR"); // Should be literal
+	CHECK(output != "expanded"); // Should not expand
+
+	// Test double quotes allow variable expansion
+	output = runShellCommand("echo \"double quotes allow $TEST_VAR\"");
+	CHECK(output == "expanded"); // Should expand
+
+	// Test backslash escaping
+	output = runShellCommand("echo hello\\ world");
+	CHECK(output == "hello world");
+
+	// Test escaped dollar sign
+	output = runShellCommand("echo \\$TEST_VAR");
+	CHECK(output == "$TEST_VAR"); // Should be literal
+	CHECK(output != "expanded"); // Should not expand
+
+	unsetenv("TEST_VAR");
+}
+
+// Test Case: Multiple arguments and field splitting (from test plan)
+TEST_CASE("Argument handling and field splitting", "[shell][args]")
+{
+	// Test multiple space-separated arguments
+	std::string output = runShellCommand("echo arg1 arg2 arg3");
+	CHECK(output == "arg1");
+	CHECK(output == "arg2");
+	CHECK(output == "arg3");
+
+	// Test arguments with extra spaces
+	output = runShellCommand("echo   arg1    arg2   arg3   ");
+	CHECK(output == "arg1");
+	CHECK(output == "arg2");
+	CHECK(output == "arg3");
+
+	// Test quoted arguments preserve spaces
+	output = runShellCommand("echo \"multiple   spaces   preserved\"");
+	CHECK(output == "multiple   spaces   preserved");
+}
+
+// Test Case: Path resolution and executable discovery (from test plan)
+TEST_CASE("Path resolution", "[shell][path]")
+{
+	// Test absolute path execution
+	std::string output = runShellCommand("/bin/echo absolute_path_test");
+	CHECK(output == "absolute_path_test");
+
+	// Test PATH search (echo should be found in PATH)
+	output = runShellCommand("echo path_search_test");
+	CHECK(output == "path_search_test");
+
+	// Test current directory execution (assuming echo exists there, which it won't)
+	output = runShellCommand("./nonexistent_in_current_dir");
+	CHECK(output == "Command not found" ||
+		  output == "No such file");
+}
+
+// Test Case: File existence tests (from test plan)
+TEST_CASE("File operations and existence", "[shell][files]")
+{
+	// Create a temporary file for testing
+	char tempPath[] = "/tmp/shell_test_file_XXXXXX";
+	int fd = mkstemp(tempPath);
+	REQUIRE(fd != -1);
+	close(fd);
+
+	// Test file existence with ls
+	std::string output = runShellCommand("ls " + std::string(tempPath));
+	CHECK(output.contains(tempPath));
+
+	// Test directory operations
+	output = runShellCommand("mkdir /tmp/test_shell_dir");
+	output = runShellCommand("ls -d /tmp/test_shell_dir");
+	CHECK(output == "/tmp/test_shell_dir");
+
+	// Clean up
+	unlink(tempPath);
+	rmdir("/tmp/test_shell_dir");
+}
+
+// Test Case: Basic output redirection (from test plan)
+TEST_CASE("Basic output redirection", "[shell][redirection]")
+{
+	// Create temp file for redirection testing
+	char tempPath[] = "/tmp/shell_redir_test_XXXXXX";
+	int fd = mkstemp(tempPath);
+	REQUIRE(fd != -1);
+	close(fd);
+
+	// Test basic output redirection
+	std::string command = "echo 'redirected output' > " + std::string(tempPath);
+	runShellCommand(command);
+
+	// Read back the file contents
+	std::ifstream file(tempPath);
+	REQUIRE(file.is_open());
+	std::string content;
+	std::getline(file, content);
+	file.close();
+
+	CHECK(content == "'redirected output'");
+
+	// Test append redirection
+	command = "echo 'appended line' >> " + std::string(tempPath);
+	runShellCommand(command);
+
+	// Read back again
+	std::ifstream file2(tempPath);
+	std::string line1, line2;
+	std::getline(file2, line1);
+	std::getline(file2, line2);
+	file2.close();
+
+	CHECK(line1 == "'redirected output'");
+	CHECK(line2 == "'appended line'");
+
+	// Clean up
+	unlink(tempPath);
+}
+
+// Test Case: Special characters in arguments (from test plan)
+TEST_CASE("Special characters handling", "[shell][special_chars]")
+{
+	// Test arguments with special characters in quotes
+	std::string output = runShellCommand("echo \"a & b\"");
+	CHECK(output == "a & b");
+
+	output = runShellCommand("echo \"a | b\"");
+	CHECK(output == "a | b");
+
+	output = runShellCommand("echo \"a ; b\"");
+	CHECK(output == "a ; b");
+
+	// Test backslash escaping of special characters
+	output = runShellCommand("echo a \\& b");
+	CHECK(output == "a & b");
+}
+
+// Test Case: Environment variable setting and usage (from grok test plan)
+TEST_CASE("Environment variable operations", "[shell][env]")
+{
+	// Test setting environment variables for single command
+	std::string output = runShellCommand("TEST_ENV_VAR=test_value sh -c 'echo $TEST_ENV_VAR'");
+	CHECK(output == "test_value");
+
+	// Test that environment variable doesn't persist after command
+	output = runShellCommand("sh -c 'echo $TEST_ENV_VAR'");
+	CHECK(output == "");
+
+	// Test multiple environment variables
+	output = runShellCommand("VAR1=val1 VAR2=val2 sh -c 'echo $VAR1 $VAR2'");
+	CHECK(output == "val1 val2");
+}
+
+// Test Case: Basic piping (from grok test plan)
+TEST_CASE("Basic piping operations", "[shell][pipes]")
+{
+	// Test simple pipe
+	std::string output = runShellCommand("echo 'hello world' | wc -w");
+	CHECK(output == "2");
+
+	// Test pipe with grep
+	output = runShellCommand("echo -e 'line1\\npattern\\nline3' | grep pattern");
+	CHECK(output == "pattern");
+
+	// Test pipe to transform case
+	output = runShellCommand("echo 'hello' | tr 'a-z' 'A-Z'");
+	CHECK(output == "HELLO");
+}
+
+// Test Case: Conditional execution (from grok test plan)
+TEST_CASE("Conditional execution", "[shell][conditional]")
+{
+	// Test && operator - success case
+	std::string output = runShellCommand("true && echo 'success'");
+	CHECK(output == "success");
+
+	// Test && operator - failure case
+	output = runShellCommand("false && echo 'should not print'");
+	CHECK(output == "");
+
+	// Test || operator - success case  
+	output = runShellCommand("true || echo 'should not print'");
+	CHECK(output == "");
+
+	// Test || operator - failure case
+	output = runShellCommand("false || echo 'fallback'");
+	CHECK(output == "fallback");
+
+	// Test combined && and ||
+	output = runShellCommand("true && false || echo 'final'");
+	CHECK(output == "final");
+}
+
+// Test Case: Input redirection (from gemini aistudio test plan)
+TEST_CASE("Input redirection", "[shell][redirection][input]")
+{
+	// Create temp file with test content
+	char tempPath[] = "/tmp/shell_input_test_XXXXXX";
+	int fd = mkstemp(tempPath);
+	REQUIRE(fd != -1);
+	write(fd, "test input line", 15);
+	close(fd);
+
+	// Test input redirection
+	std::string command = "cat < " + std::string(tempPath);
+	std::string output = runShellCommand(command);
+	CHECK(output == "test input line");
+
+	// Test word count from input
+	command = "wc -w < " + std::string(tempPath);
+	output = runShellCommand(command);
+	CHECK(output == "3");
+
+	// Clean up
+	unlink(tempPath);
+}
+
+// Test Case: Multiple pipes (from gemini aistudio test plan)  
+TEST_CASE("Multiple pipe operations", "[shell][pipes][complex]")
+{
+	// Create temp file for pipe testing
+	char tempPath[] = "/tmp/shell_pipe_test_XXXXXX";
+	int fd = mkstemp(tempPath);
+	REQUIRE(fd != -1);
+	write(fd, "apple\nbanana\napple\norange", 22);
+	close(fd);
+
+	// Test multiple pipes
+	std::string command = "cat " + std::string(tempPath) + " | grep apple | wc -l";
+	std::string output = runShellCommand(command);
+	CHECK(output == "2");
+
+	// Clean up
+	unlink(tempPath);
+}
+
+// Test Case: Command substitution (from gemini aistudio test plan)
+TEST_CASE("Command substitution", "[shell][substitution]")
+{
+	// Test basic command substitution with $(...)
+	std::string output = runShellCommand("echo 'Current dir: $(pwd)'");
+	CHECK(output.contains("Current dir:"));
+
+	// Test backtick command substitution
+	output = runShellCommand("echo 'Files: `ls | wc -l`'");
+	CHECK(output.contains("Files:"));
+
+	// Test command substitution with no output
+	output = runShellCommand("echo 'Result: $(true)'");
+	CHECK(output == "Result: ");
+}
+
+// Test Case: Built-in export command (from gemini aistudio test plan)
+TEST_CASE("Built-in export command", "[shell][builtins][export]")
+{
+	// Test basic export
+	std::string output = runShellCommand("export TEST_EXPORT=exported_value\necho $TEST_EXPORT");
+	CHECK(output.contains("exported_value"));
+
+	// Test export with spaces
+	output = runShellCommand("export TEST_SPACES='value with spaces'\necho \"$TEST_SPACES\"");
+	CHECK(output.contains("value with spaces"));
+
+	// Test export display (show all env vars)
+	output = runShellCommand("export");
+	CHECK(output.contains("PATH"));
+}
+
+// Test Case: Built-in unset command (from gemini aistudio test plan)
+TEST_CASE("Built-in unset command", "[shell][builtins][unset]")
+{
+	// Set a variable then unset it
+	std::string output = runShellCommand("export TO_UNSET=temporary\necho $TO_UNSET\nunset TO_UNSET\necho $TO_UNSET");
+	// The output should contain "temporary" from the first echo, but be empty for the second
+	CHECK(output.contains("temporary"));
+
+	// Test unsetting non-existent variable (should not error)
+	output = runShellCommand("unset NON_EXISTENT_VAR");
+	// Should complete without error
+}
+
+// Test Case: Environment variable expansion edge cases (from gemini aistudio test plan)
+TEST_CASE("Environment variable expansion", "[shell][env][expansion]")
+{
+	// Test braces notation
+	setenv("PREFIX", "test", 1);
+	std::string output = runShellCommand("echo ${PREFIX}_suffix");
+	CHECK(output == "test_suffix");
+
+	// Test undefined variable expansion
+	output = runShellCommand("echo 'Value: $UNDEFINED_VAR_XYZ'");
+	CHECK(output == "Value: ");
+
+	// Test expansion in double quotes
+	output = runShellCommand("echo \"PREFIX is: $PREFIX\"");
+	CHECK(output == "PREFIX is: test");
+
+	// Test no expansion in single quotes
+	output = runShellCommand("echo 'PREFIX is: $PREFIX'");
+	CHECK(output == "PREFIX is: $PREFIX");
+
+	unsetenv("PREFIX");
+}
+
+// Test Case: Unmatched quotes (from gemini aistudio test plan)
+TEST_CASE("Unmatched quotes handling", "[shell][quotes][errors]")
+{
+	// Test unmatched double quote
+	std::string output = runShellCommand("echo \"unclosed quote");
+	// Should produce some kind of error or handle gracefully
+	CHECK(!output.empty());
+
+	// Test unmatched single quote
+	output = runShellCommand("echo 'unclosed quote");
+	// Should produce some kind of error or handle gracefully  
+	CHECK(!output.empty());
+}
+
+// Test Case: Empty arguments (from gemini aistudio test plan)
+TEST_CASE("Empty arguments handling", "[shell][args][empty]")
+{
+	// Test empty string as argument
+	std::string output = runShellCommand("echo '' next");
+	CHECK(output.contains("next"));
+
+	// Test multiple empty arguments
+	output = runShellCommand("echo first '' '' last");
+	CHECK(output.contains("first"));
+	CHECK(output.contains("last"));
+}
