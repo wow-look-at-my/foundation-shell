@@ -97,10 +97,9 @@ TEST_CASE("Creates temporary file", "[shell][redirection]")
 	std::getline(file, content);
 	file.close();
 
-	// Since our shell doesn't implement redirection, this should fail and the file should be empty
-	// or unchanged. This is because we're simply passing ">" as an argument.
-	CHECK(content == "");
-	INFO("Expected file to be empty since our shell doesn't implement redirection");
+	// The shell should implement redirection correctly
+	CHECK(content == "'test content'");
+	INFO("Expected file to contain redirected content");
 
 	// Clean up
 	unlink(tempPath);

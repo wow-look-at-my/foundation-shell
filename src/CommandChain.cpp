@@ -43,8 +43,14 @@ void CommandChain::appendCommand(Command nextCommand, TokenType op)
 	commands_.push_back(std::move(nextCommand));
 }
 
+enum class TokenPosition
+{
+	FirstInCommand,
+	SubsequentInCommand
+};
+
 // Helper function to convert a string token to our Token types
-static std::variant<ValueToken, OperatorToken> parseStringToToken(const std::string &tokenStr, bool isLastToken)
+static std::variant<ValueToken, OperatorToken> parseStringToToken(const std::string &tokenStr, TokenPosition position)
 {
 	// Map string to token type and create the appropriate token
 	if (tokenStr == "|")
@@ -82,19 +88,7 @@ static std::variant<ValueToken, OperatorToken> parseStringToToken(const std::str
 	else if (!tokenStr.empty())
 	{
 		// Default to command or argument token based on position
-		static bool isFirstArg = true;
-		TokenType type;
-
-		if (isFirstArg)
-		{
-			type = TokenType::Command;
-			isFirstArg = false;
-		}
-		else
-		{
-			type = TokenType::CommandArgument;
-		}
-
+		TokenType type = (position == TokenPosition::FirstInCommand) ? TokenType::Command : TokenType::CommandArgument;
 		return ValueToken(type, tokenStr);
 	}
 	else
@@ -114,17 +108,35 @@ CommandChain CommandChain::parseFromTokens(const std::vector<std::string> &token
 	parsedTokens.reserve(tokens.size());
 
 	// First pass: Parse all tokens into our validated Token types
+	bool isFirstInCommand = true;
 	for (size_t i = 0; i < tokens.size(); ++i)
 	{
-		bool isLastToken = (i == tokens.size() - 1);
 		try
 		{
-			parsedTokens.push_back(parseStringToToken(tokens[i], isLastToken));
+			TokenPosition position = isFirstInCommand ? TokenPosition::FirstInCommand : TokenPosition::SubsequentInCommand;
+			auto token = parseStringToToken(tokens[i], position);
+			parsedTokens.push_back(token);
+
+			// Reset position tracking when we hit an operator that separates commands
+			if (std::holds_alternative<OperatorToken>(token))
+			{
+				const auto &opToken = std::get<OperatorToken>(token);
+				if (opToken.type == TokenType::Pipe || opToken.type == TokenType::And || opToken.type == TokenType::Or)
+				{
+					isFirstInCommand = true;
+				}
+			}
+			else if (isFirstInCommand)
+			{
+				// After the first value token in a command, subsequent ones are arguments
+				isFirstInCommand = false;
+			}
 		}
-		catch (const std::invalid_argument &e)
+		catch (std::invalid_argument e)
 		{
-			// Skip invalid tokens with a log message
-			std::print("Debug: Invalid token: {} - {}", tokens[i], e.what());
+			// Throw to bail out - invalid tokens should not be silently ignored
+			std::print("Invalid token '{}': {}", tokens[i], e.what());
+			throw;
 		}
 	}
 
@@ -151,17 +163,36 @@ CommandChain CommandChain::parseFromTokens(const std::vector<std::string> &token
 				// Add the current command to the chain if it's not empty
 				if (!currentCommand.args.empty())
 				{
-					if (chain.commands_.empty())
+					// Add the current command first
+					chain.commands_.push_back(std::move(currentCommand));
+
+					// Only add the operator if there will be another command after this operator
+					// We'll check this by looking ahead in the token stream
+					bool hasCommandAfterOperator = false;
+					for (size_t j = i + 1; j < parsedTokens.size(); ++j)
 					{
-						// First command in chain
-						chain.commands_.push_back(std::move(currentCommand));
+						if (std::holds_alternative<ValueToken>(parsedTokens[j]))
+						{
+							hasCommandAfterOperator = true;
+							break;
+						}
+						// Skip redirection operators, they don't start new commands
+						if (std::holds_alternative<OperatorToken>(parsedTokens[j]))
+						{
+							const auto &nextOp = std::get<OperatorToken>(parsedTokens[j]);
+							if (nextOp.type == TokenType::Pipe || nextOp.type == TokenType::And || nextOp.type == TokenType::Or)
+							{
+								break; // Another command operator means no command follows
+							}
+						}
 					}
-					else
+
+					// Only add the operator if there's a command after it
+					if (hasCommandAfterOperator)
 					{
-						// Add command with operator
 						chain.operators_.push_back(tokenType);
-						chain.commands_.push_back(std::move(currentCommand));
 					}
+
 					currentCommand = Command(); // Reset for next command
 					resetCommand = true;
 				}
@@ -239,16 +270,7 @@ CommandChain CommandChain::parseFromTokens(const std::vector<std::string> &token
 	// Add any remaining command if it's not empty and we didn't just reset it
 	if (!currentCommand.args.empty() && !resetCommand)
 	{
-		if (chain.commands_.empty())
-		{
-			chain.commands_.push_back(std::move(currentCommand));
-		}
-		else
-		{
-			// If we have multiple commands but no explicit operator, use None
-			chain.operators_.push_back(TokenType::None);
-			chain.commands_.push_back(std::move(currentCommand));
-		}
+		chain.commands_.push_back(std::move(currentCommand));
 	}
 
 	// Validate the chain invariant: operators.size() == commands.size() - 1 or empty chain
@@ -437,6 +459,48 @@ mh::task<int> CommandChain::executeAsync() const
 			// Execute the command directly and asynchronously
 			bool result = co_await commands_[i].executeAsync();
 			lastExitStatus = result ? 0 : 1; // Convert bool to exit status
+			
+			// Report command failure with clear diagnostics
+			if (!result)
+			{
+				std::string commandStr = commands_[i].args.empty() ? "<empty>" : commands_[i].args[0];
+				for (size_t j = 1; j < commands_[i].args.size(); ++j)
+				{
+					commandStr += " " + commands_[i].args[j];
+				}
+				std::print(stderr, "{}Command failed: {}{}\n", Colors::COLOR_RED, commandStr, Colors::COLOR_RESET);
+				std::print(stderr, "{}Exit status: {}{}\n", Colors::COLOR_RED, lastExitStatus, Colors::COLOR_RESET);
+				
+				// Show pointer to the failed command in the chain
+				std::string chainStr;
+				for (size_t k = 0; k < commands_.size(); ++k)
+				{
+					if (k > 0 && k - 1 < operators_.size())
+					{
+						if (operators_[k - 1] == TokenType::Pipe) chainStr += " | ";
+						else if (operators_[k - 1] == TokenType::And) chainStr += " && ";
+						else if (operators_[k - 1] == TokenType::Or) chainStr += " || ";
+					}
+					chainStr += commands_[k].args.empty() ? "<empty>" : commands_[k].args[0];
+				}
+				std::print(stderr, "{}Chain: {}{}\n", Colors::COLOR_YELLOW, chainStr, Colors::COLOR_RESET);
+				
+				// Add pointer to failed command
+				std::string pointer;
+				size_t pos = 0;
+				for (size_t k = 0; k < i; ++k)
+				{
+					if (k > 0 && k - 1 < operators_.size())
+					{
+						if (operators_[k - 1] == TokenType::Pipe) pos += 3; // " | "
+						else if (operators_[k - 1] == TokenType::And) pos += 4; // " && "
+						else if (operators_[k - 1] == TokenType::Or) pos += 4; // " || "
+					}
+					pos += commands_[k].args.empty() ? 7 : commands_[k].args[0].length(); // "<empty>" or command length
+				}
+				pointer = std::string(pos, ' ') + std::string(commandStr.length(), '^');
+				std::print(stderr, "{}       {}{}\n", Colors::COLOR_RED, pointer, Colors::COLOR_RESET);
+			}
 		}
 	}
 

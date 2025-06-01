@@ -14,6 +14,9 @@
 // Async sleep function using the dispatcher
 mh::task<void> sleep_async(std::chrono::milliseconds duration);
 
+// Helper function to split a string into tokens respecting quotes and escapes using wordexp
+std::vector<std::string> bashSplitString(const std::string &input);
+
 // Structure to represent a command with its I/O redirections
 class Command
 {

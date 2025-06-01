@@ -104,8 +104,12 @@ The shell supports:
 - Make sure all async functions' names end with Async
 - Never pass by reference to coroutine/async functions, its way too dangerous.
 - Keep this project platform agnostic. There shouldn't be any mention of file descriptors outside of unix/ directories
-- Always use std::print() and std::format() instead of stringstreams
+- Always use std::print() and std::format() instead of stringstreams or iostreams
 - Do not write code that encourages or easily allows the creation of invalid states. For example, an "index" value cannot logically be negative for an array type, so you would use an unsigned integer. For a class constructor, it should throw for any invalid states.
 - Format your code properly. If you do not format it to match the codebase style, expect it to get randomly autoformatted out from under you at some point in the future. Then you'll have reread the file and reorient yourself.
 - Always use include paths that are relative to the project root. Avoid "../" in include paths at all costs. For files that are in the same directory, just #include the filename with no relative path.
 - If you're going to add todos, use `static_assert(false, "TODO: <the todo>");` or `throw new std::runtime_error("TODO: <the todo>");`
+
+## Design Principles
+
+- On any kind of error, anywhere along the pipe, we should throw an exception to bail out and return back to our normal steady state prompt (easy to do because we don't have any state!)

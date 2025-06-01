@@ -66,20 +66,23 @@ mh::task<int> Shell::runAsync()
 			continue;
 		}
 
-		// Split the input into tokens
-		std::vector<std::string> tokens;
-		std::istringstream iss(input);
-		std::string token;
-		while (iss >> token)
+		try
 		{
-			tokens.push_back(token);
+			// Split the input into tokens using bash-like expansion
+			std::vector<std::string> tokens = bashSplitString(input);
+
+			// Parse the command with potential redirections, pipes, and command chains
+			CommandChain commandChain(tokens);
+
+			// Execute the command chain asynchronously
+			lastExitStatus = co_await commandChain.executeAsync();
 		}
-
-		// Parse the command with potential redirections, pipes, and command chains
-		CommandChain commandChain(tokens);
-
-		// Execute the command chain asynchronously
-		lastExitStatus = co_await commandChain.executeAsync();
+		catch (const std::exception &e)
+		{
+			// Any error should bail out and return to prompt with error status
+			std::print("{}Error: {}{}\n", Colors::COLOR_RED, e.what(), Colors::COLOR_RESET);
+			lastExitStatus = 1;
+		}
 	}
 
 	co_return lastExitStatus;

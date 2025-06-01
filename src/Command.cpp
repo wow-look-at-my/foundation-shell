@@ -36,10 +36,11 @@ int Command::handleBuiltins() const
 		try
 		{
 			std::filesystem::current_path(args.at(1));
+			return 0; // Success
 		}
 		catch (const std::exception &e)
 		{
-			std::cerr << "Failed to change directory to " << args.at(1) << ": " << e.what() << "\n";
+			std::print(stderr, "Failed to change directory to {}: {}\n", args.at(1), e.what());
 			return 1;
 		}
 	}

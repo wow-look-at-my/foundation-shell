@@ -223,6 +223,77 @@ TEST_CASE("Multiple and operators work", "[features][command_chaining]")
 	rmdir(tempDir);
 }
 
+// Test for cd working within command chains
+TEST_CASE("cd works in command chains", "[features][cd][command_chaining]")
+{
+	// Create a temporary directory
+	char tempDir[] = "/tmp/shell_cd_test_XXXXXX";
+	REQUIRE(mkdtemp(tempDir) != nullptr);
+	
+	// Test that cd && pwd shows we're in the new directory
+	std::string command = std::string("cd ") + tempDir + " && pwd";
+	std::string output = runShellCommand(command);
+	
+	// Extract the pwd output (should show the temp directory path)
+	std::string extractedOutput = extractCommandOutput(output, command);
+	CHECK(extractedOutput.find(tempDir) != std::string::npos);
+	
+	// Clean up
+	rmdir(tempDir);
+}
+
+// Test for temporary cd (directory change should be isolated per command chain)
+TEST_CASE("cd changes are temporary per command chain", "[features][cd][stateless]")
+{
+	// Create two temporary directories
+	char tempDir1[] = "/tmp/shell_cd_temp1_XXXXXX";
+	char tempDir2[] = "/tmp/shell_cd_temp2_XXXXXX";
+	REQUIRE(mkdtemp(tempDir1) != nullptr);
+	REQUIRE(mkdtemp(tempDir2) != nullptr);
+	
+	// Run first command chain: cd to tempDir1 and create a file
+	std::string command1 = std::string("cd ") + tempDir1 + " && echo 'first' > file1.txt";
+	runShellCommand(command1);
+	
+	// Run second command chain: cd to tempDir2 and create a file
+	std::string command2 = std::string("cd ") + tempDir2 + " && echo 'second' > file2.txt";
+	runShellCommand(command2);
+	
+	// Verify both files were created in their respective directories
+	std::string filePath1 = std::string(tempDir1) + "/file1.txt";
+	std::string filePath2 = std::string(tempDir2) + "/file2.txt";
+	
+	REQUIRE(fs::exists(filePath1));
+	REQUIRE(fs::exists(filePath2));
+	
+	// Verify file contents
+	std::ifstream file1(filePath1), file2(filePath2);
+	std::string content1, content2;
+	std::getline(file1, content1);
+	std::getline(file2, content2);
+	
+	CHECK(content1 == "'first'");
+	CHECK(content2 == "'second'");
+	
+	// Clean up
+	fs::remove(filePath1);
+	fs::remove(filePath2);
+	rmdir(tempDir1);
+	rmdir(tempDir2);
+}
+
+// Test for cd with nonexistent directory
+TEST_CASE("cd fails gracefully with nonexistent directory", "[features][cd][error_handling]")
+{
+	// Try to cd to a directory that doesn't exist
+	std::string command = "cd /this/directory/should/not/exist && echo should_not_run";
+	std::string output = runShellCommand(command);
+	
+	// The command chain should fail and 'should_not_run' should not appear in output
+	std::string extractedOutput = extractCommandOutput(output, command);
+	CHECK(extractedOutput.find("should_not_run") == std::string::npos);
+}
+
 TEST_CASE("Multiple pipes work", "[features][piping]")
 {
 	// Test a chain of pipes

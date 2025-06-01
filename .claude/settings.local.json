@@ -10,7 +10,8 @@
       "Bash(just clean:*)",
       "Bash(just test)",
       "Bash(rg:*)",
-      "Bash(cmake:*)"
+      "Bash(cmake:*)",
+      "Bash(timeout:*)"
     ],
     "deny": []
   },
