@@ -1,22 +1,22 @@
 #include "CommandChain.hpp"
-#include "Token.hpp"
-#include "Command.hpp"
-#include <stdexcept>
-#include <iostream>
-#include <cstdio>
-#include "io/IPipe.hpp" // For IPipe
+
+#include <atomic>
 #include <cstdio>
 #include <format>
-#include <vector>
+#include <future>
+#include <iostream>
+#include <mh/concurrency/dispatcher.hpp>
 #include <stdexcept>
 #include <thread>
-#include <atomic>
-#include <future>
-#include <mh/concurrency/dispatcher.hpp>
+#include <vector>
+
+#include "Command.hpp"
 #include "LastCppInclude.hpp"
+#include "Token.hpp"
+#include "io/IPipe.hpp" // For IPipe
 
 // Constructor that parses tokens into a command chain
-CommandChain::CommandChain(const std::vector<std::string> &tokens)
+CommandChain::CommandChain(const std::vector<std::string>& tokens)
 {
 	// Use our static parsing method
 	*this = parseFromTokens(tokens);
@@ -55,7 +55,7 @@ enum class TokenPosition
 };
 
 // Helper function to convert a string token to our Token types
-static std::variant<ValueToken, OperatorToken> parseStringToToken(const std::string &tokenStr, TokenPosition position)
+static std::variant<ValueToken, OperatorToken> parseStringToToken(const std::string& tokenStr, TokenPosition position)
 {
 	// Map string to token type and create the appropriate token
 	if (tokenStr == "|")
@@ -104,7 +104,7 @@ static std::variant<ValueToken, OperatorToken> parseStringToToken(const std::str
 }
 
 // Static method to parse tokens into a command chain
-CommandChain CommandChain::parseFromTokens(const std::vector<std::string> &tokens)
+CommandChain CommandChain::parseFromTokens(const std::vector<std::string>& tokens)
 {
 	CommandChain chain;
 
@@ -125,7 +125,7 @@ CommandChain CommandChain::parseFromTokens(const std::vector<std::string> &token
 		// Reset position tracking when we hit an operator that separates commands
 		if (std::holds_alternative<OperatorToken>(token))
 		{
-			const auto &opToken = std::get<OperatorToken>(token);
+			const auto& opToken = std::get<OperatorToken>(token);
 			if (opToken.type == TokenType::Pipe || opToken.type == TokenType::And || opToken.type == TokenType::Or)
 			{
 				isFirstInCommand = true;
@@ -149,148 +149,142 @@ CommandChain CommandChain::parseFromTokens(const std::vector<std::string> &token
 	//	throw;
 	// }
 
-// Second pass: Process the validated tokens into commands and operators
-Command currentCommand;
-bool resetCommand = false;
+	// Second pass: Process the validated tokens into commands and operators
+	Command currentCommand;
+	bool resetCommand = false;
 
-for (size_t i = 0; i < parsedTokens.size(); ++i)
-{
-	const auto &token = parsedTokens[i];
-
-	// Handle the token based on its type
-	if (std::holds_alternative<OperatorToken>(token))
+	for (size_t i = 0; i < parsedTokens.size(); ++i)
 	{
-		const auto &opToken = std::get<OperatorToken>(token);
-		TokenType tokenType = opToken.type;
+		const auto& token = parsedTokens[i];
 
-		// Process operators
-		if (tokenType == TokenType::Pipe ||
-			tokenType == TokenType::And ||
-			tokenType == TokenType::Or)
+		// Handle the token based on its type
+		if (std::holds_alternative<OperatorToken>(token))
 		{
+			const auto& opToken = std::get<OperatorToken>(token);
+			TokenType tokenType = opToken.type;
 
-			// Add the current command to the chain if it's not empty
-			if (!currentCommand.args.empty())
+			// Process operators
+			if (tokenType == TokenType::Pipe || tokenType == TokenType::And || tokenType == TokenType::Or)
 			{
-				// Add the current command first
-				chain.commands_.push_back(std::move(currentCommand));
 
-				// Only add the operator if there will be another command after this operator
-				// We'll check this by looking ahead in the token stream
-				bool hasCommandAfterOperator = false;
-				for (size_t j = i + 1; j < parsedTokens.size(); ++j)
+				// Add the current command to the chain if it's not empty
+				if (!currentCommand.args.empty())
 				{
-					if (std::holds_alternative<ValueToken>(parsedTokens[j]))
+					// Add the current command first
+					chain.commands_.push_back(std::move(currentCommand));
+
+					// Only add the operator if there will be another command after this operator
+					// We'll check this by looking ahead in the token stream
+					bool hasCommandAfterOperator = false;
+					for (size_t j = i + 1; j < parsedTokens.size(); ++j)
 					{
-						hasCommandAfterOperator = true;
-						break;
-					}
-					// Skip redirection operators, they don't start new commands
-					if (std::holds_alternative<OperatorToken>(parsedTokens[j]))
-					{
-						const auto &nextOp = std::get<OperatorToken>(parsedTokens[j]);
-						if (nextOp.type == TokenType::Pipe || nextOp.type == TokenType::And || nextOp.type == TokenType::Or)
+						if (std::holds_alternative<ValueToken>(parsedTokens[j]))
 						{
-							break; // Another command operator means no command follows
+							hasCommandAfterOperator = true;
+							break;
+						}
+						// Skip redirection operators, they don't start new commands
+						if (std::holds_alternative<OperatorToken>(parsedTokens[j]))
+						{
+							const auto& nextOp = std::get<OperatorToken>(parsedTokens[j]);
+							if (nextOp.type == TokenType::Pipe || nextOp.type == TokenType::And ||
+							    nextOp.type == TokenType::Or)
+							{
+								break; // Another command operator means no command follows
+							}
 						}
 					}
-				}
 
-				// Only add the operator if there's a command after it
-				if (hasCommandAfterOperator)
+					// Only add the operator if there's a command after it
+					if (hasCommandAfterOperator)
+					{
+						chain.operators_.push_back(tokenType);
+					}
+
+					currentCommand = Command(); // Reset for next command
+					resetCommand = true;
+				}
+			}
+			else if (tokenType == TokenType::RedirectStdIn)
+			{
+				// Input redirection
+				if (i + 1 < parsedTokens.size() && std::holds_alternative<ValueToken>(parsedTokens[i + 1]))
 				{
-					chain.operators_.push_back(tokenType);
+					const auto& valueToken = std::get<ValueToken>(parsedTokens[i + 1]);
+					currentCommand.inputFile = valueToken.value;
+					i++; // Skip the filename token
 				}
+			}
+			else if (tokenType == TokenType::RedirectStdOut)
+			{
+				// Output redirection
+				if (i + 1 < parsedTokens.size() && std::holds_alternative<ValueToken>(parsedTokens[i + 1]))
+				{
+					const auto& valueToken = std::get<ValueToken>(parsedTokens[i + 1]);
+					currentCommand.outputFile = valueToken.value;
+					currentCommand.appendOutput = false;
+					i++; // Skip the filename token
+				}
+			}
+			else if (tokenType == TokenType::RedirectStdOutAppend)
+			{
+				// Output redirection (append)
+				if (i + 1 < parsedTokens.size() && std::holds_alternative<ValueToken>(parsedTokens[i + 1]))
+				{
+					const auto& valueToken = std::get<ValueToken>(parsedTokens[i + 1]);
+					currentCommand.outputFile = valueToken.value;
+					currentCommand.appendOutput = true;
+					i++; // Skip the filename token
+				}
+			}
+			else if (tokenType == TokenType::RedirectStdErr)
+			{
+				// Error redirection
+				if (i + 1 < parsedTokens.size() && std::holds_alternative<ValueToken>(parsedTokens[i + 1]))
+				{
+					const auto& valueToken = std::get<ValueToken>(parsedTokens[i + 1]);
+					currentCommand.errorFile = valueToken.value;
+					currentCommand.appendError = false;
+					i++; // Skip the filename token
+				}
+			}
+			else if (tokenType == TokenType::RedirectStdErrAppend)
+			{
+				// Error redirection (append)
+				if (i + 1 < parsedTokens.size() && std::holds_alternative<ValueToken>(parsedTokens[i + 1]))
+				{
+					const auto& valueToken = std::get<ValueToken>(parsedTokens[i + 1]);
+					currentCommand.errorFile = valueToken.value;
+					currentCommand.appendError = true;
+					i++; // Skip the filename token
+				}
+			}
+		}
+		else if (std::holds_alternative<ValueToken>(token))
+		{
+			const auto& valueToken = std::get<ValueToken>(token);
 
-				currentCommand = Command(); // Reset for next command
-				resetCommand = true;
-			}
-		}
-		else if (tokenType == TokenType::RedirectStdIn)
-		{
-			// Input redirection
-			if (i + 1 < parsedTokens.size() &&
-				std::holds_alternative<ValueToken>(parsedTokens[i + 1]))
-			{
-				const auto &valueToken = std::get<ValueToken>(parsedTokens[i + 1]);
-				currentCommand.inputFile = valueToken.value;
-				i++; // Skip the filename token
-			}
-		}
-		else if (tokenType == TokenType::RedirectStdOut)
-		{
-			// Output redirection
-			if (i + 1 < parsedTokens.size() &&
-				std::holds_alternative<ValueToken>(parsedTokens[i + 1]))
-			{
-				const auto &valueToken = std::get<ValueToken>(parsedTokens[i + 1]);
-				currentCommand.outputFile = valueToken.value;
-				currentCommand.appendOutput = false;
-				i++; // Skip the filename token
-			}
-		}
-		else if (tokenType == TokenType::RedirectStdOutAppend)
-		{
-			// Output redirection (append)
-			if (i + 1 < parsedTokens.size() &&
-				std::holds_alternative<ValueToken>(parsedTokens[i + 1]))
-			{
-				const auto &valueToken = std::get<ValueToken>(parsedTokens[i + 1]);
-				currentCommand.outputFile = valueToken.value;
-				currentCommand.appendOutput = true;
-				i++; // Skip the filename token
-			}
-		}
-		else if (tokenType == TokenType::RedirectStdErr)
-		{
-			// Error redirection
-			if (i + 1 < parsedTokens.size() &&
-				std::holds_alternative<ValueToken>(parsedTokens[i + 1]))
-			{
-				const auto &valueToken = std::get<ValueToken>(parsedTokens[i + 1]);
-				currentCommand.errorFile = valueToken.value;
-				currentCommand.appendError = false;
-				i++; // Skip the filename token
-			}
-		}
-		else if (tokenType == TokenType::RedirectStdErrAppend)
-		{
-			// Error redirection (append)
-			if (i + 1 < parsedTokens.size() &&
-				std::holds_alternative<ValueToken>(parsedTokens[i + 1]))
-			{
-				const auto &valueToken = std::get<ValueToken>(parsedTokens[i + 1]);
-				currentCommand.errorFile = valueToken.value;
-				currentCommand.appendError = true;
-				i++; // Skip the filename token
-			}
+			// Add command or argument to the current command
+			currentCommand.args.push_back(valueToken.value);
+			resetCommand = false;
 		}
 	}
-	else if (std::holds_alternative<ValueToken>(token))
+
+	// Add any remaining command if it's not empty and we didn't just reset it
+	if (!currentCommand.args.empty() && !resetCommand)
 	{
-		const auto &valueToken = std::get<ValueToken>(token);
-
-		// Add command or argument to the current command
-		currentCommand.args.push_back(valueToken.value);
-		resetCommand = false;
+		chain.commands_.push_back(std::move(currentCommand));
 	}
-}
 
-// Add any remaining command if it's not empty and we didn't just reset it
-if (!currentCommand.args.empty() && !resetCommand)
-{
-	chain.commands_.push_back(std::move(currentCommand));
-}
+	// Validate the chain invariant: operators.size() == commands.size() - 1 or empty chain
+	if (!chain.commands_.empty() && chain.operators_.size() != chain.commands_.size() - 1)
+	{
+		throw std::logic_error(std::format("Invalid command chain: {} commands should have {} operators, but has {}",
+		                                   chain.commands_.size(), chain.commands_.size() - 1,
+		                                   chain.operators_.size()));
+	}
 
-// Validate the chain invariant: operators.size() == commands.size() - 1 or empty chain
-if (!chain.commands_.empty() && chain.operators_.size() != chain.commands_.size() - 1)
-{
-	throw std::logic_error(std::format(
-		"Invalid command chain: {} commands should have {} operators, but has {}",
-		chain.commands_.size(), chain.commands_.size() - 1, chain.operators_.size()));
-}
-
-return chain;
+	return chain;
 }
 
 
@@ -377,7 +371,8 @@ mh::task<int> CommandChain::executeAsync() const
 					if (k > 0 && k < pipelineCommands.size() - 1)
 					{
 						// Middle command: input from previous pipe, output to next pipe
-						tasks.emplace_back(pipelineCommands[k].executeAsync(pipes[k - 1]->getSource(), pipes[k]->getSink()));
+						tasks.emplace_back(
+						    pipelineCommands[k].executeAsync(pipes[k - 1]->getSource(), pipes[k]->getSink()));
 					}
 					else if (k > 0)
 					{
@@ -434,13 +429,15 @@ mh::task<int> CommandChain::executeAsync() const
 				if (operators_[i - 1] == TokenType::And && lastExitStatus != 0)
 				{
 					// Skip this command if the previous one failed for AND
-					// std::cerr << "Debug: Skipping command due to AND operator and previous command failure" << std::endl;
+					// std::cerr << "Debug: Skipping command due to AND operator and previous command failure" <<
+					// std::endl;
 					continue;
 				}
 				else if (operators_[i - 1] == TokenType::Or && lastExitStatus == 0)
 				{
 					// Skip this command if the previous one succeeded for OR
-					// std::cerr << "Debug: Skipping command due to OR operator and previous command success" << std::endl;
+					// std::cerr << "Debug: Skipping command due to OR operator and previous command success" <<
+					// std::endl;
 					continue;
 				}
 			}

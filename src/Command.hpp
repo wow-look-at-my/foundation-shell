@@ -1,21 +1,22 @@
 #pragma once
 
+#include <chrono>
+#include <memory>
+#include <mh/process/process.hpp> // Include mh::process
 #include <string>
 #include <vector>
-#include <memory>
-#include <chrono>
+
+#include "Config.hpp"            // Include ShellConfig
+#include "TokenType.hpp"         // Include TokenType enum
+#include "io/ISink.hpp"          // Include ISink interface
+#include "io/ISource.hpp"        // Include ISource interface
 #include "mh/coroutine/task.hpp" // Include the Task type
-#include "Config.hpp"			 // Include ShellConfig
-#include "io/ISink.hpp"			 // Include ISink interface
-#include "io/ISource.hpp"		 // Include ISource interface
-#include <mh/process/process.hpp>	 // Include mh::process
-#include "TokenType.hpp"		 // Include TokenType enum
 
 // Async sleep function using the dispatcher
 mh::task<void> sleep_async(std::chrono::milliseconds duration);
 
 // Helper function to split a string into tokens respecting quotes and escapes using wordexp
-std::vector<std::string> bashSplitString(const std::string &input);
+std::vector<std::string> bashSplitString(const std::string& input);
 
 // Structure to represent a command with its I/O redirections
 class Command

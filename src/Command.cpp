@@ -1,31 +1,30 @@
 #include "Command.hpp"
-#include "EnvManager.hpp"
-#include <filesystem>
+
+#include <dirent.h>
+#include <signal.h>
+#include <wordexp.h>
+
+#include <algorithm>
+#include <chrono>
 #include <cstdio>
 #include <cstring>
-#include <ostream>
-#include <wordexp.h>
 #include <filesystem>
-#include <signal.h>
-#include <regex>
-#include <dirent.h>
-#include <sstream>
-#include <algorithm>
-#include <thread>
-#include <chrono>
 #include <mh/concurrency/dispatcher.hpp>
-#include <mh/io/source.hpp>
 #include <mh/io/sink.hpp>
-#include "io/FileSource.hpp"
-#include "io/FileSink.hpp"
-#include "Main.hpp"
+#include <mh/io/source.hpp>
+#include <ostream>
+#include <regex>
+#include <sstream>
+#include <thread>
+
+#include "EnvManager.hpp"
 #include "LastCppInclude.hpp"
+#include "Main.hpp"
+#include "io/FileSink.hpp"
+#include "io/FileSource.hpp"
 
 // Command implementation
-Command::Command()
-	: appendOutput(false), appendError(false)
-{
-}
+Command::Command() : appendOutput(false), appendError(false) {}
 
 int Command::handleBuiltins() const
 {
@@ -42,7 +41,7 @@ int Command::handleBuiltins() const
 			std::filesystem::current_path(args.at(1));
 			return 0; // Success
 		}
-		catch (const std::exception &e)
+		catch (const std::exception& e)
 		{
 			std::print(stderr, "Failed to change directory to {}: {}\n", args.at(1), e.what());
 			return 1;
@@ -80,7 +79,7 @@ int Command::handleBuiltins() const
 	if (args.at(0) == "help")
 	{
 		std::string_view headerColor = "\033[1;34m"; // Bold blue
-		std::string_view cmdColor = "\033[1;32m";	 // Bold green
+		std::string_view cmdColor = "\033[1;32m";    // Bold green
 
 		std::print("{}Foundation Shell - Available Commands:{}\n", headerColor, Colors::COLOR_RESET);
 		std::print("{}  cd [dir]{} - Change directory\n", cmdColor, Colors::COLOR_RESET);
@@ -100,7 +99,8 @@ int Command::handleBuiltins() const
 		std::print("\n");
 		std::print("{}Special Characters:{}\n", headerColor, Colors::COLOR_RESET);
 		std::print("{}  |{} - Pipe output of one command to another\n", cmdColor, Colors::COLOR_RESET);
-		std::print("{}  &&{} - Chain commands (execute next only if previous succeeds)\n", cmdColor, Colors::COLOR_RESET);
+		std::print("{}  &&{} - Chain commands (execute next only if previous succeeds)\n", cmdColor,
+		           Colors::COLOR_RESET);
 		std::print("{}  > file{} - Redirect output to file\n", cmdColor, Colors::COLOR_RESET);
 		std::print("{}  >> file{} - Append output to file\n", cmdColor, Colors::COLOR_RESET);
 		std::print("{}  < file{} - Redirect input from file\n", cmdColor, Colors::COLOR_RESET);
@@ -116,7 +116,7 @@ int Command::handleBuiltins() const
 }
 
 // Helper function to check if a token is an environment variable assignment
-static bool isEnvironmentAssignment(const std::string &token)
+static bool isEnvironmentAssignment(const std::string& token)
 {
 	// Must contain '=' and start with a valid variable name
 	size_t eq_pos = token.find('=');
@@ -187,7 +187,7 @@ mh::task<bool> Command::executeAsync(mh::io::source_ptr inputSource, mh::io::sin
 	if (command_args.empty())
 	{
 		// Set environment variables and return success
-		for (const auto &[name, value] : env_assignments)
+		for (const auto& [name, value] : env_assignments)
 		{
 			setenv(name.c_str(), value.c_str(), 1);
 		}
@@ -202,7 +202,7 @@ mh::task<bool> Command::executeAsync(mh::io::source_ptr inputSource, mh::io::sin
 	bool isBuiltin = false;
 	if (!command_args.empty())
 	{
-		const std::string &cmd = command_args[0];
+		const std::string& cmd = command_args[0];
 		isBuiltin = (cmd == "cd" || cmd == "exit" || cmd == "pwd" || cmd == "clear" || cmd == "help");
 	}
 
@@ -244,18 +244,18 @@ mh::task<bool> Command::executeAsync(mh::io::source_ptr inputSource, mh::io::sin
 	}
 
 	// Create the process with proper I/O redirection using command_args
-	mh::process process(
-		command_args.at(0), // Command
-		command_args,		// Arguments (including command)
-		inputSource,		// Input source
-		outputSink,			// Output sink
-		errorSink			// Error sink
+	mh::process process(command_args.at(0), // Command
+	                    command_args,       // Arguments (including command)
+	                    inputSource,        // Input source
+	                    outputSink,         // Output sink
+	                    errorSink           // Error sink
 	);
 
 	// Start the process
 	if (!process.start())
 	{
-		std::print(stderr, "{}Failed to start process: {}{}\n", Colors::COLOR_RED, command_args.at(0), Colors::COLOR_RESET);
+		std::print(stderr, "{}Failed to start process: {}{}\n", Colors::COLOR_RED, command_args.at(0),
+		           Colors::COLOR_RESET);
 		co_return false;
 	}
 
@@ -268,11 +268,11 @@ mh::task<bool> Command::executeAsync(mh::io::source_ptr inputSource, mh::io::sin
 }
 
 // Helper function to expand tilde in a token
-static std::string expandTilde(const std::string &token)
+static std::string expandTilde(const std::string& token)
 {
 	if (!token.empty() && token[0] == '~')
 	{
-		const char *home = getenv("HOME");
+		const char* home = getenv("HOME");
 		if (home)
 		{
 			if (token.length() == 1)
@@ -289,7 +289,7 @@ static std::string expandTilde(const std::string &token)
 }
 
 // Helper function to expand environment variables in a token
-static std::string expandEnvironmentVariables(const std::string &token)
+static std::string expandEnvironmentVariables(const std::string& token)
 {
 	std::string result = token;
 	size_t pos = 0;
@@ -310,8 +310,7 @@ static std::string expandEnvironmentVariables(const std::string &token)
 			size_t end = start;
 
 			// Find the end of the variable name
-			while (end < result.length() &&
-				   (std::isalnum(result[end]) || result[end] == '_'))
+			while (end < result.length() && (std::isalnum(result[end]) || result[end] == '_'))
 			{
 				end++;
 			}
@@ -319,7 +318,7 @@ static std::string expandEnvironmentVariables(const std::string &token)
 			if (end > start)
 			{
 				std::string varName = result.substr(start, end - start);
-				const char *varValue = getenv(varName.c_str());
+				const char* varValue = getenv(varName.c_str());
 				if (varValue)
 				{
 					result.replace(pos, end - pos, varValue);
@@ -360,7 +359,7 @@ struct TokenContext
 };
 
 // Helper function to tokenize input respecting quotes
-static std::vector<TokenContext> tokenizeInput(const std::string &input)
+static std::vector<TokenContext> tokenizeInput(const std::string& input)
 {
 	std::vector<TokenContext> tokens;
 	TokenContext current_token;
@@ -385,7 +384,7 @@ static std::vector<TokenContext> tokenizeInput(const std::string &input)
 			{
 				// \$ becomes literal $ (use special marker to prevent expansion)
 				current_token.content += "\x01$"; // Use special marker
-				i++;							  // Skip the next character
+				i++;                              // Skip the next character
 			}
 			else if (next_char == ' ')
 			{
@@ -436,12 +435,12 @@ static std::vector<TokenContext> tokenizeInput(const std::string &input)
 }
 
 // Main function to split a string into tokens with bash-like expansion
-std::vector<std::string> bashSplitString(const std::string &input)
+std::vector<std::string> bashSplitString(const std::string& input)
 {
 	auto token_contexts = tokenizeInput(input);
 	std::vector<std::string> result;
 
-	for (const auto &ctx : token_contexts)
+	for (const auto& ctx : token_contexts)
 	{
 		std::string token_result;
 		if (ctx.was_single_quoted)
@@ -512,16 +511,15 @@ int levenshteinDistance(std::string_view s1, std::string_view s2)
 }
 
 // Function to find command suggestions
-std::vector<std::string> findCommandSuggestions(const std::string &command)
+std::vector<std::string> findCommandSuggestions(const std::string& command)
 {
 	std::vector<std::string> suggestions;
 	const std::vector<std::string_view> commonCommands = {
-		"ls", "cd", "pwd", "echo", "cat", "grep", "find", "mkdir", "rm", "cp", "mv",
-		"exit", "clear", "help", "man", "touch", "chmod", "chown", "sudo",
-		"ps", "top", "kill", "config", "themes"};
+	    "ls",    "cd",   "pwd", "echo",  "cat",   "grep",  "find", "mkdir", "rm",  "cp",   "mv",     "exit",
+	    "clear", "help", "man", "touch", "chmod", "chown", "sudo", "ps",    "top", "kill", "config", "themes"};
 
 	// Add built-in commands
-	for (const auto &builtinCmd : commonCommands)
+	for (const auto& builtinCmd : commonCommands)
 	{
 		int distance = levenshteinDistance(command, builtinCmd);
 		if (distance <= 3) // Fixed threshold value
@@ -531,7 +529,7 @@ std::vector<std::string> findCommandSuggestions(const std::string &command)
 	}
 
 	// Check $PATH for executable commands
-	const char *pathEnv = getenv("PATH");
+	const char* pathEnv = getenv("PATH");
 	if (pathEnv)
 	{
 		std::string pathStr(pathEnv);
@@ -543,10 +541,10 @@ std::vector<std::string> findCommandSuggestions(const std::string &command)
 			try
 			{
 				// Fallback to manual directory reading if filesystem support is problematic
-				DIR *dir = opendir(path.c_str());
+				DIR* dir = opendir(path.c_str());
 				if (dir)
 				{
-					struct dirent *entry;
+					struct dirent* entry;
 					while ((entry = readdir(dir)) != nullptr)
 					{
 						std::string_view filename = entry->d_name;
@@ -559,7 +557,8 @@ std::vector<std::string> findCommandSuggestions(const std::string &command)
 
 						// Check if file exists and is executable
 						auto status = std::filesystem::status(fullPath);
-						if (std::filesystem::is_regular_file(fullPath) && (status.permissions() & std::filesystem::perms::owner_exec) != std::filesystem::perms::none)
+						if (std::filesystem::is_regular_file(fullPath) &&
+						    (status.permissions() & std::filesystem::perms::owner_exec) != std::filesystem::perms::none)
 						{
 							int distance = levenshteinDistance(command, filename);
 							if (distance <= 3)
@@ -571,7 +570,7 @@ std::vector<std::string> findCommandSuggestions(const std::string &command)
 					closedir(dir);
 				}
 			}
-			catch (const std::exception &e)
+			catch (const std::exception& e)
 			{
 				// silently skip directories we can't read
 			}

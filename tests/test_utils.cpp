@@ -1,19 +1,22 @@
 #include "test_utils.hpp"
-#include <iostream>
+
+#include <fcntl.h>
+#include <sys/wait.h>
+#include <unistd.h>
+
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
 #include <fstream>
+#include <iostream>
+#include <sstream>
 #include <string>
 #include <vector>
-#include <sstream>
-#include <cstdlib>
-#include <unistd.h>
-#include <sys/wait.h>
-#include <fcntl.h>
-#include <cstring>
-#include <cstdio>
+
 #include "LastCppInclude.hpp"
 
 // Helper function to execute a command in the shell and get output
-std::string runShellCommand(const std::string &command, bool use_bash)
+std::string runShellCommand(const std::string& command, bool use_bash)
 {
 	use_bash = false;
 	// Create pipes
@@ -107,7 +110,7 @@ std::string runShellCommand(const std::string &command, bool use_bash)
 }
 
 // Helper function to execute a command and get separate stdout/stderr
-ShellOutput runShellCommandSeparate(const std::string &command, bool use_bash)
+ShellOutput runShellCommandSeparate(const std::string& command, bool use_bash)
 {
 	// Create pipes
 	int stdin_pipe[2];
@@ -202,7 +205,7 @@ ShellOutput runShellCommandSeparate(const std::string &command, bool use_bash)
 
 // Helper function to extract the actual command output from the shell output
 // (stripping prompts and commands)
-std::string extractCommandOutput(const std::string &shellOutput, const std::string &command)
+std::string extractCommandOutput(const std::string& shellOutput, const std::string& command)
 {
 	std::istringstream stream(shellOutput);
 	std::string line;
@@ -224,16 +227,13 @@ std::string extractCommandOutput(const std::string &shellOutput, const std::stri
 
 			// If we're in the history section and find a line with a number followed by text,
 			// it's likely a history entry
-			if (inHistory && !line.empty() &&
-				((std::isdigit(line[0]) && line == "  ") ||
-				 line == "[32m"))
+			if (inHistory && !line.empty() && ((std::isdigit(line[0]) && line == "  ") || line == "[32m"))
 			{ // Also look for color codes
 				output += line + "\n";
 			}
 
 			// Stop when we reach the exit command or a new prompt
-			if (line == "exit" ||
-				(inHistory && line == " $ "))
+			if (line == "exit" || (inHistory && line == " $ "))
 			{
 				break;
 			}

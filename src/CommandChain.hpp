@@ -1,14 +1,15 @@
 #pragma once
 
 // Rename to use PascalCase file names
+#include <stdexcept>
+#include <string>
+#include <utility>
+#include <vector>
+
 #include "Command.hpp"
-#include "mh/coroutine/task.hpp"
 #include "Config.hpp"
 #include "Token.hpp"
-#include <vector>
-#include <string>
-#include <stdexcept>
-#include <utility>
+#include "mh/coroutine/task.hpp"
 
 // Forward declaration
 class CommandChain;
@@ -21,10 +22,10 @@ public:
 	CommandChain() = default;
 
 	// Constructor that parses from tokens
-	explicit CommandChain(const std::vector<std::string> &tokens);
+	explicit CommandChain(const std::vector<std::string>& tokens);
 
 	// Static method to parse tokens into a command chain
-	static CommandChain parseFromTokens(const std::vector<std::string> &tokens);
+	static CommandChain parseFromTokens(const std::vector<std::string>& tokens);
 
 	// Execute the command chain asynchronously - stateless version
 	mh::task<int> executeAsync() const;
@@ -37,9 +38,15 @@ public:
 	void appendCommand(Command nextCommand, TokenType op);
 
 	// Accessors
-	const std::vector<Command> &commands() const { return commands_; }
-	const std::vector<TokenType> &operators() const { return operators_; }
-	const Command &getCommand(size_t index) const
+	const std::vector<Command>& commands() const
+	{
+		return commands_;
+	}
+	const std::vector<TokenType>& operators() const
+	{
+		return operators_;
+	}
+	const Command& getCommand(size_t index) const
 	{
 		if (index >= commands_.size())
 		{
@@ -57,13 +64,18 @@ public:
 	}
 
 	// Check if empty
-	bool empty() const { return commands_.empty(); }
+	bool empty() const
+	{
+		return commands_.empty();
+	}
 
 	// Size (number of commands)
-	size_t size() const { return commands_.size(); }
+	size_t size() const
+	{
+		return commands_.size();
+	}
 
 private:
-
 	std::vector<Command> commands_;
 	std::vector<TokenType> operators_; // operators_[i] is the operator between commands_[i] and commands_[i+1]
 };

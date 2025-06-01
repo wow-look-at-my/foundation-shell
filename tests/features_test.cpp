@@ -1,45 +1,47 @@
-#include <catch2/catch_all.hpp>
-#include "test_utils.hpp"
-#include <iostream>
-#include <fstream>
-#include <string>
-#include <vector>
-#include <sstream>
-#include <cstdlib>
-#include <unistd.h>
-#include <sys/wait.h>
 #include <fcntl.h>
+#include <sys/stat.h>
+#include <sys/wait.h>
+#include <unistd.h>
+
+#include <catch2/catch_all.hpp>
+#include <cstdio> // For stdout
+#include <cstdlib>
 #include <cstring>
 #include <filesystem>
-#include <sys/stat.h>
-#include <cstdio> // For stdout
+#include <fstream>
+#include <iostream>
+#include <sstream>
+#include <string>
+#include <vector>
+
 #include "LastCppInclude.hpp"
+#include "test_utils.hpp"
 
 // Fallback functions for filesystem operations
 // to avoid compiler-specific variations in std::filesystem
 namespace fs
 {
-	bool exists(const std::string &path)
-	{
-		struct stat buffer;
-		return (stat(path.c_str(), &buffer) == 0);
-	}
-
-	bool remove(const std::string &path)
-	{
-		return (::remove(path.c_str()) == 0);
-	}
-
-	std::uintmax_t file_size(const std::string &path)
-	{
-		struct stat buffer;
-		if (stat(path.c_str(), &buffer) == 0)
-		{
-			return buffer.st_size;
-		}
-		return 0;
-	}
+bool exists(const std::string& path)
+{
+	struct stat buffer;
+	return (stat(path.c_str(), &buffer) == 0);
 }
+
+bool remove(const std::string& path)
+{
+	return (::remove(path.c_str()) == 0);
+}
+
+std::uintmax_t file_size(const std::string& path)
+{
+	struct stat buffer;
+	if (stat(path.c_str(), &buffer) == 0)
+	{
+		return buffer.st_size;
+	}
+	return 0;
+}
+} // namespace fs
 
 // Tests for redirection
 TEST_CASE("Output redirection works", "[features][redirection]")
@@ -119,8 +121,7 @@ TEST_CASE("Append redirection works", "[features][redirection]")
 	std::ifstream file(tempPath);
 	REQUIRE(file.is_open());
 
-	std::string content((std::istreambuf_iterator<char>(file)),
-						std::istreambuf_iterator<char>());
+	std::string content((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
 
 	// Verify both initial and appended content exists
 	std::string expectedContent = "initial_content\nappended_content\n";
@@ -180,8 +181,8 @@ TEST_CASE("And operator stops on failure", "[features][command_chaining]")
 
 	// Test a command chain with && where the first command fails
 	std::string nonExistentDir = "/nonexistent_directory_12345";
-	std::string command = std::string("cd ") + nonExistentDir +
-						  " && echo should_not_execute > " + tempDir + "/should_not_exist.txt";
+	std::string command =
+	    std::string("cd ") + nonExistentDir + " && echo should_not_execute > " + tempDir + "/should_not_exist.txt";
 	std::string output = runShellCommand(command);
 
 	// Verify the file was NOT created (meaning second command wasn't executed)
@@ -202,10 +203,8 @@ TEST_CASE("Multiple and operators work", "[features][command_chaining]")
 	REQUIRE(mkdtemp(tempDir) != nullptr);
 
 	// Test multiple commands chained with &&
-	std::string command = std::string("cd ") + tempDir +
-						  " && mkdir -p subdir" +
-						  " && cd subdir" +
-						  " && echo nested_success > test_file.txt";
+	std::string command = std::string("cd ") + tempDir + " && mkdir -p subdir" + " && cd subdir" +
+	                      " && echo nested_success > test_file.txt";
 	std::string output = runShellCommand(command);
 
 	// Verify the file was created in the nested directory

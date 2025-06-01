@@ -1,8 +1,9 @@
 #include <catch2/catch_all.hpp>
-#include "src/Token.hpp"
 #include <stdexcept>
 #include <string>
+
 #include "LastCppInclude.hpp"
+#include "src/Token.hpp"
 
 TEST_CASE("Value token types are identified correctly", "[token]")
 {

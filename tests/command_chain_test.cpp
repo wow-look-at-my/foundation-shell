@@ -1,11 +1,12 @@
 #include <catch2/catch_all.hpp>
-#include "src/CommandChain.hpp"
-#include "src/Token.hpp"
-#include "src/Command.hpp"
 #include <stdexcept>
 #include <string>
 #include <vector>
+
 #include "LastCppInclude.hpp"
+#include "src/Command.hpp"
+#include "src/CommandChain.hpp"
+#include "src/Token.hpp"
 
 // Test creating a CommandChain with valid commands
 TEST_CASE("CommandChain valid construction", "[command_chain]")
@@ -149,12 +150,9 @@ TEST_CASE("CommandChain parse from tokens", "[command_chain]")
 	// does not have a backgroundProcess member
 
 	// Test parsing complex command chain
-	std::vector<std::string> complexTokens = {
-		"grep", "error", "<", "log.txt", "|",
-		"sort", "|",
-		"uniq", "-c", ">", "results.txt", "&&",
-		"echo", "done", "||",
-		"echo", "failed"};
+	std::vector<std::string> complexTokens = {"grep", "error", "<",  "log.txt", "|",           "sort",
+	                                          "|",    "uniq",  "-c", ">",       "results.txt", "&&",
+	                                          "echo", "done",  "||", "echo",    "failed"};
 	CommandChain complexChain = CommandChain::parseFromTokens(complexTokens);
 	CHECK(complexChain.size() == 5);
 	CHECK(complexChain.operators()[0] == TokenType::Pipe);

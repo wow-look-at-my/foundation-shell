@@ -1,8 +1,9 @@
 #pragma once
 
-#include "ISink.hpp"
 #include <filesystem>
 #include <memory>
+
+#include "ISink.hpp"
 
 /**
  * Platform-agnostic file sink
@@ -17,7 +18,7 @@ public:
 	 * @param append Whether to append to the file if it exists
 	 * @return Shared pointer to an ISink implementation
 	 */
-	static std::shared_ptr<ISink> create(const std::filesystem::path &path, bool append = false);
+	static std::shared_ptr<ISink> create(const std::filesystem::path& path, bool append = false);
 };
 
 // Typedef for shared pointer to ISink

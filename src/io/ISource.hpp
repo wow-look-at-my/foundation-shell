@@ -13,7 +13,7 @@ public:
 	virtual ~ISource() = default;
 
 	// Read data from source
-	virtual size_t read(void *buffer, size_t size) = 0;
+	virtual size_t read(void* buffer, size_t size) = 0;
 
 	// Check if there's data available to read
 	virtual bool canRead() const = 0;

@@ -1,8 +1,9 @@
 #pragma once
 
+#include <memory>
+
 #include "ISink.hpp"
 #include "ISource.hpp"
-#include <memory>
 
 /**
  * Interface for pipe operations

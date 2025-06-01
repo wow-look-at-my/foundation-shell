@@ -1,8 +1,9 @@
 #pragma once
 
-#include "ISource.hpp"
 #include <filesystem>
 #include <memory>
+
+#include "ISource.hpp"
 
 /**
  * Platform-agnostic file source
@@ -16,7 +17,7 @@ public:
 	 * @param path Path to the file
 	 * @return Shared pointer to an ISource implementation
 	 */
-	static std::shared_ptr<ISource> create(const std::filesystem::path &path);
+	static std::shared_ptr<ISource> create(const std::filesystem::path& path);
 };
 
 // Typedef for shared pointer to ISource

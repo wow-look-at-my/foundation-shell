@@ -13,7 +13,7 @@ public:
 	virtual ~ISink() = default;
 
 	// Write data to sink
-	virtual size_t write(const void *buffer, size_t size) = 0;
+	virtual size_t write(const void* buffer, size_t size) = 0;
 
 	// Check if sink can accept data
 	virtual bool canWrite() const = 0;

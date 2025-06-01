@@ -1,7 +1,8 @@
-#include "Shell.hpp"
 #include <iostream>
 #include <mh/concurrency/dispatcher.hpp>
+
 #include "LastCppInclude.hpp"
+#include "Shell.hpp"
 
 // Implementation of sleep_async function using the thread dispatcher
 mh::task<void> sleep_async(std::chrono::milliseconds duration)

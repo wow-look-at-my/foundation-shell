@@ -1,15 +1,17 @@
+#include <unistd.h>
+
 #include <catch2/catch_all.hpp>
-#include "test_utils.hpp"
-#include "Config.hpp"
-#include <iostream>
+#include <cstdlib>
+#include <format>
 #include <fstream>
+#include <iostream>
+#include <sstream>
 #include <string>
 #include <vector>
-#include <sstream>
-#include <cstdlib>
-#include <unistd.h>
-#include <format>
+
+#include "Config.hpp"
 #include "LastCppInclude.hpp"
+#include "test_utils.hpp"
 
 // Tests for the basic shell functionality
 TEST_CASE("Executes simple command", "[shell]")
@@ -241,7 +243,7 @@ TEST_CASE("Quote types and character escaping", "[shell][quotes]")
 	setenv("TEST_VAR", "expanded", 1);
 	std::string output = runShellCommand("echo 'single quotes preserve $TEST_VAR'");
 	CHECK(output == "single quotes preserve $TEST_VAR\n"); // Should be literal
-	CHECK(output != "expanded\n");  // Should not expand
+	CHECK(output != "expanded\n");                         // Should not expand
 
 	// Test double quotes allow variable expansion
 	output = runShellCommand("echo \"double quotes allow $TEST_VAR\"");
@@ -481,7 +483,7 @@ TEST_CASE("Command substitution", "[shell][substitution]")
 	// Single quotes prevent substitution in bash
 	CHECK(output == "Current dir: $(pwd)\n");
 
-	// Test backtick command substitution  
+	// Test backtick command substitution
 	output = runShellCommand("echo 'Result: `echo test`'");
 	CHECK(output == "Result: `echo test`\n"); // Single quotes prevent substitution in bash
 
@@ -595,8 +597,8 @@ TEST_CASE("Error messages go to stderr only", "[shell][stdout_stderr]")
 	// Just verify stderr is not empty (contains some error message about the nonexistent command)
 
 	// stdout should be empty or only contain whitespace
-	bool is_empty_or_whitespace = output.stdout_output.empty() ||
-								  output.stdout_output.find_first_not_of(" \t\n\r") == std::string::npos;
+	bool is_empty_or_whitespace =
+	    output.stdout_output.empty() || output.stdout_output.find_first_not_of(" \t\n\r") == std::string::npos;
 	CHECK(is_empty_or_whitespace);
 }
 

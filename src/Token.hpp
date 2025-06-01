@@ -1,9 +1,10 @@
 #pragma once
 
+#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <variant>
-#include <stdexcept>
+
 #include "TokenType.hpp"
 
 // Base token type (non-virtual for simplicity)

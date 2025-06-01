@@ -1,19 +1,21 @@
 #include "Shell.hpp"
-#include "Command.hpp"
-#include "CommandChain.hpp"
-#include <iostream>
-#include <cstdio>
-#include <string>
-#include <memory>
-#include <format>
-#include <cstdio>
-#include <sstream>
+
+#include <pthread.h>
+#include <unistd.h>
+
 #include <chrono>
 #include <csignal>
-#include <unistd.h>
+#include <cstdio>
 #include <cstdlib>
-#include <pthread.h>
+#include <format>
+#include <iostream>
+#include <memory>
 #include <mh/concurrency/dispatcher.hpp>
+#include <sstream>
+#include <string>
+
+#include "Command.hpp"
+#include "CommandChain.hpp"
 #include "LastCppInclude.hpp"
 
 // Constructor with RAII initialization
@@ -23,10 +25,10 @@ Shell::Shell() : dispatcher_(std::make_unique<mh::dispatcher>())
 	dispatcher_->register_for_current_thread();
 	// Setup signal handlers
 	{
-		signal(SIGINT, [](int)
-			   {
-				   // Just print a newline and return to the prompt
-				   std::print(stderr, "\n"); });
+		signal(SIGINT, [](int) {
+			// Just print a newline and return to the prompt
+			std::print(stderr, "\n");
+		});
 
 		// Don't ignore SIGCHLD - we need it for waitpid() to work properly
 		// signal(SIGCHLD, SIG_IGN);
@@ -62,7 +64,7 @@ mh::task<int> Shell::runAsync()
 
 	// Check if running interactively (when stdin is a terminal)
 	bool isInteractive = isatty(STDIN_FILENO);
-	
+
 	// Display welcome message only in interactive mode
 	if (isInteractive)
 	{
@@ -74,7 +76,8 @@ mh::task<int> Shell::runAsync()
 		// Simple prompt with last exit status color - only in interactive mode
 		if (isInteractive)
 		{
-			std::string prompt_color = lastExitStatus == 0 ? std::string{Colors::COLOR_GREEN} : std::string{Colors::COLOR_RED};
+			std::string prompt_color =
+			    lastExitStatus == 0 ? std::string{Colors::COLOR_GREEN} : std::string{Colors::COLOR_RED};
 			std::print(stderr, "{}${} ", prompt_color, Colors::COLOR_RESET);
 		}
 
@@ -86,14 +89,15 @@ mh::task<int> Shell::runAsync()
 		ssize_t bytes_read = getline(&line, &len, stdin);
 		if (bytes_read != -1)
 		{
-			input = std::string(line, bytes_read > 0 && line[bytes_read-1] == '\n' ? bytes_read-1 : bytes_read);
+			input = std::string(line, bytes_read > 0 && line[bytes_read - 1] == '\n' ? bytes_read - 1 : bytes_read);
 			free(line);
 		}
 		else
 		{
-			if (line) free(line);
+			if (line)
+				free(line);
 		}
-		
+
 		if (bytes_read == -1)
 		{
 			// Handle EOF - check if we have partial input to process
@@ -142,7 +146,7 @@ mh::task<int> Shell::runAsync()
 			// Execute the command chain asynchronously
 			lastExitStatus = co_await commandChain.executeAsync();
 		}
-		catch (const std::exception &e)
+		catch (const std::exception& e)
 		{
 			// Any error should bail out and return to prompt with error status
 			std::print(stderr, "{}Error: {}{}\n", Colors::COLOR_RED, e.what(), Colors::COLOR_RESET);
