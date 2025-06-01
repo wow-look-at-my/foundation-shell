@@ -12,6 +12,7 @@
 #include <csignal>
 #include <unistd.h>
 #include <cstdlib>
+#include <pthread.h>
 #include "LastCppInclude.hpp"
 
 // Constructor with RAII initialization
@@ -32,6 +33,8 @@ Shell::Shell()
 
 	// Start timeout thread for testing
 	timeoutThread_ = std::thread([this]() {
+		// Name the thread for debugging
+		pthread_setname_np("shell-timeout");
 		std::this_thread::sleep_for(std::chrono::seconds(30));
 		std::print(stderr, "\nShell timeout reached - exiting\n");
 		exit(124); // Use exit code 124 for timeout

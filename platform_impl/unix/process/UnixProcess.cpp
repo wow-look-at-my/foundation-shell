@@ -4,6 +4,11 @@
 #include <cstring>
 #include <signal.h>
 #include <print>
+#include <unistd.h>
+#include <fcntl.h>
+#include <sys/wait.h>
+#include <mh/concurrency/dispatcher.hpp>
+#include "core/GlobalDispatcher.hpp"
 #include "LastCppInclude.hpp"
 
 
@@ -84,6 +89,118 @@ bool UnixProcess::start()
 	}
 }
 
+// Custom awaitable for process completion using SIGCHLD
+struct ProcessWaitTask {
+	int pid_;
+	int* exitCode_;
+	bool* completed_;
+	
+	// Global SIGCHLD self-pipe (shared across all processes)
+	static int sigchld_pipe_[2];
+	static bool pipe_initialized_;
+	
+	static void initSigchldPipe() {
+		if (!pipe_initialized_) {
+			if (pipe(sigchld_pipe_) == 0) {
+				// Set write end to non-blocking
+				int flags = fcntl(sigchld_pipe_[1], F_GETFL);
+				fcntl(sigchld_pipe_[1], F_SETFL, flags | O_NONBLOCK);
+				
+				// Install SIGCHLD handler
+				struct sigaction sa;
+				sa.sa_handler = [](int) {
+					char byte = 1;
+					write(sigchld_pipe_[1], &byte, 1); // Wake up waiters
+				};
+				sigemptyset(&sa.sa_mask);
+				sa.sa_flags = SA_RESTART | SA_NOCLDSTOP;
+				sigaction(SIGCHLD, &sa, nullptr);
+				
+				pipe_initialized_ = true;
+			}
+		}
+	}
+	
+	ProcessWaitTask(int pid, int* exitCode, bool* completed) 
+		: pid_(pid), exitCode_(exitCode), completed_(completed) {
+		initSigchldPipe();
+	}
+	
+	bool await_ready() {
+		// Check if process already exited
+		int status;
+		pid_t result = waitpid(pid_, &status, WNOHANG);
+		if (result > 0) {
+			// Process completed
+			*completed_ = true;
+			if (WIFEXITED(status)) {
+				*exitCode_ = WEXITSTATUS(status);
+			} else if (WIFSIGNALED(status)) {
+				*exitCode_ = -WTERMSIG(status);
+			} else {
+				*exitCode_ = -1;
+			}
+			return true; // Don't suspend, we're done
+		} else if (result == -1) {
+			// Error occurred
+			*completed_ = true;
+			*exitCode_ = -1;
+			return true; // Don't suspend, we're done
+		}
+		return false; // Suspend and wait for SIGCHLD
+	}
+	
+	auto await_suspend(std::coroutine_handle<> handle) {
+		if (!pipe_initialized_) {
+			return handle; // Resume immediately if pipe not initialized
+		}
+		
+		// Use the FD monitoring directly to wait for SIGCHLD
+		auto fdTask = core::getGlobalDispatcher().co_wait_fd_read(sigchld_pipe_[0]);
+		
+		// Chain the FD task with our process checking
+		return fdTask.await_suspend([this, handle](auto) {
+			// This will be called when the FD becomes readable
+			// Drain the pipe
+			char buffer[256];
+			read(sigchld_pipe_[0], buffer, sizeof(buffer));
+			
+			// Check our specific process
+			int status;
+			pid_t result = waitpid(pid_, &status, WNOHANG);
+			if (result > 0) {
+				// Our process completed
+				*completed_ = true;
+				if (WIFEXITED(status)) {
+					*exitCode_ = WEXITSTATUS(status);
+				} else if (WIFSIGNALED(status)) {
+					*exitCode_ = -WTERMSIG(status);
+				} else {
+					*exitCode_ = -1;
+				}
+				handle.resume();
+			} else if (result == -1) {
+				// Error occurred
+				*completed_ = true;
+				*exitCode_ = -1;
+				handle.resume();
+			} else {
+				// Not our process, wait again
+				auto nextFdTask = core::getGlobalDispatcher().co_wait_fd_read(sigchld_pipe_[0]);
+				return nextFdTask.await_suspend(/* recursive call */);
+			}
+		});
+	}
+	
+	int await_resume() {
+		return *exitCode_;
+	}
+};
+
+// Static member definitions
+int ProcessWaitTask::sigchld_pipe_[2] = {-1, -1};
+bool ProcessWaitTask::pipe_initialized_ = false;
+
 // Wait for the process to complete
 mh::task<int> UnixProcess::waitAsync()
 {
@@ -97,35 +214,61 @@ mh::task<int> UnixProcess::waitAsync()
 		co_return exitCode_; // Already completed
 	}
 
-	// Wait for the child process
+	// Initialize SIGCHLD handling if needed
+	ProcessWaitTask::initSigchldPipe();
+	
+	// First check if process already exited
 	int status;
-	pid_t result = waitpid(pid_, &status, 0);
-
-	if (result == -1)
-	{
-		// Error occurred (suppress error message for now to avoid test pollution)
-		// std::print(stderr, ErrorMessages::ERROR_WAITING_FOR_PROCESS);
+	pid_t result = waitpid(pid_, &status, WNOHANG);
+	if (result > 0) {
+		// Process already completed
 		completed_ = true;
-		exitCode_ = -1;
-	}
-	else
-	{
-		// Process completed
-		completed_ = true;
-		if (WIFEXITED(status))
-		{
+		if (WIFEXITED(status)) {
 			exitCode_ = WEXITSTATUS(status);
-		}
-		else if (WIFSIGNALED(status))
-		{
+		} else if (WIFSIGNALED(status)) {
 			exitCode_ = -WTERMSIG(status);
-		}
-		else
-		{
+		} else {
 			exitCode_ = -1;
 		}
+		co_return exitCode_;
+	} else if (result == -1) {
+		// Error occurred
+		completed_ = true;
+		exitCode_ = -1;
+		co_return exitCode_;
 	}
-
+	
+	// Process is still running, wait for SIGCHLD
+	while (!completed_) {
+		// Wait for SIGCHLD signal via FD monitoring
+		co_await core::getGlobalDispatcher().co_wait_fd_read(ProcessWaitTask::sigchld_pipe_[0]);
+		
+		// Drain the pipe
+		char buffer[256];
+		read(ProcessWaitTask::sigchld_pipe_[0], buffer, sizeof(buffer));
+		
+		// Check our specific process
+		result = waitpid(pid_, &status, WNOHANG);
+		if (result > 0) {
+			// Our process completed
+			completed_ = true;
+			if (WIFEXITED(status)) {
+				exitCode_ = WEXITSTATUS(status);
+			} else if (WIFSIGNALED(status)) {
+				exitCode_ = -WTERMSIG(status);
+			} else {
+				exitCode_ = -1;
+			}
+			break;
+		} else if (result == -1) {
+			// Error occurred
+			completed_ = true;
+			exitCode_ = -1;
+			break;
+		}
+		// If result == 0, not our process, wait for next SIGCHLD
+	}
+	
 	co_return exitCode_;
 }
 
