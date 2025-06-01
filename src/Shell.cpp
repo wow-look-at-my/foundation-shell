@@ -13,11 +13,14 @@
 #include <unistd.h>
 #include <cstdlib>
 #include <pthread.h>
+#include <mh/concurrency/dispatcher.hpp>
 #include "LastCppInclude.hpp"
 
 // Constructor with RAII initialization
-Shell::Shell()
+Shell::Shell() : dispatcher_(std::make_unique<mh::dispatcher>())
 {
+	// Register dispatcher for current thread
+	dispatcher_->register_for_current_thread();
 	// Setup signal handlers
 	{
 		signal(SIGINT, [](int)

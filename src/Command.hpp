@@ -8,7 +8,7 @@
 #include "Config.hpp"			 // Include ShellConfig
 #include "io/ISink.hpp"			 // Include ISink interface
 #include "io/ISource.hpp"		 // Include ISource interface
-#include "process/IProcess.hpp"	 // Include IProcess interface
+#include <mh/process/process.hpp>	 // Include mh::process
 #include "TokenType.hpp"		 // Include TokenType enum
 
 // Async sleep function using the dispatcher

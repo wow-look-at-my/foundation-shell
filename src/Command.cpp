@@ -1,4 +1,5 @@
 #include "Command.hpp"
+#include "EnvManager.hpp"
 #include <filesystem>
 #include <cstdio>
 #include <cstring>
@@ -191,6 +192,10 @@ mh::task<bool> Command::executeAsync(Source inputSource, Sink outputSink) const
 		co_return true;
 	}
 
+	// Set environment variables using RAII for the entire command execution
+	EnvManager env_manager;
+	env_manager.set_assignments(env_assignments);
+
 	// Check if this is a builtin command (without executing)
 	bool isBuiltin = false;
 	if (!command_args.empty())
@@ -201,36 +206,10 @@ mh::task<bool> Command::executeAsync(Source inputSource, Sink outputSink) const
 
 	if (isBuiltin)
 	{
-		// Set environment variables for builtin command execution
-		std::vector<std::string> saved_values;
-		std::vector<bool> was_set;
-
-		for (const auto &[name, value] : env_assignments)
-		{
-			const char *old_value = getenv(name.c_str());
-			saved_values.push_back(old_value ? old_value : "");
-			was_set.push_back(old_value != nullptr);
-			setenv(name.c_str(), value.c_str(), 1);
-		}
-
 		// Execute builtin with the command arguments
 		Command builtin_cmd = *this;
 		builtin_cmd.args = command_args;
 		int result = builtin_cmd.handleBuiltins();
-
-		// Restore environment
-		for (size_t i = 0; i < env_assignments.size(); ++i)
-		{
-			if (was_set[i])
-			{
-				setenv(env_assignments[i].first.c_str(), saved_values[i].c_str(), 1);
-			}
-			else
-			{
-				unsetenv(env_assignments[i].first.c_str());
-			}
-		}
-
 		co_return result == 0; // Convert exit status to bool
 	}
 
@@ -262,20 +241,8 @@ mh::task<bool> Command::executeAsync(Source inputSource, Sink outputSink) const
 		// std::cerr << "Warning: File error redirection is platform-specific\n";
 	}
 
-	// Set environment variables before creating the process
-	std::vector<std::string> saved_values;
-	std::vector<bool> was_set;
-
-	for (const auto &[name, value] : env_assignments)
-	{
-		const char *old_value = getenv(name.c_str());
-		saved_values.push_back(old_value ? old_value : "");
-		was_set.push_back(old_value != nullptr);
-		setenv(name.c_str(), value.c_str(), 1);
-	}
-
 	// Create the process with proper I/O redirection using command_args
-	ProcessPtr process = createProcess(
+	mh::process process(
 		command_args.at(0), // Command
 		command_args,		// Arguments (including command)
 		inputSource,		// Input source
@@ -284,41 +251,16 @@ mh::task<bool> Command::executeAsync(Source inputSource, Sink outputSink) const
 	);
 
 	// Start the process
-	if (!process->start())
+	if (!process.start())
 	{
 		std::print(stderr, "{}Failed to start process: {}{}\n", Colors::COLOR_RED, command_args.at(0), Colors::COLOR_RESET);
-
-		// Restore environment before returning
-		for (size_t i = 0; i < env_assignments.size(); ++i)
-		{
-			if (was_set[i])
-			{
-				setenv(env_assignments[i].first.c_str(), saved_values[i].c_str(), 1);
-			}
-			else
-			{
-				unsetenv(env_assignments[i].first.c_str());
-			}
-		}
-
 		co_return false;
 	}
 
 	// Wait for the process to complete
-	int exitCode = co_await process->waitAsync();
+	int exitCode = co_await process.wait_async();
 
-	// Restore environment variables after process completes
-	for (size_t i = 0; i < env_assignments.size(); ++i)
-	{
-		if (was_set[i])
-		{
-			setenv(env_assignments[i].first.c_str(), saved_values[i].c_str(), 1);
-		}
-		else
-		{
-			unsetenv(env_assignments[i].first.c_str());
-		}
-	}
+	// Environment variables automatically restored by env_manager destructor
 
 	co_return exitCode == 0; // Convert exit status to bool
 }
