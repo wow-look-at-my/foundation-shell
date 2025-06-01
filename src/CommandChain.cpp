@@ -135,7 +135,7 @@ CommandChain CommandChain::parseFromTokens(const std::vector<std::string> &token
 		catch (std::invalid_argument e)
 		{
 			// Throw to bail out - invalid tokens should not be silently ignored
-			std::print("Invalid token '{}': {}", tokens[i], e.what());
+			std::print(stderr, "Invalid token '{}': {}", tokens[i], e.what());
 			throw;
 		}
 	}

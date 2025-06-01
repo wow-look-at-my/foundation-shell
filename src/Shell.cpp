@@ -41,19 +41,19 @@ mh::task<int> Shell::runAsync()
 	int lastExitStatus = 0;
 
 	// Display welcome message
-	std::print("{}Welcome to Foundation Shell{}\n", Colors::COLOR_BOLD, Colors::COLOR_RESET);
+	std::print(stderr, "{}Welcome to Foundation Shell{}\n", Colors::COLOR_BOLD, Colors::COLOR_RESET);
 
 	while (true)
 	{
 		// Simple prompt with last exit status color
 		std::string prompt_color = lastExitStatus == 0 ? std::string{Colors::COLOR_GREEN} : std::string{Colors::COLOR_RED};
-		std::print("{}${} ", prompt_color, Colors::COLOR_RESET);
+		std::print(stderr, "{}${} ", prompt_color, Colors::COLOR_RESET);
 
 		// Get user input
 		if (!std::getline(std::cin, input))
 		{
 			// Handle EOF (Ctrl+D)
-			std::print("\nExiting shell\n");
+			std::print(stderr, "\nExiting shell\n");
 			break;
 		}
 
@@ -77,7 +77,7 @@ mh::task<int> Shell::runAsync()
 		catch (const std::exception &e)
 		{
 			// Any error should bail out and return to prompt with error status
-			std::print("{}Error: {}{}\n", Colors::COLOR_RED, e.what(), Colors::COLOR_RESET);
+			std::print(stderr, "{}Error: {}{}\n", Colors::COLOR_RED, e.what(), Colors::COLOR_RESET);
 			lastExitStatus = 1;
 		}
 	}

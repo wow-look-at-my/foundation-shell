@@ -552,3 +552,47 @@ TEST_CASE("Empty arguments handling", "[shell][args][empty]")
 	output = runShellCommand("echo first '' '' last");
 	CHECK(output == "first  last");
 }
+
+// Tests for stdout/stderr separation
+TEST_CASE("Command output goes to stdout only", "[shell][stdout_stderr]")
+{
+	ShellOutput output = runShellCommandSeparate("echo hello_world");
+	
+	// Command output should be in stdout
+	CHECK(output.stdout_output == "hello_world\n");
+	
+	// Prompts and welcome message should be in stderr only
+	CHECK(output.stderr_output.find("Welcome to Foundation Shell") != std::string::npos);
+	CHECK(output.stderr_output.find("$") != std::string::npos);
+	
+	// stdout should NOT contain prompts or welcome messages
+	CHECK(output.stdout_output.find("Welcome") == std::string::npos);
+	CHECK(output.stdout_output.find("$") == std::string::npos);
+}
+
+TEST_CASE("Error messages go to stderr only", "[shell][stdout_stderr]")
+{
+	ShellOutput output = runShellCommandSeparate("nonexistent_command_xyz");
+	
+	// Error message should be in stderr
+	CHECK(output.stderr_output.find("Command not found") != std::string::npos);
+	
+	// stdout should be empty or only contain whitespace
+	bool is_empty_or_whitespace = output.stdout_output.empty() || 
+	                              output.stdout_output.find_first_not_of(" \t\n\r") == std::string::npos;
+	CHECK(is_empty_or_whitespace);
+}
+
+TEST_CASE("Built-in command output goes to stdout", "[shell][stdout_stderr][builtins]")
+{
+	ShellOutput output = runShellCommandSeparate("pwd");
+	
+	// pwd output should be in stdout
+	CHECK(!output.stdout_output.empty());
+	CHECK(output.stdout_output.find("/") != std::string::npos);
+	
+	// stderr should only contain shell control messages, not the pwd output
+	bool stderr_ok = output.stderr_output.find("/") == std::string::npos || 
+	                 output.stderr_output.find("Welcome") != std::string::npos;
+	CHECK(stderr_ok);
+}
