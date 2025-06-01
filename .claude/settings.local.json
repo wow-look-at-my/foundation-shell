@@ -20,7 +20,8 @@
       "Bash(./tests/unit_tests --help)",
       "Bash(just profile-analyze:*)",
       "Bash(just profile-test:*)",
-      "Bash(just profile:*)"
+      "Bash(just profile:*)",
+      "Bash(just:*)"
     ],
     "deny": []
   },
