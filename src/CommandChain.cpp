@@ -1,4 +1,3 @@
-#include "StdioFix.hpp" // Must be first to handle stdio identifiers
 #include "CommandChain.hpp"
 #include "Token.hpp"
 #include "Command.hpp"

@@ -4,19 +4,15 @@
 #include <vector>
 #include <memory>
 #include <chrono>
-#include "Task.hpp"				// Include the Task type
-#include "Config.hpp"			// Include ShellConfig
-#include "io/ISink.hpp"			// Include ISink interface
-#include "io/ISource.hpp"		// Include ISource interface
-#include "process/IProcess.hpp" // Include IProcess interface
-#include "TokenType.hpp"		// Include TokenType enum
-
-#undef stdin
-#undef stdout
-#undef stderr
+#include "mh/coroutine/task.hpp" // Include the Task type
+#include "Config.hpp"			 // Include ShellConfig
+#include "io/ISink.hpp"			 // Include ISink interface
+#include "io/ISource.hpp"		 // Include ISource interface
+#include "process/IProcess.hpp"	 // Include IProcess interface
+#include "TokenType.hpp"		 // Include TokenType enum
 
 // Async sleep function using the dispatcher
-Task<void> sleep_async(std::chrono::milliseconds duration);
+mh::task<void> sleep_async(std::chrono::milliseconds duration);
 
 // Structure to represent a command with its I/O redirections
 class Command
@@ -36,9 +32,9 @@ public:
 	bool appendError = false;
 
 	// I/O interfaces
-	Sink stdin;
-	Source stdout;
-	Source stderr;
+	Sink m_stdin;
+	Source m_stdout;
+	Source m_stderr;
 
 	// Execute the command with optional I/O redirection (async) - stateless version
 	Task<bool> executeAsync(Source inputSource = nullptr, Sink outputSink = nullptr) const;

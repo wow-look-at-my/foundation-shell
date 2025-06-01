@@ -2,7 +2,7 @@
 
 // Rename to use PascalCase file names
 #include "Command.hpp"
-#include "Task.hpp"
+#include "mh/coroutine/task.hpp"
 #include "Config.hpp"
 #include "Token.hpp"
 #include <vector>
@@ -27,7 +27,7 @@ public:
 	static CommandChain parseFromTokens(const std::vector<std::string> &tokens);
 
 	// Execute the command chain asynchronously - stateless version
-	Task<int> executeAsync() const;
+	mh::task<int> executeAsync() const;
 
 	// Start a new chain with a single command
 	explicit CommandChain(Command firstCommand);
@@ -64,7 +64,7 @@ public:
 
 private:
 	// Execute a sequence of piped commands asynchronously - stateless version
-	Task<int> executeCommandsWithPipesAsync(const std::vector<Command> &commands) const;
+	mh::task<int> executeCommandsWithPipesAsync(const std::vector<Command> &commands) const;
 
 	std::vector<Command> commands_;
 	std::vector<TokenType> operators_; // operators_[i] is the operator between commands_[i] and commands_[i+1]

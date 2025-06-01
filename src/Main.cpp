@@ -11,6 +11,7 @@ Task<void> sleep_async(std::chrono::milliseconds duration)
 	co_await g_dispatcher.co_delay_for(duration);
 }
 
+#ifdef FOUNDATION_SHELL_EXE
 int main()
 {
 	// Get the shell instance (initializes automatically through RAII)
@@ -32,3 +33,4 @@ int main()
 	// Return the shell's exit status
 	return shellTask.get_result();
 }
+#endif

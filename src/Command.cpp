@@ -1,4 +1,3 @@
-#include "StdioFix.hpp" // Must be first to handle stdio identifiers
 #include "Command.hpp"
 #include <filesystem>
 #include <iostream>

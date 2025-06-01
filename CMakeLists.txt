@@ -8,23 +8,28 @@ endif()
 
 project(foundation_shell VERSION 1.0)
 
+# Enable warnings as errors and colored output
+if(CMAKE_CXX_COMPILER_ID MATCHES "Clang" OR CMAKE_CXX_COMPILER_ID MATCHES "GNU")
+    add_compile_options(-Werror -fdiagnostics-color=always)
+endif()
+
 # Add a custom command to check for incorrect static_assert usage
 add_custom_target(check_static_asserts
-  COMMAND ${CMAKE_SOURCE_DIR}/scripts/fix_static_asserts.ps1
+  COMMAND ${CMAKE_SOURCE_DIR}/scripts/fix_static_asserts.cs
   WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
   COMMENT "Checking for incorrect static_assert usage..."
 )
 
 # Add a custom command to check for proper upper CamelCase (PascalCase) file naming
 add_custom_target(check_casing
-  COMMAND ${CMAKE_SOURCE_DIR}/scripts/check_casing.ps1
+  COMMAND ${CMAKE_SOURCE_DIR}/scripts/check_casing.cs
   WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
   COMMENT "Checking for proper upper CamelCase (PascalCase) file naming..."
 )
 
 # Add a custom command to check for proper include paths
 add_custom_target(check_includes
-  COMMAND ${CMAKE_SOURCE_DIR}/scripts/check_includes.ps1
+  COMMAND ${CMAKE_SOURCE_DIR}/scripts/check_includes.cs ${CMAKE_SOURCE_DIR}
   WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
   COMMENT "Checking for proper include paths..."
 )
@@ -54,19 +59,29 @@ include("cmake/CPM.cmake")
 set(CMAKE_PREFIX_PATH "${CMAKE_SOURCE_DIR}/extern/vcpkg-registry/ports")
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/extern/vcpkg-registry/ports/mh-cmake-common")
 
+# Add Catch2 only if testing is enabled
+if(BUILD_TESTING)
+  CPMAddPackage(
+    NAME Catch2
+    GITHUB_REPOSITORY catchorg/Catch2
+    VERSION 3.4.0
+    GIT_TAG v3.4.0
+  )
+
+  # Disable deprecated literal operator warning for Catch2
+  if(TARGET Catch2)
+    target_compile_options(Catch2 PRIVATE -Wno-deprecated-literal-operator)
+  endif()
+
+  # Make Catch2 CMake extensions available
+  list(APPEND CMAKE_MODULE_PATH ${catch2_SOURCE_DIR}/extras)
+endif()
+
 # Add MH stuff submodule
 add_subdirectory(extern/mh_stuff)
 
 # Add platform implementation library
 add_subdirectory(platform_impl)
-
-# Add Catch2 using CPM
-CPMAddPackage(
-  NAME Catch2
-  GITHUB_REPOSITORY catchorg/Catch2
-  VERSION 3.4.0
-  GIT_TAG v3.4.0
-)
 
 # Add JSON library (header-only)
 CPMAddPackage(
@@ -85,7 +100,7 @@ file(GLOB_RECURSE SOURCES CONFIGURE_DEPENDS
 )
 
 # Remove main.cpp from the sources as it will be added directly to the executable
-list(FILTER SOURCES EXCLUDE REGEX ".*main\\.cpp$")
+list(FILTER SOURCES EXCLUDE REGEX ".*[mM]ain\\.cpp$")
 
 # Create library with all sources
 add_library(foundation_shell_lib ${SOURCES})
@@ -99,8 +114,10 @@ target_include_directories(foundation_shell_lib PUBLIC src)
 
 # Main executable
 add_executable(foundation_shell
-    src/main.cpp
+    src/Main.cpp
 )
+
+target_compile_definitions(foundation_shell PRIVATE FOUNDATION_SHELL_EXE)
 
 # Link executable against the library
 target_link_libraries(foundation_shell PRIVATE foundation_shell_lib)
@@ -108,25 +125,4 @@ target_link_libraries(foundation_shell PRIVATE foundation_shell_lib)
 # Make sure all checks run before building
 add_dependencies(foundation_shell check_static_asserts check_casing check_includes)
 
-# Enable testing
-enable_testing()
-
-# Find all test files
-file(GLOB_RECURSE TEST_FILES CONFIGURE_DEPENDS
-    "tests/*_test.cpp"
-)
-
-# Create a single test executable for all tests
-add_executable(unit_tests ${TEST_FILES})
-target_link_libraries(unit_tests
-    foundation_shell_lib
-    Catch2::Catch2WithMain
-)
-
-# Add include directories for test files (using absolute paths)
-target_include_directories(unit_tests PRIVATE
-    "${CMAKE_SOURCE_DIR}"
-)
-
-# Add the test to CTest
-add_test(NAME UnitTests COMMAND unit_tests)
+add_subdirectory(tests)

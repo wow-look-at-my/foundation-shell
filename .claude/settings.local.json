@@ -6,7 +6,9 @@
       "Bash(grep:*)",
       "Bash(chmod:*)",
       "Bash(just build)",
-      "Bash(clang++:*)"
+      "Bash(clang++:*)",
+      "Bash(just clean:*)",
+      "Bash(just test)"
     ],
     "deny": []
   },

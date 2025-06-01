@@ -5,7 +5,7 @@
 #include <memory>
 #include "io/ISource.hpp"
 #include "io/ISink.hpp"
-#include "Task.hpp"
+#include "mh/coroutine/task.hpp"
 
 // Forward declarations
 class IProcess;
@@ -48,7 +48,7 @@ public:
 	 * Wait for the process to complete
 	 * @return Exit code of the process
 	 */
-	virtual Task<int> waitAsync() = 0;
+	virtual mh::task<int> waitAsync() = 0;
 
 	/**
 	 * Check if the process is running

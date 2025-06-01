@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Task.hpp"
+#include "mh/coroutine/task.hpp"
 #include <chrono>
 
-extern Task<void> sleep_async(std::chrono::milliseconds duration);
+extern mh::task<void> sleep_async(std::chrono::milliseconds duration);

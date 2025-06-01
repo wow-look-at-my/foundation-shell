@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Task.hpp"
+#include "mh/coroutine/task.hpp"
 
 // Shell class with RAII initialization
 class Shell
@@ -13,7 +13,7 @@ public:
 	~Shell();
 
 	// Run the shell asynchronously
-	Task<int> runAsync();
+	mh::task<int> runAsync();
 
 private:
 	// Signal handlers
