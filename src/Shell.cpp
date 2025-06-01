@@ -40,7 +40,16 @@ Shell::Shell() : dispatcher_(std::make_unique<mh::dispatcher>())
 	timeoutThread_ = std::thread([this]() {
 		// Name the thread for debugging
 		pthread_setname_np("shell-timeout");
-		std::this_thread::sleep_for(std::chrono::seconds(30));
+		
+		// Wait for timeout or shutdown signal
+		std::unique_lock<std::mutex> lock(timeoutMutex_);
+		if (timeoutCv_.wait_for(lock, std::chrono::seconds(30), [this] { return shutdownRequested_.load(); }))
+		{
+			// Shutdown was requested before timeout
+			return;
+		}
+		
+		// Timeout reached without shutdown signal
 		std::print(stderr, "\nShell timeout reached - exiting\n");
 		exit(124); // Use exit code 124 for timeout
 	});
@@ -49,10 +58,15 @@ Shell::Shell() : dispatcher_(std::make_unique<mh::dispatcher>())
 // Destructor with cleanup
 Shell::~Shell()
 {
-	// Clean up timeout thread
+	// Signal timeout thread to shutdown and wait for it
 	if (timeoutThread_.joinable())
 	{
-		timeoutThread_.detach(); // Let it finish or terminate naturally
+		{
+			std::lock_guard<std::mutex> lock(timeoutMutex_);
+			shutdownRequested_.store(true);
+		}
+		timeoutCv_.notify_one();
+		timeoutThread_.join();
 	}
 }
 

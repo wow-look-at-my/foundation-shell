@@ -1,6 +1,9 @@
 #pragma once
 
+#include <atomic>
+#include <condition_variable>
 #include <memory>
+#include <mutex>
 #include <thread>
 
 #include "mh/coroutine/task.hpp"
@@ -30,6 +33,11 @@ private:
 
 	// Timeout thread for testing
 	std::thread timeoutThread_;
+
+	// Synchronization for interruptible timeout
+	std::atomic<bool> shutdownRequested_{false};
+	std::condition_variable timeoutCv_;
+	std::mutex timeoutMutex_;
 
 	// Dispatcher for async operations (registered for current thread)
 	std::unique_ptr<mh::dispatcher> dispatcher_;
