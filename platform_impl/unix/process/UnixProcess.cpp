@@ -1,7 +1,13 @@
 #include "UnixProcess.hpp"
+#include "Config.hpp"
 #include <iostream>
 #include <cstring>
 #include <signal.h>
+#include <print>
+
+// Poison iostream to prevent accidental use - use std::print instead
+#define cout DO_NOT_USE_COUT_USE_STD_PRINT_INSTEAD
+#define cerr DO_NOT_USE_CERR_USE_STD_PRINT_STDERR_INSTEAD
 
 // Constructor
 UnixProcess::UnixProcess(
@@ -51,7 +57,7 @@ bool UnixProcess::start()
 	if (pid_ == -1)
 	{
 		// Fork failed
-		std::cerr << "Failed to fork process\n";
+		std::print(stderr, ErrorMessages::FAILED_TO_FORK);
 		return false;
 	}
 	else if (pid_ == 0)
@@ -68,7 +74,7 @@ bool UnixProcess::start()
 		execvp(command_.c_str(), argArray);
 
 		// If execvp returns, an error occurred
-		std::cerr << "Failed to execute command: " << command_ << "\n";
+		std::print(stderr, ErrorMessages::COMMAND_NOT_FOUND, command_);
 		freeCharArray(argArray, args_.size());
 		exit(1);
 	}
@@ -100,7 +106,7 @@ mh::task<int> UnixProcess::waitAsync()
 	if (result == -1)
 	{
 		// Error occurred
-		std::cerr << "Error waiting for process\n";
+		std::print(stderr, ErrorMessages::ERROR_WAITING_FOR_PROCESS);
 		completed_ = true;
 		exitCode_ = -1;
 	}

@@ -25,6 +25,8 @@ namespace Constants
 // Error message constants
 namespace ErrorMessages
 {
-	inline constexpr std::string_view COMMAND_NOT_FOUND = "Command not found";
+	inline constexpr std::string_view COMMAND_NOT_FOUND = "Failed to execute command: {}";
 	inline constexpr std::string_view FS_ENTRY_NOT_FOUND = "No such file or directory";
+	inline constexpr std::string_view FAILED_TO_FORK = "Failed to fork process";
+	inline constexpr std::string_view ERROR_WAITING_FOR_PROCESS = "Error waiting for process";
 }

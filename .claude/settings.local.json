@@ -12,7 +12,8 @@
       "Bash(rg:*)",
       "Bash(cmake:*)",
       "Bash(timeout:*)",
-      "Bash(./tests/unit_tests --reporter=verbose \"[stdout_stderr]\")"
+      "Bash(./tests/unit_tests --reporter=verbose \"[stdout_stderr]\")",
+      "Bash(./tests/unit_tests \"[stdout_stderr]\")"
     ],
     "deny": []
   },

@@ -8,6 +8,7 @@
 #include <sstream>
 #include <cstdlib>
 #include <unistd.h>
+#include <format>
 
 // Tests for the basic shell functionality
 TEST_CASE("Executes simple command", "[shell]")
@@ -229,7 +230,7 @@ TEST_CASE("Quote types and character escaping", "[shell][quotes]")
 	setenv("TEST_VAR", "expanded", 1);
 	std::string output = runShellCommand("echo 'single quotes preserve $TEST_VAR'");
 	CHECK(output == "$TEST_VAR"); // Should be literal
-	CHECK(output != "expanded"); // Should not expand
+	CHECK(output != "expanded");  // Should not expand
 
 	// Test double quotes allow variable expansion
 	output = runShellCommand("echo \"double quotes allow $TEST_VAR\"");
@@ -242,7 +243,7 @@ TEST_CASE("Quote types and character escaping", "[shell][quotes]")
 	// Test escaped dollar sign
 	output = runShellCommand("echo \\$TEST_VAR");
 	CHECK(output == "$TEST_VAR"); // Should be literal
-	CHECK(output != "expanded"); // Should not expand
+	CHECK(output != "expanded");  // Should not expand
 
 	unsetenv("TEST_VAR");
 }
@@ -403,7 +404,7 @@ TEST_CASE("Conditional execution", "[shell][conditional]")
 	output = runShellCommand("false && echo 'should not print'");
 	CHECK(output == "");
 
-	// Test || operator - success case  
+	// Test || operator - success case
 	output = runShellCommand("true || echo 'should not print'");
 	CHECK(output == "");
 
@@ -440,7 +441,7 @@ TEST_CASE("Input redirection", "[shell][redirection][input]")
 	unlink(tempPath);
 }
 
-// Test Case: Multiple pipes (from gemini aistudio test plan)  
+// Test Case: Multiple pipes (from gemini aistudio test plan)
 TEST_CASE("Multiple pipe operations", "[shell][pipes][complex]")
 {
 	// Create temp file for pipe testing
@@ -537,7 +538,7 @@ TEST_CASE("Unmatched quotes handling", "[shell][quotes][errors]")
 
 	// Test unmatched single quote
 	output = runShellCommand("echo 'unclosed quote");
-	// Should produce some kind of error or handle gracefully  
+	// Should produce some kind of error or handle gracefully
 	CHECK(!output.empty());
 }
 
@@ -557,14 +558,14 @@ TEST_CASE("Empty arguments handling", "[shell][args][empty]")
 TEST_CASE("Command output goes to stdout only", "[shell][stdout_stderr]")
 {
 	ShellOutput output = runShellCommandSeparate("echo hello_world");
-	
+
 	// Command output should be in stdout
 	CHECK(output.stdout_output == "hello_world\n");
-	
+
 	// Prompts and welcome message should be in stderr only
 	CHECK(output.stderr_output.find("Welcome to Foundation Shell") != std::string::npos);
 	CHECK(output.stderr_output.find("$") != std::string::npos);
-	
+
 	// stdout should NOT contain prompts or welcome messages
 	CHECK(output.stdout_output.find("Welcome") == std::string::npos);
 	CHECK(output.stdout_output.find("$") == std::string::npos);
@@ -573,26 +574,32 @@ TEST_CASE("Command output goes to stdout only", "[shell][stdout_stderr]")
 TEST_CASE("Error messages go to stderr only", "[shell][stdout_stderr]")
 {
 	ShellOutput output = runShellCommandSeparate("nonexistent_command_xyz");
-	
-	// Error message should be in stderr
-	CHECK(output.stderr_output.find("Command not found") != std::string::npos);
-	
+
+	// Debug: print actual output to see what we get
+	INFO("STDOUT: '" << output.stdout_output << "'");
+	INFO("STDERR: '" << output.stderr_output << "'");
+
+	// Error message should be in stderr (formatted with command name)
+	std::string expected_error = std::format(ErrorMessages::COMMAND_NOT_FOUND, "nonexistent_command_xyz");
+	CHECK(output.stderr_output == expected_error);
+
 	// stdout should be empty or only contain whitespace
-	bool is_empty_or_whitespace = output.stdout_output.empty() || 
-	                              output.stdout_output.find_first_not_of(" \t\n\r") == std::string::npos;
+	bool is_empty_or_whitespace = output.stdout_output.empty() ||
+								  output.stdout_output.find_first_not_of(" \t\n\r") == std::string::npos;
 	CHECK(is_empty_or_whitespace);
 }
 
 TEST_CASE("Built-in command output goes to stdout", "[shell][stdout_stderr][builtins]")
 {
 	ShellOutput output = runShellCommandSeparate("pwd");
-	
+
 	// pwd output should be in stdout
 	CHECK(!output.stdout_output.empty());
 	CHECK(output.stdout_output.find("/") != std::string::npos);
-	
+
 	// stderr should only contain shell control messages, not the pwd output
-	bool stderr_ok = output.stderr_output.find("/") == std::string::npos || 
-	                 output.stderr_output.find("Welcome") != std::string::npos;
+	FAIL("Don't use || in checks");
+	bool stderr_ok = output.stderr_output.find("/") == std::string::npos ||
+					 output.stderr_output.find("Welcome") != std::string::npos;
 	CHECK(stderr_ok);
 }
