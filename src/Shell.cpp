@@ -1,6 +1,5 @@
 #include "Shell.hpp"
 
-#include <pthread.h>
 #include <unistd.h>
 
 #include <chrono>
@@ -18,11 +17,38 @@
 #include "CommandChain.hpp"
 #include "LastCppInclude.hpp"
 
-// Constructor with RAII initialization
-Shell::Shell() : dispatcher_(std::make_unique<mh::dispatcher>())
+
+namespace
 {
-	// Register dispatcher for current thread
-	dispatcher_->register_for_current_thread();
+struct Init
+{
+	Init()
+	{
+		// Initialize the dispatcher
+		m_Dispatcher.register_for_current_thread();
+		m_Timeout = timeout_async();
+	}
+
+private:
+	mh::task<> timeout_async()
+	{
+		std::print(stderr, "Shell timeout started - waiting for 30 seconds\n");
+		// Wait for 30 seconds before exiting the shell
+		// This is a simple timeout mechanism and should be
+		co_await m_Dispatcher.co_delay_for(std::chrono::seconds(30));
+		std::print(stderr, "\nShell timeout reached - exiting\n");
+		exit(124); // Use exit code 124 for timeout
+	}
+
+	mh::dispatcher m_Dispatcher{true};
+	mh::task<> m_Timeout;
+
+} const s_init;
+} // namespace
+
+// Constructor with RAII initialization
+Shell::Shell()
+{
 	// Setup signal handlers
 	{
 		signal(SIGINT, [](int) {
@@ -35,39 +61,12 @@ Shell::Shell() : dispatcher_(std::make_unique<mh::dispatcher>())
 
 		// No SIGTSTP handler needed - we don't support background processes
 	}
-
-	// Start timeout thread for testing
-	timeoutThread_ = std::thread([this]() {
-		// Name the thread for debugging
-		pthread_setname_np("shell-timeout");
-		
-		// Wait for timeout or shutdown signal
-		std::unique_lock<std::mutex> lock(timeoutMutex_);
-		if (timeoutCv_.wait_for(lock, std::chrono::seconds(30), [this] { return shutdownRequested_.load(); }))
-		{
-			// Shutdown was requested before timeout
-			return;
-		}
-		
-		// Timeout reached without shutdown signal
-		std::print(stderr, "\nShell timeout reached - exiting\n");
-		exit(124); // Use exit code 124 for timeout
-	});
 }
 
 // Destructor with cleanup
 Shell::~Shell()
 {
-	// Signal timeout thread to shutdown and wait for it
-	if (timeoutThread_.joinable())
-	{
-		{
-			std::lock_guard<std::mutex> lock(timeoutMutex_);
-			shutdownRequested_.store(true);
-		}
-		timeoutCv_.notify_one();
-		timeoutThread_.join();
-	}
+	// No cleanup needed for task-based timeout
 }
 
 // Implements the main shell loop as a coroutine

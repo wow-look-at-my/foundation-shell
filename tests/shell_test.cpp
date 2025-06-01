@@ -228,6 +228,8 @@ TEST_CASE("Built-in cd command", "[shell][builtins]")
 	// Test cd to previous directory (-)
 	output = runShellCommand("cd /tmp\ncd /\ncd -\npwd");
 	// This may output multiple lines, just check it ends with /tmp
+FAIL("Use exact equality or die");
+FAIL("Use exact equality or die");
 	CHECK(output.find("/tmp") != std::string::npos);
 
 	// Test cd to non-existent directory

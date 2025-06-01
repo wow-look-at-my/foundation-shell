@@ -121,3 +121,7 @@ The shell supports:
 ## Scripting
 
 - For scripts, use C# with dotnet run.
+
+## Memories
+
+- You probably want to review the documentation for catch2, specifically @build/_deps/catch2-src/docs/matchers.md and @build/_deps/catch2-src/docs/assertions.md

@@ -30,11 +30,11 @@ if(BUILD_TESTING AND TARGET Catch2::Catch2WithMain)
         foundation_shell_lib
         Catch2::Catch2WithMain
     )
-    
+
     # Make unit_tests depend on the find/npos pattern check
     # TEMPORARILY DISABLED while fixing tests for bash
-    # add_dependencies(unit_tests check_find_npos_patterns)
-    
+    add_dependencies(unit_tests check_find_npos_patterns)
+
     # Add include directories for test files (using absolute paths)
     target_include_directories(unit_tests PRIVATE
         "${CMAKE_SOURCE_DIR}"

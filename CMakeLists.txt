@@ -37,6 +37,13 @@ add_custom_target(check_includes
   COMMENT "Checking for proper include paths..."
 )
 
+# Add a custom command to check that LastCppInclude.hpp is the last include in all cpp files
+add_custom_target(check_last_include
+  COMMAND ${CMAKE_SOURCE_DIR}/scripts/check_last_include.cs
+  WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+  COMMENT "Checking that LastCppInclude.hpp is the last include in all cpp files..."
+)
+
 # Check for filesystem support
 if(APPLE)
   # MacOS has built-in filesystem support without a separate library
@@ -126,6 +133,6 @@ target_compile_definitions(foundation_shell PRIVATE FOUNDATION_SHELL_EXE)
 target_link_libraries(foundation_shell PRIVATE foundation_shell_lib)
 
 # Make sure all checks run before building
-add_dependencies(foundation_shell check_static_asserts check_casing check_includes)
+add_dependencies(foundation_shell check_static_asserts check_casing check_includes check_last_include)
 
 add_subdirectory(tests)

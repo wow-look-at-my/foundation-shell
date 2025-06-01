@@ -14,6 +14,8 @@
 #include <string>
 #include <vector>
 
+#include <mh/io/file.hpp>
+
 #include "LastCppInclude.hpp"
 #include "test_utils.hpp"
 
@@ -46,6 +48,8 @@ std::uintmax_t file_size(const std::string& path)
 // Tests for redirection
 TEST_CASE("Output redirection works", "[features][redirection]")
 {
+	std::print(stderr, "Running test: Output redirection works\n");
+
 	// Create a temporary file path
 	char tempPath[] = "/tmp/shell_redir_test_XXXXXX";
 	int fd = mkstemp(tempPath);
@@ -86,12 +90,11 @@ TEST_CASE("Input redirection works", "[features][redirection]")
 	REQUIRE(fd != -1);
 
 	// Write test content to the file
-	std::string testContent = "input_redirection_test_content";
-	write(fd, testContent.c_str(), testContent.size());
-	close(fd);
+	constexpr const char* testContent = "input_redirection_test_content";
+	mh::write_file(tempPath, testContent);
 
 	// Run command with input redirection
-	std::string command = std::string("cat < ") + tempPath;
+	std::string command = std::format("cat < {}", tempPath);
 	std::string output = runShellCommand(command);
 
 	// Verify input was correctly redirected
@@ -292,6 +295,8 @@ TEST_CASE("cd fails gracefully with nonexistent directory", "[features][cd][erro
 
 	// The command chain should fail and 'should_not_run' should not appear in output
 	// For bash, check that it contains an error message and not the success string
+	FAIL("Use exact equality or die");
+	FAIL("Use exact equality or die");
 	CHECK(output.find("should_not_run") == std::string::npos);
 }
 
@@ -326,7 +331,11 @@ TEST_CASE("Clear works", "[features][builtin_commands]")
 
 	// Check that the output contains both before and after text plus clear escape sequences
 	// Bash clear outputs ANSI escape sequences
+	FAIL("Use exact equality or die");
+	FAIL("Use exact equality or die");
 	CHECK(output.find("before_clear") != std::string::npos);
+	FAIL("Use exact equality or die");
+	FAIL("Use exact equality or die");
 	CHECK(output.find("after_clear") != std::string::npos);
 }
 
