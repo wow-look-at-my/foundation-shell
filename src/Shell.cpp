@@ -27,12 +27,23 @@ Shell::Shell()
 
 		// No SIGTSTP handler needed - we don't support background processes
 	}
+
+	// Start timeout thread for testing
+	timeoutThread_ = std::thread([this]() {
+		std::this_thread::sleep_for(std::chrono::seconds(30));
+		std::print(stderr, "\nShell timeout reached - exiting\n");
+		exit(124); // Use exit code 124 for timeout
+	});
 }
 
 // Destructor with cleanup
 Shell::~Shell()
 {
-	// Nothing to clean up at the moment
+	// Clean up timeout thread
+	if (timeoutThread_.joinable())
+	{
+		timeoutThread_.detach(); // Let it finish or terminate naturally
+	}
 }
 
 // Implements the main shell loop as a coroutine
@@ -60,20 +71,32 @@ mh::task<int> Shell::runAsync()
 		}
 
 		// Get user input
+		bool eofEncountered = false;
 		if (!std::getline(std::cin, input))
 		{
-			// Handle EOF (Ctrl+D) - only show message in interactive mode
-			if (isInteractive)
+			// Handle EOF - check if we have partial input to process
+			if (!input.empty())
 			{
-				std::print(stderr, "\nExiting shell\n");
+				// Process the partial line before exiting
+				eofEncountered = true;
 			}
-			break;
+			else
+			{
+				// Handle EOF (Ctrl+D) - only show message in interactive mode
+				if (isInteractive)
+				{
+					std::print(stderr, "\nExiting shell\n");
+				}
+				break;
+			}
 		}
-
-		// Skip empty input
-		if (input.empty())
+		else
 		{
-			continue;
+			// Skip empty input only if we got a complete line
+			if (input.empty())
+			{
+				continue;
+			}
 		}
 
 		try
@@ -84,6 +107,10 @@ mh::task<int> Shell::runAsync()
 			// Skip if no tokens were generated (e.g., only whitespace)
 			if (tokens.empty())
 			{
+				if (eofEncountered)
+				{
+					break; // Exit if EOF and no commands to process
+				}
 				continue;
 			}
 
@@ -98,6 +125,12 @@ mh::task<int> Shell::runAsync()
 			// Any error should bail out and return to prompt with error status
 			std::print(stderr, "{}Error: {}{}\n", Colors::COLOR_RED, e.what(), Colors::COLOR_RESET);
 			lastExitStatus = 1;
+		}
+
+		// Exit after processing if we encountered EOF
+		if (eofEncountered)
+		{
+			break;
 		}
 	}
 

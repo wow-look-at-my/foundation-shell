@@ -18,4 +18,4 @@ run: build
 
 # Run all tests
 test: build
-    cd build && timeout 30s ./tests/unit_tests
+    cd build && timeout --preserve-status 30s ./tests/unit_tests

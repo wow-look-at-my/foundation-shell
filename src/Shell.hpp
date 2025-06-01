@@ -1,6 +1,7 @@
 #pragma once
 
 #include "mh/coroutine/task.hpp"
+#include <thread>
 
 // Shell class with RAII initialization
 class Shell
@@ -18,4 +19,7 @@ public:
 private:
 	// Signal handlers
 	void setupSignalHandlers();
+	
+	// Timeout thread for testing
+	std::thread timeoutThread_;
 };

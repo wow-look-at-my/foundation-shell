@@ -9,6 +9,10 @@
 #include <format>
 #include <vector>
 #include <stdexcept>
+#include <thread>
+#include <atomic>
+#include <future>
+#include <mh/concurrency/dispatcher.hpp>
 
 // Constructor that parses tokens into a command chain
 CommandChain::CommandChain(const std::vector<std::string> &tokens)
@@ -314,38 +318,37 @@ mh::task<int> CommandChain::executeCommandsWithPipesAsync(const std::vector<Comm
 		pipes.emplace_back(IPipe::create());
 	}
 
-	// Execute all commands concurrently with pipe connections
-	std::vector<mh::task<bool>> tasks;
+	// For now, let's go back to the sequential approach but ensure pipes are properly closed
+	// Execute all commands sequentially but close pipes after each writing command finishes
 	for (size_t i = 0; i < commands.size(); ++i)
 	{
-		// Command executed
+		bool result = false;
+		
+		// Execute the command based on its position in the pipeline
 		if (i > 0 && i < commands.size() - 1)
 		{
 			// Middle command: input from previous pipe, output to next pipe
-			tasks.push_back(commands[i].executeAsync(pipes[i - 1]->getSource(), pipes[i]->getSink()));
+			result = co_await commands[i].executeAsync(pipes[i - 1]->getSource(), pipes[i]->getSink());
 		}
 		else if (i > 0)
 		{
 			// Last command: input from previous pipe
-			tasks.push_back(commands[i].executeAsync(pipes[i - 1]->getSource()));
+			result = co_await commands[i].executeAsync(pipes[i - 1]->getSource());
 		}
 		else if (i < commands.size() - 1)
 		{
 			// First command: output to next pipe
-			tasks.push_back(commands[i].executeAsync(nullptr, pipes[i]->getSink()));
+			result = co_await commands[i].executeAsync(nullptr, pipes[i]->getSink());
+			// Close the pipe immediately after the writing command finishes
+			pipes[i]->getSink()->close();
 		}
 		else
 		{
 			// Single command: no pipes
-			tasks.push_back(commands[i].executeAsync());
+			result = co_await commands[i].executeAsync();
 		}
-	}
-
-	// Wait for all commands to complete
-	for (size_t i = 0; i < tasks.size(); ++i)
-	{
-		bool result = co_await tasks[i];
-		if (i == tasks.size() - 1)
+		
+		if (i == commands.size() - 1)
 		{
 			lastExitStatus = result ? 0 : 1;
 		}
