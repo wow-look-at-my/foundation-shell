@@ -63,8 +63,6 @@ public:
 	size_t size() const { return commands_.size(); }
 
 private:
-	// Execute a sequence of piped commands asynchronously - stateless version
-	mh::task<int> executeCommandsWithPipesAsync(const std::vector<Command> &commands) const;
 
 	std::vector<Command> commands_;
 	std::vector<TokenType> operators_; // operators_[i] is the operator between commands_[i] and commands_[i+1]

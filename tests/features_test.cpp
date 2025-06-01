@@ -347,7 +347,7 @@ TEST_CASE("Background process works", "[features][process_management]")
 	std::string output = runShellCommand(command + "\nsleep 3");
 
 	// Add more verbose output to help with debugging
-	std::cout << "Background process test output: " << output << std::endl;
+	std::print("Background process test output: {}\n", output);
 
 	// Wait and retry a few times if necessary - file system operations can be async
 	bool fileExists = false;
@@ -356,7 +356,7 @@ TEST_CASE("Background process works", "[features][process_management]")
 		fileExists = fs::exists(tempPath);
 		if (!fileExists)
 		{
-			std::cout << "File not found yet, waiting..." << std::endl;
+			std::print("File not found yet, waiting...\n");
 			usleep(500000); // Sleep for 0.5 seconds between retries
 		}
 	}

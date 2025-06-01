@@ -6,9 +6,6 @@
 #include <print>
 #include "LastCppInclude.hpp"
 
-// Poison iostream to prevent accidental use - use std::print instead
-#define cout DO_NOT_USE_COUT_USE_STD_PRINT_INSTEAD
-#define cerr DO_NOT_USE_CERR_USE_STD_PRINT_STDERR_INSTEAD
 
 // Constructor
 UnixProcess::UnixProcess(

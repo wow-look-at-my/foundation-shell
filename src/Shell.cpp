@@ -11,6 +11,7 @@
 #include <chrono>
 #include <csignal>
 #include <unistd.h>
+#include <cstdlib>
 #include "LastCppInclude.hpp"
 
 // Constructor with RAII initialization
@@ -73,7 +74,21 @@ mh::task<int> Shell::runAsync()
 
 		// Get user input
 		bool eofEncountered = false;
-		if (!std::getline(std::cin, input))
+		// Use C-style input to avoid poisoned cin
+		char* line = nullptr;
+		size_t len = 0;
+		ssize_t bytes_read = getline(&line, &len, stdin);
+		if (bytes_read != -1)
+		{
+			input = std::string(line, bytes_read > 0 && line[bytes_read-1] == '\n' ? bytes_read-1 : bytes_read);
+			free(line);
+		}
+		else
+		{
+			if (line) free(line);
+		}
+		
+		if (bytes_read == -1)
 		{
 			// Handle EOF - check if we have partial input to process
 			if (!input.empty())

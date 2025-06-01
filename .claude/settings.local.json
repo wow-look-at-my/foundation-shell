@@ -15,7 +15,12 @@
       "Bash(./tests/unit_tests --reporter=verbose \"[stdout_stderr]\")",
       "Bash(./tests/unit_tests \"[stdout_stderr]\")",
       "Bash(just compare-bash:*)",
-      "Bash(ln:*)"
+      "Bash(ln:*)",
+      "Bash(just test:*)",
+      "Bash(./tests/unit_tests --help)",
+      "Bash(just profile-analyze:*)",
+      "Bash(just profile-test:*)",
+      "Bash(just profile:*)"
     ],
     "deny": []
   },

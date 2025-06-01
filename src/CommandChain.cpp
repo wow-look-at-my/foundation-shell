@@ -148,7 +148,6 @@ CommandChain CommandChain::parseFromTokens(const std::vector<std::string> &token
 	//	}
 	//	throw;
 	// }
-}
 
 // Second pass: Process the validated tokens into commands and operators
 Command currentCommand;
@@ -294,74 +293,6 @@ if (!chain.commands_.empty() && chain.operators_.size() != chain.commands_.size(
 return chain;
 }
 
-// Implementation of the private method to execute piped commands
-mh::task<int> CommandChain::executeCommandsWithPipesAsync(const std::vector<Command> &commands) const
-{
-	if (commands.empty())
-	{
-		co_return 0;
-	}
-
-	// Log message about executing piped commands (disabled for tests)
-	// std::cerr << "Debug: Executing piped commands with " << commands.size() << " commands" << std::endl;
-
-	// If there's only one command, execute it directly
-	if (commands.size() == 1)
-	{
-		// Command executed
-		bool result = co_await commands[0].executeAsync();
-		co_return result ? 0 : 1; // Convert bool to exit status
-	}
-
-	// For multiple commands, we need to set up pipes between commands
-	int lastExitStatus = 0;
-
-	// Create pipes between commands
-	std::vector<std::shared_ptr<IPipe>> pipes;
-	for (size_t i = 0; i < commands.size() - 1; ++i)
-	{
-		// Use the static create method from IPipe interface
-		pipes.emplace_back(IPipe::create());
-	}
-
-	// For now, let's go back to the sequential approach but ensure pipes are properly closed
-	// Execute all commands sequentially but close pipes after each writing command finishes
-	for (size_t i = 0; i < commands.size(); ++i)
-	{
-		bool result = false;
-
-		// Execute the command based on its position in the pipeline
-		if (i > 0 && i < commands.size() - 1)
-		{
-			// Middle command: input from previous pipe, output to next pipe
-			result = co_await commands[i].executeAsync(pipes[i - 1]->getSource(), pipes[i]->getSink());
-		}
-		else if (i > 0)
-		{
-			// Last command: input from previous pipe
-			result = co_await commands[i].executeAsync(pipes[i - 1]->getSource());
-		}
-		else if (i < commands.size() - 1)
-		{
-			// First command: output to next pipe
-			result = co_await commands[i].executeAsync(nullptr, pipes[i]->getSink());
-			// Close the pipe immediately after the writing command finishes
-			pipes[i]->getSink()->close();
-		}
-		else
-		{
-			// Single command: no pipes
-			result = co_await commands[i].executeAsync();
-		}
-
-		if (i == commands.size() - 1)
-		{
-			lastExitStatus = result ? 0 : 1;
-		}
-	}
-
-	co_return lastExitStatus;
-}
 
 // Execute the command chain asynchronously
 mh::task<int> CommandChain::executeAsync() const
@@ -422,8 +353,57 @@ mh::task<int> CommandChain::executeAsync() const
 				pipelineCommands.push_back(commands_[j]);
 			}
 
-			// Execute the pipeline asynchronously (directly handle piped commands)
-			lastExitStatus = co_await executeCommandsWithPipesAsync(pipelineCommands);
+			// Execute the pipeline asynchronously with concurrent commands
+			if (pipelineCommands.size() == 1)
+			{
+				bool result = co_await pipelineCommands[0].executeAsync();
+				lastExitStatus = result ? 0 : 1;
+			}
+			else
+			{
+				// Create pipes between commands
+				std::vector<std::shared_ptr<IPipe>> pipes;
+				for (size_t k = 0; k < pipelineCommands.size() - 1; ++k)
+				{
+					pipes.emplace_back(IPipe::create());
+				}
+
+				// Start all commands concurrently
+				std::vector<mh::task<bool>> tasks;
+				tasks.reserve(pipelineCommands.size());
+
+				for (size_t k = 0; k < pipelineCommands.size(); ++k)
+				{
+					if (k > 0 && k < pipelineCommands.size() - 1)
+					{
+						// Middle command: input from previous pipe, output to next pipe
+						tasks.emplace_back(pipelineCommands[k].executeAsync(pipes[k - 1]->getSource(), pipes[k]->getSink()));
+					}
+					else if (k > 0)
+					{
+						// Last command: input from previous pipe
+						tasks.emplace_back(pipelineCommands[k].executeAsync(pipes[k - 1]->getSource()));
+					}
+					else
+					{
+						// First command: output to next pipe
+						tasks.emplace_back(pipelineCommands[k].executeAsync(nullptr, pipes[k]->getSink()));
+					}
+				}
+
+				// Wait for all commands to complete
+				bool lastResult = true;
+				for (size_t k = 0; k < tasks.size(); ++k)
+				{
+					bool result = co_await tasks[k];
+					if (k == pipelineCommands.size() - 1)
+					{
+						lastResult = result;
+					}
+				}
+
+				lastExitStatus = lastResult ? 0 : 1;
+			}
 
 			// Skip to after this pipeline
 			i = pipelineEnd;

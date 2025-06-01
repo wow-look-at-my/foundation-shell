@@ -65,7 +65,7 @@ int Command::handleBuiltins() const
 	if (args.at(0) == "clear")
 	{
 		// ANSI escape sequence to clear the screen
-		std::cout << "\033[2J\033[H";
+		std::print("\033[2J\033[H");
 		return 0;
 	}
 
@@ -79,32 +79,32 @@ int Command::handleBuiltins() const
 		std::string_view headerColor = "\033[1;34m"; // Bold blue
 		std::string_view cmdColor = "\033[1;32m";	 // Bold green
 
-		std::cout << headerColor << "Foundation Shell - Available Commands:" << Colors::COLOR_RESET << std::endl;
-		std::cout << cmdColor << "  cd [dir]" << Colors::COLOR_RESET << " - Change directory" << std::endl;
-		std::cout << cmdColor << "  pwd" << Colors::COLOR_RESET << " - Print working directory" << std::endl;
-		std::cout << cmdColor << "  exit" << Colors::COLOR_RESET << " - Exit the shell" << std::endl;
-		std::cout << cmdColor << "  clear" << Colors::COLOR_RESET << " - Clear the screen" << std::endl;
-		std::cout << cmdColor << "  history [-c]" << Colors::COLOR_RESET << " - Show command history or clear it" << std::endl;
-		std::cout << cmdColor << "  jobs" << Colors::COLOR_RESET << " - List active jobs" << std::endl;
-		std::cout << cmdColor << "  fg [job_id]" << Colors::COLOR_RESET << " - Bring job to foreground" << std::endl;
-		std::cout << cmdColor << "  bg [job_id]" << Colors::COLOR_RESET << " - Continue job in background" << std::endl;
-		std::cout << cmdColor << "  alias [name=value]" << Colors::COLOR_RESET << " - Display or set command aliases" << std::endl;
-		std::cout << cmdColor << "  unalias name" << Colors::COLOR_RESET << " - Remove an alias" << std::endl;
-		std::cout << cmdColor << "  config [key] [value]" << Colors::COLOR_RESET << " - View or set configuration" << std::endl;
-		std::cout << cmdColor << "  themes" << Colors::COLOR_RESET << " - List available themes" << std::endl;
-		std::cout << cmdColor << "  debug [on|off|stats]" << Colors::COLOR_RESET << " - Toggle debug mode or show stats" << std::endl;
-		std::cout << cmdColor << "  help" << Colors::COLOR_RESET << " - Display this help message" << std::endl;
-		std::cout << std::endl;
-		std::cout << headerColor << "Special Characters:" << Colors::COLOR_RESET << std::endl;
-		std::cout << cmdColor << "  |" << Colors::COLOR_RESET << " - Pipe output of one command to another" << std::endl;
-		std::cout << cmdColor << "  &&" << Colors::COLOR_RESET << " - Chain commands (execute next only if previous succeeds)" << std::endl;
-		std::cout << cmdColor << "  > file" << Colors::COLOR_RESET << " - Redirect output to file" << std::endl;
-		std::cout << cmdColor << "  >> file" << Colors::COLOR_RESET << " - Append output to file" << std::endl;
-		std::cout << cmdColor << "  < file" << Colors::COLOR_RESET << " - Redirect input from file" << std::endl;
-		std::cout << cmdColor << "  2> file" << Colors::COLOR_RESET << " - Redirect error output to file" << std::endl;
-		std::cout << cmdColor << "  2>> file" << Colors::COLOR_RESET << " - Append error output to file" << std::endl;
-		std::cout << cmdColor << "  &" << Colors::COLOR_RESET << " - Run command in background" << std::endl;
-		std::cout << cmdColor << "  !n" << Colors::COLOR_RESET << " - Execute command from history" << std::endl;
+		std::print("{}Foundation Shell - Available Commands:{}\n", headerColor, Colors::COLOR_RESET);
+		std::print("{}  cd [dir]{} - Change directory\n", cmdColor, Colors::COLOR_RESET);
+		std::print("{}  pwd{} - Print working directory\n", cmdColor, Colors::COLOR_RESET);
+		std::print("{}  exit{} - Exit the shell\n", cmdColor, Colors::COLOR_RESET);
+		std::print("{}  clear{} - Clear the screen\n", cmdColor, Colors::COLOR_RESET);
+		std::print("{}  history [-c]{} - Show command history or clear it\n", cmdColor, Colors::COLOR_RESET);
+		std::print("{}  jobs{} - List active jobs\n", cmdColor, Colors::COLOR_RESET);
+		std::print("{}  fg [job_id]{} - Bring job to foreground\n", cmdColor, Colors::COLOR_RESET);
+		std::print("{}  bg [job_id]{} - Continue job in background\n", cmdColor, Colors::COLOR_RESET);
+		std::print("{}  alias [name=value]{} - Display or set command aliases\n", cmdColor, Colors::COLOR_RESET);
+		std::print("{}  unalias name{} - Remove an alias\n", cmdColor, Colors::COLOR_RESET);
+		std::print("{}  config [key] [value]{} - View or set configuration\n", cmdColor, Colors::COLOR_RESET);
+		std::print("{}  themes{} - List available themes\n", cmdColor, Colors::COLOR_RESET);
+		std::print("{}  debug [on|off|stats]{} - Toggle debug mode or show stats\n", cmdColor, Colors::COLOR_RESET);
+		std::print("{}  help{} - Display this help message\n", cmdColor, Colors::COLOR_RESET);
+		std::print("\n");
+		std::print("{}Special Characters:{}\n", headerColor, Colors::COLOR_RESET);
+		std::print("{}  |{} - Pipe output of one command to another\n", cmdColor, Colors::COLOR_RESET);
+		std::print("{}  &&{} - Chain commands (execute next only if previous succeeds)\n", cmdColor, Colors::COLOR_RESET);
+		std::print("{}  > file{} - Redirect output to file\n", cmdColor, Colors::COLOR_RESET);
+		std::print("{}  >> file{} - Append output to file\n", cmdColor, Colors::COLOR_RESET);
+		std::print("{}  < file{} - Redirect input from file\n", cmdColor, Colors::COLOR_RESET);
+		std::print("{}  2> file{} - Redirect error output to file\n", cmdColor, Colors::COLOR_RESET);
+		std::print("{}  2>> file{} - Append error output to file\n", cmdColor, Colors::COLOR_RESET);
+		std::print("{}  &{} - Run command in background\n", cmdColor, Colors::COLOR_RESET);
+		std::print("{}  !n{} - Execute command from history\n", cmdColor, Colors::COLOR_RESET);
 		return 0;
 	}
 
@@ -286,7 +286,7 @@ mh::task<bool> Command::executeAsync(Source inputSource, Sink outputSink) const
 	// Start the process
 	if (!process->start())
 	{
-		std::cerr << Colors::COLOR_RED << "Failed to start process: " << command_args.at(0) << Colors::COLOR_RESET << "\n";
+		std::print(stderr, "{}Failed to start process: {}{}\n", Colors::COLOR_RED, command_args.at(0), Colors::COLOR_RESET);
 
 		// Restore environment before returning
 		for (size_t i = 0; i < env_assignments.size(); ++i)
