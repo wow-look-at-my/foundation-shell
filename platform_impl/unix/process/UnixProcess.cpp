@@ -244,14 +244,4 @@ void UnixProcess::freeCharArray(char **array, int size) const
 	delete[] array;
 }
 
-// Factory function implementation (Unix-specific)
-ProcessPtr createProcess(
-	const std::string &command,
-	const std::vector<std::string> &args,
-	Source inputSource,
-	Sink outputSink,
-	Sink errorSink)
-{
-	return std::make_shared<UnixProcess>(
-		command, args, inputSource, outputSink, errorSink);
-}
+// Factory function implementation moved to UnixProcessFactory.cpp

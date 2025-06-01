@@ -1,37 +1,34 @@
+#include "StdioFix.hpp" // Must be first to handle stdio identifiers
 #include "Shell.hpp"
 #include "Command.hpp"
 #include "CommandChain.hpp"
-#include "History.hpp"
-#include "Job.hpp"
-#include "Alias.hpp"
 #include <iostream>
+#include <cstdio>
 #include <string>
 #include <memory>
-
-// External globals
-extern bool debugMode;
-extern DebugInfo debugInfo;
-extern void sigchldHandler(int);
+#include <format>
+#include <cstdio>
+#include <sstream>
+#include <chrono>
+#include <csignal>
 
 // Constructor with RAII initialization
 Shell::Shell()
 {
-	// Initialize debug info
-	debugInfo.startTime = std::chrono::steady_clock::now();
-
 	// Setup signal handlers
 	{
 		signal(SIGINT, [](int)
 			   {
 				   // Just print a newline and return to the prompt
-				   std::cout << std::endl; });
+				   std::print("\n"); });
 
-		signal(SIGCHLD, sigchldHandler);
+		// Basic SIGCHLD handler for background processes
+		signal(SIGCHLD, SIG_IGN);
 
 		signal(SIGTSTP, [](int)
 			   {
  					// Handle Ctrl+Z (suspend process)
- 					std::cout << std::endl; });
+ 					std::print("\n"); });
 	}
 }
 
@@ -39,34 +36,28 @@ Shell::Shell()
 Shell::~Shell()
 {
 	// Nothing to clean up at the moment
-	// Future: save history, config changes, etc.
 }
 
 // Implements the main shell loop as a coroutine
 Task<int> Shell::runAsync()
 {
 	std::string input;
-	std::string prompt;
 	int lastExitStatus = 0;
 
 	// Display welcome message
-	if (!shellConfig.welcomeMessage.empty())
-	{
-		std::cout << shellConfig.getThemeColor("header") << shellConfig.welcomeMessage
-				  << Colors::COLOR_RESET << std::endl;
-	}
+	std::print("{}Welcome to Foundation Shell{}\n", Colors::COLOR_BOLD, Colors::COLOR_RESET);
 
 	while (true)
 	{
-		// Format the prompt based on the template
-		prompt = shellConfig.formatPrompt(shellConfig.promptTemplate, lastExitStatus);
-		std::cout << prompt;
+		// Simple prompt with last exit status color
+		std::string prompt_color = lastExitStatus == 0 ? std::string{Colors::COLOR_GREEN} : std::string{Colors::COLOR_RED};
+		std::print("{}${} ", prompt_color, Colors::COLOR_RESET);
 
 		// Get user input
 		if (!std::getline(std::cin, input))
 		{
 			// Handle EOF (Ctrl+D)
-			std::cout << "\nExiting shell\n";
+			std::print("\nExiting shell\n");
 			break;
 		}
 
@@ -76,51 +67,20 @@ Task<int> Shell::runAsync()
 			continue;
 		}
 
-		// Handle history execution with ! notation
-		if (!input.empty() && input[0] == '!')
+		// Split the input into tokens
+		std::vector<std::string> tokens;
+		std::istringstream iss(input);
+		std::string token;
+		while (iss >> token)
 		{
-			// Extract the history number
-			int historyNum = 0;
-			try
-			{
-				historyNum = std::stoi(input.substr(1));
-				std::string historyCommand = findCommandByHistoryNumber(historyNum);
-				if (!historyCommand.empty())
-				{
-					input = historyCommand;
-					std::cout << input << std::endl; // Echo the command
-				}
-				else
-				{
-					std::cerr << "Event not found: " << historyNum << std::endl;
-					continue;
-				}
-			}
-			catch (const std::exception &e)
-			{
-				std::cerr << "Invalid history reference: " << input << std::endl;
-				continue;
-			}
+			tokens.push_back(token);
 		}
-
-		// Handle aliases
-		std::string expandedInput = expandAlias(input);
-		if (expandedInput != input && debugMode)
-		{
-			std::cerr << "Debug: Expanded alias: " << input << " -> " << expandedInput << std::endl;
-		}
-
-		// Save the command to history
-		saveToHistory(input); // Save original command, not expanded alias
-
-		// Split the input into tokens, using bash-compatible splitting
-		std::vector<std::string> tokens = bashSplitString(expandedInput);
 
 		// Parse the command with potential redirections, pipes, and command chains
 		CommandChain commandChain(tokens);
 
 		// Execute the command chain asynchronously
-		lastExitStatus = co_await commandChain.executeAsync(shellConfig);
+		lastExitStatus = co_await commandChain.executeAsync();
 	}
 
 	co_return lastExitStatus;

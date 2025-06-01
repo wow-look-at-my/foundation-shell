@@ -3,9 +3,9 @@
 #include <string>
 #include <vector>
 #include <memory>
-#include "../io/ISource.hpp"
-#include "../io/ISink.hpp"
-#include "../Task.hpp"
+#include "io/ISource.hpp"
+#include "io/ISink.hpp"
+#include "Task.hpp"
 
 // Forward declarations
 class IProcess;

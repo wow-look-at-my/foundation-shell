@@ -10,7 +10,7 @@ project(foundation_shell VERSION 1.0)
 
 # Add a custom command to check for incorrect static_assert usage
 add_custom_target(check_static_asserts
-  COMMAND ${CMAKE_SOURCE_DIR}/scripts/fix_static_asserts.sh
+  COMMAND ${CMAKE_SOURCE_DIR}/scripts/fix_static_asserts.ps1
   WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
   COMMENT "Checking for incorrect static_assert usage..."
 )
@@ -60,12 +60,20 @@ add_subdirectory(extern/mh_stuff)
 # Add platform implementation library
 add_subdirectory(platform_impl)
 
-# Add GoogleTest using CPM
+# Add Catch2 using CPM
 CPMAddPackage(
-  NAME googletest
-  GITHUB_REPOSITORY google/googletest
-  GIT_TAG v1.14.0
-  OPTIONS "INSTALL_GTEST OFF" "gtest_force_shared_crt ON"
+  NAME Catch2
+  GITHUB_REPOSITORY catchorg/Catch2
+  VERSION 3.4.0
+  GIT_TAG v3.4.0
+)
+
+# Add JSON library (header-only)
+CPMAddPackage(
+  NAME nlohmann_json
+  GITHUB_REPOSITORY nlohmann/json
+  GIT_TAG v3.12.0
+  OPTIONS "JSON_BuildTests OFF"
 )
 
 # Enable policy to correctly handle CONFIGURE_DEPENDS option
@@ -84,12 +92,7 @@ add_library(foundation_shell_lib ${SOURCES})
 target_compile_features(foundation_shell_lib PUBLIC cxx_std_23)
 
 # Link against dependencies
-target_link_libraries(foundation_shell_lib PUBLIC mh-stuff platform_impl)
-
-# Enable coroutine support
-if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
-  # GCC and Clang already have coroutine support in C++20/C++23
-endif()
+target_link_libraries(foundation_shell_lib PUBLIC mh-stuff platform_impl nlohmann_json)
 
 # Set include directories for library
 target_include_directories(foundation_shell_lib PUBLIC src)
@@ -117,8 +120,12 @@ file(GLOB_RECURSE TEST_FILES CONFIGURE_DEPENDS
 add_executable(unit_tests ${TEST_FILES})
 target_link_libraries(unit_tests
     foundation_shell_lib
-    gtest_main
-    gmock
+    Catch2::Catch2WithMain
+)
+
+# Add include directories for test files (using absolute paths)
+target_include_directories(unit_tests PRIVATE
+    "${CMAKE_SOURCE_DIR}"
 )
 
 # Add the test to CTest

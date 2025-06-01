@@ -13,4 +13,9 @@ target_compile_features(platform_impl PUBLIC cxx_std_23)
 
 # Include directories for finding header files
 # This is internal - only for building this library
-target_include_directories(platform_impl PRIVATE "${CMAKE_SOURCE_DIR}/src")
+target_include_directories(platform_impl
+    PRIVATE
+		"${CMAKE_SOURCE_DIR}"
+		"${CMAKE_CURRENT_SOURCE_DIR}"
+		"${CMAKE_SOURCE_DIR}/src"
+)

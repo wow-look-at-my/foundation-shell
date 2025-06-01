@@ -17,7 +17,12 @@ Write-Host "Checking include paths in $RootDir..."
 
 # Find all C++ files
 $CppFiles = Get-ChildItem -Path $RootDir -Recurse -Include '*.cpp', '*.hpp', '*.h', '*.cc' |
-	Where-Object { -not $_.FullName.Contains('\build\') -and -not $_.FullName.Contains('/build/') }
+	Where-Object {
+		-not $_.FullName.Contains('\build\') -and
+		-not $_.FullName.Contains('/build/') -and
+		-not $_.FullName.Contains('\extern\') -and
+		-not $_.FullName.Contains('/extern/')
+	}
 
 $ErrorCount = 0
 

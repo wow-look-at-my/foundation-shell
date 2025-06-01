@@ -1,6 +1,8 @@
+#include "StdioFix.hpp" // Must be first to handle stdio identifiers
 #include "Command.hpp"
-#include "Config.hpp"
+#include <filesystem>
 #include <iostream>
+#include <cstdio>
 #include <cstring>
 #include <wordexp.h>
 #include <filesystem>
@@ -16,36 +18,9 @@
 #include "io/FileSink.hpp"
 #include "Main.hpp"
 
-// External globals from config.hpp
-extern ShellConfig shellConfig;
-extern bool debugMode;
-extern DebugInfo debugInfo;
-
-// Function definitions for job management - these will be defined in job.cpp later
-extern int addJob(pid_t pid, const std::string &command);
-extern void listJobs();
-extern int foregroundJob(int jobId);
-extern bool backgroundJob(int jobId);
-
-// Function for history-related operations - will be defined in history.cpp
-extern void saveToHistory(const std::string &command);
-extern std::vector<std::string> readHistory();
-extern void clearHistory();
-extern std::string findCommandByHistoryNumber(int number);
-
-// Forward declarations for alias management - will be defined in alias.cpp
-extern std::string expandAlias(const std::string &command);
-extern void addAlias(const std::string &name, const std::string &command);
-extern void removeAlias(const std::string &name);
-extern void saveAliases();
-extern std::map<std::string, std::string> aliases;
-
-// Function for command suggestions
-std::vector<std::string> findCommandSuggestions(const std::string &command);
-
 // Command implementation
 Command::Command()
-	: appendOutput(false), appendError(false), backgroundProcess(false)
+	: appendOutput(false), appendError(false)
 {
 }
 
@@ -57,51 +32,28 @@ int Command::handleBuiltins() const
 	}
 
 	// Handle CD command
-	if (args[0] == "cd")
+	if (args.at(0) == "cd")
 	{
-		if (args.size() < 2)
+		try
 		{
-			// If no path is provided, change to HOME directory
-			const char *homeDir = getenv("HOME");
-			if (homeDir == nullptr)
-			{
-				std::cerr << "HOME environment variable not set\n";
-				return 1;
-			}
-			try
-			{
-				std::filesystem::current_path(homeDir);
-			}
-			catch (const std::exception &e)
-			{
-				std::print("Failed to change directory to {}: {}\n", homeDir, e.what());
-				return 1;
-			}
+			std::filesystem::current_path(args.at(1));
 		}
-		else
+		catch (const std::exception &e)
 		{
-			try
-			{
-				std::filesystem::current_path(args[1]);
-			}
-			catch (const std::exception &e)
-			{
-				std::cerr << "Failed to change directory to " << args[1] << ": " << e.what() << "\n";
-				return 1;
-			}
+			std::cerr << "Failed to change directory to " << args.at(1) << ": " << e.what() << "\n";
+			return 1;
 		}
-		return 0;
 	}
 
 	// Handle exit command
-	if (args[0] == "exit")
+	if (args.at(0) == "exit")
 	{
 		// Exit the shell
 		exit(0);
 	}
 
 	// Add pwd as a built-in command
-	if (args[0] == "pwd")
+	if (args.at(0) == "pwd")
 	{
 		const std::filesystem::path cwd = std::filesystem::current_path();
 		std::print("{}\n", cwd.c_str());
@@ -109,223 +61,22 @@ int Command::handleBuiltins() const
 	}
 
 	// Add clear as a built-in command
-	if (args[0] == "clear")
+	if (args.at(0) == "clear")
 	{
 		// ANSI escape sequence to clear the screen
 		std::cout << "\033[2J\033[H";
 		return 0;
 	}
 
-	// Add history command
-	if (args[0] == "history")
-	{
-		std::vector<std::string> history = readHistory();
+	// This shell is stateless, so we don't implement history or aliases
 
-		// Check for -c option to clear history
-		if (args.size() > 1 && args[1] == "-c")
-		{
-			clearHistory();
-			// For test compatibility, save the history -c command itself
-			saveToHistory("history -c");
-			return 0;
-		}
-
-		// Display the history with colors
-		for (size_t i = 0; i < history.size(); ++i)
-		{
-			std::cout << Colors::COLOR_GREEN << (i + 1) << Colors::COLOR_RESET << "  " << history[i] << std::endl;
-		}
-		return 0;
-	}
-
-	// Add alias command
-	if (args[0] == "alias")
-	{
-		if (args.size() == 1)
-		{
-			// List all aliases
-			if (aliases.empty())
-			{
-				std::cout << "No aliases defined" << std::endl;
-			}
-			else
-			{
-				for (const auto &[name, value] : aliases)
-				{
-					std::cout << name << "='" << value << "'" << std::endl;
-				}
-			}
-			return 0;
-		}
-		else
-		{
-			// Parse alias definition
-			std::string_view aliasArg = args[1];
-			size_t equalsPos = aliasArg.find('=');
-
-			if (equalsPos != std::string::npos)
-			{
-				// Format: alias name=command
-				std::string name{aliasArg.substr(0, equalsPos)};
-				std::string value{aliasArg.substr(equalsPos + 1)};
-
-				// Handle quoted values
-				if (value.size() >= 2 &&
-					((value.front() == '"' && value.back() == '"') ||
-					 (value.front() == '\'' && value.back() == '\'')))
-				{
-					value = value.substr(1, value.size() - 2);
-				}
-
-				addAlias(name, value);
-				return 0;
-			}
-			else
-			{
-				// Show specific alias
-				auto it = aliases.find(std::string{aliasArg});
-				if (it != aliases.end())
-				{
-					std::cout << it->first << "='" << it->second << "'" << std::endl;
-				}
-				else
-				{
-					std::cerr << "alias: " << aliasArg << " not found" << std::endl;
-					return 1;
-				}
-				return 0;
-			}
-		}
-	}
-
-	// Add unalias command
-	if (args[0] == "unalias")
-	{
-		if (args.size() < 2)
-		{
-			std::cerr << "unalias: missing alias name" << std::endl;
-			return 1;
-		}
-
-		std::string_view name = args[1];
-		if (name == "-a")
-		{
-			// Remove all aliases
-			aliases.clear();
-			saveAliases();
-			return 0;
-		}
-		else
-		{
-			// Remove specific alias
-			auto it = aliases.find(std::string{name});
-			if (it != aliases.end())
-			{
-				removeAlias(std::string{name});
-				return 0;
-			}
-			else
-			{
-				std::cerr << "unalias: " << name << " not found" << std::endl;
-				return 1;
-			}
-		}
-	}
-
-	// Add debug command to toggle debug mode
-	if (args[0] == "debug")
-	{
-		if (args.size() > 1)
-		{
-			std::string_view arg = args[1];
-			if (arg == "on" || arg == "1" || arg == "true")
-			{
-				debugMode = true;
-				std::cout << "Debug mode enabled" << std::endl;
-			}
-			else if (arg == "off" || arg == "0" || arg == "false")
-			{
-				debugMode = false;
-				std::cout << "Debug mode disabled" << std::endl;
-			}
-			else if (arg == "stats")
-			{
-				// Show debug statistics
-				auto now = std::chrono::steady_clock::now();
-				auto duration = std::chrono::duration_cast<std::chrono::seconds>(now - debugInfo.startTime).count();
-
-				std::cout << shellConfig.getThemeColor("header") << "Debug Statistics:" << Colors::COLOR_RESET << std::endl;
-				std::cout << "Uptime: " << duration << " seconds" << std::endl;
-				std::cout << "Commands executed: " << debugInfo.commandCount << std::endl;
-				std::cout << "Pipelines processed: " << debugInfo.pipelineCount << std::endl;
-				std::cout << "I/O redirections: " << debugInfo.redirectionCount << std::endl;
-				std::cout << "Background processes: " << debugInfo.backgroundProcessCount << std::endl;
-				return 0;
-			}
-		}
-		else
-		{
-			// Toggle debug mode
-			debugMode = !debugMode;
-			std::cout << "Debug mode " << (debugMode ? "enabled" : "disabled") << std::endl;
-		}
-		return 0;
-	}
-
-	// Add jobs command
-	if (args[0] == "jobs")
-	{
-		listJobs();
-		return 0;
-	}
-
-	// Add fg command (foreground)
-	if (args[0] == "fg")
-	{
-		if (args.size() < 2)
-		{
-			std::cerr << "fg: job specification required" << std::endl;
-			return 1;
-		}
-
-		try
-		{
-			int jobId = std::stoi(args[1]);
-			return foregroundJob(jobId);
-		}
-		catch (const std::exception &e)
-		{
-			std::cerr << "fg: invalid job specification" << std::endl;
-			return 1;
-		}
-	}
-
-	// Add bg command (background)
-	if (args[0] == "bg")
-	{
-		if (args.size() < 2)
-		{
-			std::cerr << "bg: job specification required" << std::endl;
-			return 1;
-		}
-
-		try
-		{
-			int jobId = std::stoi(args[1]);
-			return backgroundJob(jobId) ? 0 : 1;
-		}
-		catch (const std::exception &e)
-		{
-			std::cerr << "bg: invalid job specification" << std::endl;
-			return 1;
-		}
-	}
+	// This shell is stateless, so we don't implement job control
 
 	// Add help command
-	if (args[0] == "help")
+	if (args.at(0) == "help")
 	{
-		std::string_view headerColor = shellConfig.getThemeColor("header");
-		std::string_view cmdColor = shellConfig.getThemeColor("command");
+		std::string_view headerColor = "\033[1;34m"; // Bold blue
+		std::string_view cmdColor = "\033[1;32m";	 // Bold green
 
 		std::cout << headerColor << "Foundation Shell - Available Commands:" << Colors::COLOR_RESET << std::endl;
 		std::cout << cmdColor << "  cd [dir]" << Colors::COLOR_RESET << " - Change directory" << std::endl;
@@ -355,8 +106,6 @@ int Command::handleBuiltins() const
 		std::cout << cmdColor << "  !n" << Colors::COLOR_RESET << " - Execute command from history" << std::endl;
 		return 0;
 	}
-
-	// Add config and themes commands - these will be implemented in config.cpp later
 
 	// Not a builtin command
 	return -1;
@@ -388,7 +137,7 @@ Task<bool> Command::executeAsync(Source inputSource, Sink outputSink) const
 	if (!inputFile.empty())
 	{
 		// Create platform-agnostic FileSource
-		inputSource = std::make_shared<FileSource>(inputFile);
+		inputSource = FileSource::create(inputFile);
 		// For now, rely on process implementation to handle this
 		std::cerr << "Warning: File input redirection is platform-specific\n";
 	}
@@ -396,7 +145,7 @@ Task<bool> Command::executeAsync(Source inputSource, Sink outputSink) const
 	if (!outputFile.empty())
 	{
 		// Create platform-agnostic FileSink
-		outputSink = std::make_shared<FileSink>(outputFile, appendOutput);
+		outputSink = FileSink::create(outputFile, appendOutput);
 		// For now, rely on process implementation to handle this
 		std::cerr << "Warning: File output redirection is platform-specific\n";
 	}
@@ -404,14 +153,14 @@ Task<bool> Command::executeAsync(Source inputSource, Sink outputSink) const
 	if (!errorFile.empty())
 	{
 		// Create platform-agnostic FileSink
-		outputSink = std::make_shared<FileSink>(outputFile, appendOutput);
+		outputSink = FileSink::create(outputFile, appendOutput);
 		// For now, rely on process implementation to handle this
 		std::cerr << "Warning: File error redirection is platform-specific\n";
 	}
 
 	// Create the process with proper I/O redirection
 	ProcessPtr process = createProcess(
-		args[0],	 // Command
+		args.at(0),	 // Command
 		args,		 // Arguments (including command)
 		inputSource, // Input source
 		outputSink,	 // Output sink
@@ -421,36 +170,8 @@ Task<bool> Command::executeAsync(Source inputSource, Sink outputSink) const
 	// Start the process
 	if (!process->start())
 	{
-		std::cerr << Colors::COLOR_RED << "Failed to start process: " << args[0] << Colors::COLOR_RESET << "\n";
+		std::cerr << Colors::COLOR_RED << "Failed to start process: " << args.at(0) << Colors::COLOR_RESET << "\n";
 		co_return false;
-	}
-
-	// If it's a background process, don't wait
-	if (backgroundProcess)
-	{
-		// Register the job
-		int jobId = addJob(static_cast<pid_t>(process->getPid()), args[0]);
-		std::cout << "[" << jobId << "] " << process->getPid() << std::endl;
-
-		// Async delay to ensure background processes get a chance to start and run
-		// This is especially important for tests that verify background processes
-		if (args[0] == "sh" && args.size() > 2)
-		{
-			// For tests involving sleep and file creation, wait longer
-			if (args[2].find("sleep") != std::string::npos &&
-				args[2].find(">") != std::string::npos)
-			{
-				// Wait long enough for sleep+file operations to complete (2 seconds)
-				co_await sleep_async(std::chrono::milliseconds(2000));
-			}
-			else
-			{
-				// Normal background process delay
-				co_await sleep_async(std::chrono::milliseconds(500));
-			}
-		}
-
-		co_return true; // Exit status 0 -> true
 	}
 
 	// Wait for the process to complete
@@ -498,8 +219,6 @@ TokenType identifyToken(std::string_view token, bool isLastToken)
 		return TokenType::And;
 	if (token == "||")
 		return TokenType::Or;
-	if (token == "&" && isLastToken)
-		return TokenType::Background; // Note: Marked as deprecated
 	if (token == "<")
 		return TokenType::RedirectStdIn;
 	if (token == ">")
@@ -519,11 +238,11 @@ int levenshteinDistance(std::string_view s1, std::string_view s2)
 	const std::size_t len1 = s1.size(), len2 = s2.size();
 	std::vector<std::vector<int>> d(len1 + 1, std::vector<int>(len2 + 1));
 
-	d[0][0] = 0;
+	d.at(0).at(0) = 0;
 	for (std::size_t i = 1; i <= len1; ++i)
-		d[i][0] = i;
+		d[i].at(0) = i;
 	for (std::size_t i = 1; i <= len2; ++i)
-		d[0][i] = i;
+		d.at(0)[i] = i;
 
 	for (std::size_t i = 1; i <= len1; ++i)
 		for (std::size_t j = 1; j <= len2; ++j)
@@ -538,26 +257,16 @@ std::vector<std::string> findCommandSuggestions(const std::string &command)
 	std::vector<std::string> suggestions;
 	const std::vector<std::string_view> commonCommands = {
 		"ls", "cd", "pwd", "echo", "cat", "grep", "find", "mkdir", "rm", "cp", "mv",
-		"history", "exit", "clear", "help", "man", "touch", "chmod", "chown", "sudo",
-		"ps", "top", "kill", "bg", "fg", "jobs", "config", "themes", "alias"};
+		"exit", "clear", "help", "man", "touch", "chmod", "chown", "sudo",
+		"ps", "top", "kill", "config", "themes"};
 
 	// Add built-in commands
 	for (const auto &builtinCmd : commonCommands)
 	{
 		int distance = levenshteinDistance(command, builtinCmd);
-		if (distance <= shellConfig.suggestionThreshold)
+		if (distance <= 3) // Fixed threshold value
 		{
 			suggestions.push_back(std::string{builtinCmd});
-		}
-	}
-
-	// Add aliases
-	for (const auto &[name, value] : aliases)
-	{
-		int distance = levenshteinDistance(command, name);
-		if (distance <= shellConfig.suggestionThreshold)
-		{
-			suggestions.push_back(name + " (alias)");
 		}
 	}
 
@@ -593,7 +302,7 @@ std::vector<std::string> findCommandSuggestions(const std::string &command)
 						if (std::filesystem::is_regular_file(fullPath) && (status.permissions() & std::filesystem::perms::owner_exec) != std::filesystem::perms::none)
 						{
 							int distance = levenshteinDistance(command, filename);
-							if (distance <= shellConfig.suggestionThreshold)
+							if (distance <= 3)
 							{
 								suggestions.push_back(std::string{filename});
 							}
@@ -604,9 +313,7 @@ std::vector<std::string> findCommandSuggestions(const std::string &command)
 			}
 			catch (const std::exception &e)
 			{
-				// Skip directories we can't read
-				if (debugMode)
-					std::cerr << "Debug: Could not read directory " << path << ": " << e.what() << std::endl;
+				// silently skip directories we can't read
 			}
 		}
 	}

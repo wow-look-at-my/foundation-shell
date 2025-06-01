@@ -1,7 +1,6 @@
 #pragma once
 
 #include "Task.hpp"
-#include "Config.hpp"
 
 // Shell class with RAII initialization
 class Shell
@@ -19,7 +18,4 @@ public:
 private:
 	// Signal handlers
 	void setupSignalHandlers();
-
-	// The shell's configuration
-	ShellConfig shellConfig;
 };

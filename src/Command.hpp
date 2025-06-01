@@ -3,6 +3,7 @@
 #include <string>
 #include <vector>
 #include <memory>
+#include <chrono>
 #include "Task.hpp"				// Include the Task type
 #include "Config.hpp"			// Include ShellConfig
 #include "io/ISink.hpp"			// Include ISink interface
@@ -33,20 +34,16 @@ public:
 	std::string errorFile;
 	bool appendOutput = false;
 	bool appendError = false;
-	bool backgroundProcess = false;
 
 	// I/O interfaces
 	Sink stdin;
 	Source stdout;
 	Source stderr;
 
-	// Execute the command with optional I/O redirection (async)
+	// Execute the command with optional I/O redirection (async) - stateless version
 	Task<bool> executeAsync(Source inputSource = nullptr, Sink outputSink = nullptr) const;
 
 private:
-	// Helper method to handle built-in commands
+	// Helper method to handle built-in commands - stateless version
 	int handleBuiltins() const;
 };
-
-// Function to split a string into tokens respecting quotes and escapes
-std::vector<std::string> bashSplitString(const std::string &input);

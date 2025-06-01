@@ -5,8 +5,10 @@
       "Bash(/Users/mhaynie/repos/vscode-base-shell/build.sh:*)",
       "Bash(grep:*)",
       "Bash(chmod:*)",
-      "Bash(just build)"
+      "Bash(just build)",
+      "Bash(clang++:*)"
     ],
     "deny": []
-  }
+  },
+  "enableAllProjectMcpServers": false
 }

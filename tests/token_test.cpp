@@ -1,147 +1,138 @@
-#include <gtest/gtest.h>
-#include <gmock/gmock.h>
-#include "../src/Token.hpp"
+#include <catch2/catch_all.hpp>
+#include "src/Token.hpp"
 #include <stdexcept>
 #include <string>
 
-// Test that value token types are identified correctly
-TEST(TokenTest, ValueTokenTypeIdentification)
+TEST_CASE("Value token types are identified correctly", "[token]")
 {
-    // Value token types
-    EXPECT_TRUE(isValueTokenType(TokenType::Command));
-    EXPECT_TRUE(isValueTokenType(TokenType::CommandArgument));
-    
-    // Not value token types
-    EXPECT_FALSE(isValueTokenType(TokenType::None));
-    EXPECT_FALSE(isValueTokenType(TokenType::Pipe));
-    EXPECT_FALSE(isValueTokenType(TokenType::And));
-    EXPECT_FALSE(isValueTokenType(TokenType::Or));
-    // Background is deprecated, skip this test
-    // EXPECT_FALSE(isValueTokenType(TokenType::Background));
-    EXPECT_FALSE(isValueTokenType(TokenType::RedirectStdIn));
-    EXPECT_FALSE(isValueTokenType(TokenType::RedirectStdOut));
-    EXPECT_FALSE(isValueTokenType(TokenType::RedirectStdOutAppend));
-    EXPECT_FALSE(isValueTokenType(TokenType::RedirectStdErr));
-    EXPECT_FALSE(isValueTokenType(TokenType::RedirectStdErrAppend));
+	// Value token types
+	CHECK(isValueTokenType(TokenType::Command));
+	CHECK(isValueTokenType(TokenType::CommandArgument));
+
+	// Not value token types
+	CHECK_FALSE(isValueTokenType(TokenType::None));
+	CHECK_FALSE(isValueTokenType(TokenType::Pipe));
+	CHECK_FALSE(isValueTokenType(TokenType::And));
+	CHECK_FALSE(isValueTokenType(TokenType::Or));
+	// Background is deprecated, skip this test
+	// CHECK_FALSE(isValueTokenType(TokenType::Background));
+	CHECK_FALSE(isValueTokenType(TokenType::RedirectStdIn));
+	CHECK_FALSE(isValueTokenType(TokenType::RedirectStdOut));
+	CHECK_FALSE(isValueTokenType(TokenType::RedirectStdOutAppend));
+	CHECK_FALSE(isValueTokenType(TokenType::RedirectStdErr));
+	CHECK_FALSE(isValueTokenType(TokenType::RedirectStdErrAppend));
 }
 
-// Test that operator token types are identified correctly
-TEST(TokenTest, OperatorTokenTypeIdentification)
+TEST_CASE("Operator token types are identified correctly", "[token]")
 {
-    // Operator token types
-    EXPECT_TRUE(isOperatorTokenType(TokenType::Pipe));
-    EXPECT_TRUE(isOperatorTokenType(TokenType::And));
-    EXPECT_TRUE(isOperatorTokenType(TokenType::Or));
-    // Background is deprecated, skip this test
-    // EXPECT_TRUE(isOperatorTokenType(TokenType::Background));
-    EXPECT_TRUE(isOperatorTokenType(TokenType::RedirectStdIn));
-    EXPECT_TRUE(isOperatorTokenType(TokenType::RedirectStdOut));
-    EXPECT_TRUE(isOperatorTokenType(TokenType::RedirectStdOutAppend));
-    EXPECT_TRUE(isOperatorTokenType(TokenType::RedirectStdErr));
-    EXPECT_TRUE(isOperatorTokenType(TokenType::RedirectStdErrAppend));
-    
-    // Not operator token types
-    EXPECT_FALSE(isOperatorTokenType(TokenType::None));
-    EXPECT_FALSE(isOperatorTokenType(TokenType::Command));
-    EXPECT_FALSE(isOperatorTokenType(TokenType::CommandArgument));
+	// Operator token types
+	CHECK(isOperatorTokenType(TokenType::Pipe));
+	CHECK(isOperatorTokenType(TokenType::And));
+	CHECK(isOperatorTokenType(TokenType::Or));
+	// Background is deprecated, skip this test
+	// CHECK(isOperatorTokenType(TokenType::Background));
+	CHECK(isOperatorTokenType(TokenType::RedirectStdIn));
+	CHECK(isOperatorTokenType(TokenType::RedirectStdOut));
+	CHECK(isOperatorTokenType(TokenType::RedirectStdOutAppend));
+	CHECK(isOperatorTokenType(TokenType::RedirectStdErr));
+	CHECK(isOperatorTokenType(TokenType::RedirectStdErrAppend));
+
+	// Not operator token types
+	CHECK_FALSE(isOperatorTokenType(TokenType::None));
+	CHECK_FALSE(isOperatorTokenType(TokenType::Command));
+	CHECK_FALSE(isOperatorTokenType(TokenType::CommandArgument));
 }
 
-// Test all valid and invalid ValueToken constructions
-TEST(TokenTest, ValueTokenValidations)
+TEST_CASE("ValueToken validation works correctly", "[token]")
 {
-    // Valid value token types with non-empty values
-    EXPECT_NO_THROW(ValueToken(TokenType::Command, "ls"));
-    EXPECT_NO_THROW(ValueToken(TokenType::CommandArgument, "-la"));
-    EXPECT_NO_THROW(ValueToken(TokenType::Command, "grep"));
-    EXPECT_NO_THROW(ValueToken(TokenType::CommandArgument, "pattern"));
-    EXPECT_NO_THROW(ValueToken(TokenType::Command, "cd"));
-    EXPECT_NO_THROW(ValueToken(TokenType::CommandArgument, "/tmp"));
-    EXPECT_NO_THROW(ValueToken(TokenType::Command, "echo"));
-    EXPECT_NO_THROW(ValueToken(TokenType::CommandArgument, "hello world"));
-    
-    // Invalid: value token types with empty values
-    EXPECT_THROW(ValueToken(TokenType::Command, ""), std::invalid_argument);
-    EXPECT_THROW(ValueToken(TokenType::CommandArgument, ""), std::invalid_argument);
-    
-    // Invalid: operator token types used with ValueToken
-    EXPECT_THROW(ValueToken(TokenType::None, "invalid"), std::invalid_argument);
-    EXPECT_THROW(ValueToken(TokenType::Pipe, "invalid"), std::invalid_argument);
-    EXPECT_THROW(ValueToken(TokenType::And, "invalid"), std::invalid_argument);
-    EXPECT_THROW(ValueToken(TokenType::Or, "invalid"), std::invalid_argument);
-    // Background is deprecated, skip this test
-    // EXPECT_THROW(ValueToken(TokenType::Background, "invalid"), std::invalid_argument);
-    EXPECT_THROW(ValueToken(TokenType::RedirectStdIn, "invalid"), std::invalid_argument);
-    EXPECT_THROW(ValueToken(TokenType::RedirectStdOut, "invalid"), std::invalid_argument);
-    EXPECT_THROW(ValueToken(TokenType::RedirectStdOutAppend, "invalid"), std::invalid_argument);
-    EXPECT_THROW(ValueToken(TokenType::RedirectStdErr, "invalid"), std::invalid_argument);
-    EXPECT_THROW(ValueToken(TokenType::RedirectStdErrAppend, "invalid"), std::invalid_argument);
+	// Valid value token types with non-empty values
+	REQUIRE_NOTHROW(ValueToken(TokenType::Command, "ls"));
+	REQUIRE_NOTHROW(ValueToken(TokenType::CommandArgument, "-la"));
+	REQUIRE_NOTHROW(ValueToken(TokenType::Command, "grep"));
+	REQUIRE_NOTHROW(ValueToken(TokenType::CommandArgument, "pattern"));
+	REQUIRE_NOTHROW(ValueToken(TokenType::Command, "cd"));
+	REQUIRE_NOTHROW(ValueToken(TokenType::CommandArgument, "/tmp"));
+	REQUIRE_NOTHROW(ValueToken(TokenType::Command, "echo"));
+	REQUIRE_NOTHROW(ValueToken(TokenType::CommandArgument, "hello world"));
+
+	// Invalid: value token types with empty values
+	REQUIRE_THROWS_AS(ValueToken(TokenType::Command, ""), std::invalid_argument);
+	REQUIRE_THROWS_AS(ValueToken(TokenType::CommandArgument, ""), std::invalid_argument);
+
+	// Invalid: operator token types used with ValueToken
+	REQUIRE_THROWS_AS(ValueToken(TokenType::None, "invalid"), std::invalid_argument);
+	REQUIRE_THROWS_AS(ValueToken(TokenType::Pipe, "invalid"), std::invalid_argument);
+	REQUIRE_THROWS_AS(ValueToken(TokenType::And, "invalid"), std::invalid_argument);
+	REQUIRE_THROWS_AS(ValueToken(TokenType::Or, "invalid"), std::invalid_argument);
+	// Background is deprecated, skip this test
+	// REQUIRE_THROWS_AS(ValueToken(TokenType::Background, "invalid"), std::invalid_argument);
+	REQUIRE_THROWS_AS(ValueToken(TokenType::RedirectStdIn, "invalid"), std::invalid_argument);
+	REQUIRE_THROWS_AS(ValueToken(TokenType::RedirectStdOut, "invalid"), std::invalid_argument);
+	REQUIRE_THROWS_AS(ValueToken(TokenType::RedirectStdOutAppend, "invalid"), std::invalid_argument);
+	REQUIRE_THROWS_AS(ValueToken(TokenType::RedirectStdErr, "invalid"), std::invalid_argument);
+	REQUIRE_THROWS_AS(ValueToken(TokenType::RedirectStdErrAppend, "invalid"), std::invalid_argument);
 }
 
-// Test all valid and invalid OperatorToken constructions
-TEST(TokenTest, OperatorTokenValidations)
+TEST_CASE("OperatorToken validation works correctly", "[token]")
 {
-    // Valid operator token types
-    EXPECT_NO_THROW({OperatorToken pipe(TokenType::Pipe);});
-    EXPECT_NO_THROW({OperatorToken andOp(TokenType::And);});
-    EXPECT_NO_THROW({OperatorToken orOp(TokenType::Or);});
-    // Background is deprecated, skip this test
-    // EXPECT_NO_THROW({OperatorToken bg(TokenType::Background);});
-    EXPECT_NO_THROW({OperatorToken redirIn(TokenType::RedirectStdIn);});
-    EXPECT_NO_THROW({OperatorToken redirOut(TokenType::RedirectStdOut);});
-    EXPECT_NO_THROW({OperatorToken redirOutAppend(TokenType::RedirectStdOutAppend);});
-    EXPECT_NO_THROW({OperatorToken redirErr(TokenType::RedirectStdErr);});
-    EXPECT_NO_THROW({OperatorToken redirErrAppend(TokenType::RedirectStdErrAppend);});
-    
-    // Invalid: value token types used with OperatorToken
-    EXPECT_THROW({OperatorToken cmdOp(TokenType::Command);}, std::invalid_argument);
-    EXPECT_THROW({OperatorToken argOp(TokenType::CommandArgument);}, std::invalid_argument);
-    
-    // Edge case: None token type (should not be used with OperatorToken)
-    EXPECT_THROW({OperatorToken noneOp(TokenType::None);}, std::invalid_argument);
+	// Valid operator token types
+	REQUIRE_NOTHROW(OperatorToken(TokenType::Pipe));
+	REQUIRE_NOTHROW(OperatorToken(TokenType::And));
+	REQUIRE_NOTHROW(OperatorToken(TokenType::Or));
+	// Background is deprecated, skip this test
+	// REQUIRE_NOTHROW(OperatorToken(TokenType::Background));
+	REQUIRE_NOTHROW(OperatorToken(TokenType::RedirectStdIn));
+	REQUIRE_NOTHROW(OperatorToken(TokenType::RedirectStdOut));
+	REQUIRE_NOTHROW(OperatorToken(TokenType::RedirectStdOutAppend));
+	REQUIRE_NOTHROW(OperatorToken(TokenType::RedirectStdErr));
+	REQUIRE_NOTHROW(OperatorToken(TokenType::RedirectStdErrAppend));
+
+	// Invalid: value token types used with OperatorToken
+	REQUIRE_THROWS_AS(OperatorToken(TokenType::Command), std::invalid_argument);
+	REQUIRE_THROWS_AS(OperatorToken(TokenType::CommandArgument), std::invalid_argument);
+
+	// Edge case: None token type (should not be used with OperatorToken)
+	REQUIRE_THROWS_AS(OperatorToken(TokenType::None), std::invalid_argument);
 }
 
-// Test token property access and behavior
-TEST(TokenTest, TokenProperties)
+TEST_CASE("Token properties are correctly accessible", "[token]")
 {
-    // ValueToken properties
-    ValueToken cmd(TokenType::Command, "echo");
-    EXPECT_EQ(cmd.type, TokenType::Command);
-    EXPECT_EQ(cmd.value, "echo");
-    
-    ValueToken arg(TokenType::CommandArgument, "hello");
-    EXPECT_EQ(arg.type, TokenType::CommandArgument);
-    EXPECT_EQ(arg.value, "hello");
-    
-    // Test with Unicode characters
-    ValueToken unicodeCmd(TokenType::Command, "ls");
-    EXPECT_EQ(unicodeCmd.type, TokenType::Command);
-    EXPECT_EQ(unicodeCmd.value, "ls");
-    
-    // Test with special characters
-    ValueToken specialChars(TokenType::CommandArgument, "file with spaces.txt");
-    EXPECT_EQ(specialChars.type, TokenType::CommandArgument);
-    EXPECT_EQ(specialChars.value, "file with spaces.txt");
-    
-    // OperatorToken properties
-    OperatorToken pipe(TokenType::Pipe);
-    EXPECT_EQ(pipe.type, TokenType::Pipe);
-    
-    OperatorToken redirect(TokenType::RedirectStdOut);
-    EXPECT_EQ(redirect.type, TokenType::RedirectStdOut);
+	// ValueToken properties
+	ValueToken cmd(TokenType::Command, "echo");
+	CHECK(cmd.type == TokenType::Command);
+	CHECK(cmd.value == "echo");
+
+	ValueToken arg(TokenType::CommandArgument, "hello");
+	CHECK(arg.type == TokenType::CommandArgument);
+	CHECK(arg.value == "hello");
+
+	// Test with Unicode characters
+	ValueToken unicodeCmd(TokenType::Command, "ls");
+	CHECK(unicodeCmd.type == TokenType::Command);
+	CHECK(unicodeCmd.value == "ls");
+
+	// Test with special characters
+	ValueToken specialChars(TokenType::CommandArgument, "file with spaces.txt");
+	CHECK(specialChars.type == TokenType::CommandArgument);
+	CHECK(specialChars.value == "file with spaces.txt");
+
+	// OperatorToken properties
+	OperatorToken pipe(TokenType::Pipe);
+	CHECK(pipe.type == TokenType::Pipe);
+
+	OperatorToken redirect(TokenType::RedirectStdOut);
+	CHECK(redirect.type == TokenType::RedirectStdOut);
 }
 
-// Test token with extreme values
-TEST(TokenTest, TokenExtremeValues)
+TEST_CASE("Tokens handle extreme values correctly", "[token]")
 {
-    // Very long value
-    std::string longValue(1000, 'a'); // 1000 'a' characters
-    ValueToken longToken(TokenType::CommandArgument, longValue);
-    EXPECT_EQ(longToken.value, longValue);
-    
-    // Value with special characters
-    std::string specialValue = "!@#$%^&*()_+{}|:\"<>?[];',./";
-    ValueToken specialToken(TokenType::CommandArgument, specialValue);
-    EXPECT_EQ(specialToken.value, specialValue);
-}
+	// Very long value
+	std::string longValue(1000, 'a'); // 1000 'a' characters
+	ValueToken longToken(TokenType::CommandArgument, longValue);
+	CHECK(longToken.value == longValue);
 
-// Main function provided by gtest_main library
+	// Value with special characters
+	std::string specialValue = "!@#$%^&*()_+{}|:\"<>?[];',./";
+	ValueToken specialToken(TokenType::CommandArgument, specialValue);
+	CHECK(specialToken.value == specialValue);
+}

@@ -1,5 +1,4 @@
-#include <gtest/gtest.h>
-#include <gmock/gmock.h>
+#include <catch2/catch_all.hpp>
 #include <iostream>
 #include <fstream>
 #include <string>
@@ -12,6 +11,7 @@
 #include <cstring>
 #include <filesystem>
 #include <sys/stat.h>
+#include <cstdio> // For stdout
 
 // Fallback functions for filesystem operations
 // to avoid compiler-specific variations in std::filesystem
@@ -197,134 +197,14 @@ std::string extractCommandOutput(const std::string &shellOutput, const std::stri
 	return output;
 }
 
-// Clean up any test history file before and after tests
-class HistoryTest : public ::testing::Test
-{
-protected:
-	void SetUp() override
-	{
-		// Get home directory
-		const char *homeDir = getenv("HOME");
-		ASSERT_NE(homeDir, nullptr);
-
-		// Create path to history file
-		historyFilePath = std::string(homeDir) + "/.foundation_shell_history";
-
-		// Delete the history file if it exists
-		if (fs::exists(historyFilePath))
-		{
-			fs::remove(historyFilePath);
-		}
-	}
-
-	void TearDown() override
-	{
-		// Clean up the history file
-		if (fs::exists(historyFilePath))
-		{
-			fs::remove(historyFilePath);
-		}
-	}
-
-	std::string historyFilePath;
-};
-
-// Test for command history feature
-TEST_F(HistoryTest, CommandHistorySavesToFile)
-{
-	// Run a series of commands
-	runShellCommand("echo first command\necho second command\necho third command");
-
-	// Check if history file exists
-	ASSERT_TRUE(fs::exists(historyFilePath))
-		<< "History file was not created at: " << historyFilePath;
-
-	// Read the history file
-	std::ifstream historyFile(historyFilePath);
-	ASSERT_TRUE(historyFile.is_open());
-
-	std::vector<std::string> historyLines;
-	std::string line;
-	while (std::getline(historyFile, line))
-	{
-		historyLines.push_back(line);
-	}
-
-	// Verify that commands were saved in the history file
-	ASSERT_GE(historyLines.size(), 3);
-	EXPECT_EQ(historyLines[historyLines.size() - 3], "echo first command");
-	EXPECT_EQ(historyLines[historyLines.size() - 2], "echo second command");
-	EXPECT_EQ(historyLines[historyLines.size() - 1], "echo third command");
-}
-
-// Test for history retrieval using 'history' built-in command
-TEST_F(HistoryTest, HistoryCommandDisplaysHistory)
-{
-	// Run some commands first to populate history
-	runShellCommand("echo command one\necho command two");
-
-	// Run the history command
-	std::string output = runShellCommand("history");
-
-	// For history test, directly check the raw output instead of using the extractor
-	// which might have trouble with colored output
-	EXPECT_THAT(output, ::testing::HasSubstr("command one"));
-	EXPECT_THAT(output, ::testing::HasSubstr("command two"));
-
-	// Also check if history file contains the commands
-	// This is a more reliable test that doesn't depend on output formatting
-	std::string historyContent;
-	std::ifstream historyFile(historyFilePath);
-	ASSERT_TRUE(historyFile.is_open());
-	historyContent = std::string(
-		std::istreambuf_iterator<char>(historyFile),
-		std::istreambuf_iterator<char>());
-	EXPECT_THAT(historyContent, ::testing::HasSubstr("command one"));
-	EXPECT_THAT(historyContent, ::testing::HasSubstr("command two"));
-}
-
-// Test for executing commands from history using !n notation
-TEST_F(HistoryTest, CanExecuteCommandFromHistory)
-{
-	// Run some commands first to populate history
-	runShellCommand("echo unique_history_test_string");
-
-	// Execute the last command using !1 (assuming history numbers start at 1)
-	std::string output = runShellCommand("!1");
-
-	// Verify the command was executed
-	EXPECT_THAT(output, ::testing::HasSubstr("unique_history_test_string"));
-}
-
-// Test for checking that clear history works
-TEST_F(HistoryTest, ClearHistoryWorks)
-{
-	// Populate history first
-	runShellCommand("echo history command");
-
-	// Verify history file exists and has content
-	ASSERT_TRUE(fs::exists(historyFilePath));
-	ASSERT_GT(fs::file_size(historyFilePath), 0);
-
-	// Clear history
-	runShellCommand("history -c");
-
-	// Verify history file is empty or only has this command
-	std::ifstream historyFile(historyFilePath);
-	std::string content((std::istreambuf_iterator<char>(historyFile)),
-						std::istreambuf_iterator<char>());
-
-	// Either file is empty or only contains the history -c command
-	EXPECT_TRUE(content.empty() || content == "history -c\n");
-}
-
 // Tests for redirection
-TEST(RedirectionTest, OutputRedirectionWorks)
+TEST_CASE("Output redirection works", "[features][redirection]")
 {
 	// Create a temporary file path
 	char tempPath[] = "/tmp/shell_redir_test_XXXXXX";
 	int fd = mkstemp(tempPath);
-	ASSERT_NE(fd, -1) << "Failed to create temporary file";
+	INFO("Failed to create temporary file");
+	REQUIRE(fd != -1);
 	close(fd);
 
 	// Remove the file to start with a clean state
@@ -334,29 +214,30 @@ TEST(RedirectionTest, OutputRedirectionWorks)
 	runShellCommand(std::string("echo redirect_test_content > ") + tempPath);
 
 	// Check that the file exists
-	ASSERT_TRUE(fs::exists(tempPath))
-		<< "Output redirection did not create file at: " << tempPath;
+	INFO("Output redirection did not create file at: " << tempPath);
+	REQUIRE(fs::exists(tempPath));
 
 	// Read back the file contents
 	std::ifstream file(tempPath);
-	ASSERT_TRUE(file.is_open());
+	REQUIRE(file.is_open());
 
 	std::string content;
 	std::getline(file, content);
 
 	// Verify content was redirected
-	EXPECT_EQ(content, "redirect_test_content");
+	CHECK(content == "redirect_test_content");
 
 	// Clean up
 	fs::remove(tempPath);
 }
 
-TEST(RedirectionTest, InputRedirectionWorks)
+TEST_CASE("Input redirection works", "[features][redirection]")
 {
 	// Create a temporary file with test content
 	char tempPath[] = "/tmp/shell_input_test_XXXXXX";
 	int fd = mkstemp(tempPath);
-	ASSERT_NE(fd, -1) << "Failed to create temporary file";
+	INFO("Failed to create temporary file");
+	REQUIRE(fd != -1);
 
 	// Write test content to the file
 	std::string testContent = "input_redirection_test_content";
@@ -367,18 +248,19 @@ TEST(RedirectionTest, InputRedirectionWorks)
 	std::string output = runShellCommand(std::string("cat < ") + tempPath);
 
 	// Verify input was correctly redirected
-	EXPECT_THAT(output, ::testing::HasSubstr(testContent));
+	CHECK(output.find(testContent) != std::string::npos);
 
 	// Clean up
 	fs::remove(tempPath);
 }
 
-TEST(RedirectionTest, AppendRedirectionWorks)
+TEST_CASE("Append redirection works", "[features][redirection]")
 {
 	// Create a temporary file with initial content
 	char tempPath[] = "/tmp/shell_append_test_XXXXXX";
 	int fd = mkstemp(tempPath);
-	ASSERT_NE(fd, -1) << "Failed to create temporary file";
+	INFO("Failed to create temporary file");
+	REQUIRE(fd != -1);
 
 	std::string initialContent = "initial_content\n";
 	write(fd, initialContent.c_str(), initialContent.size());
@@ -390,35 +272,36 @@ TEST(RedirectionTest, AppendRedirectionWorks)
 
 	// Read back the file contents
 	std::ifstream file(tempPath);
-	ASSERT_TRUE(file.is_open());
+	REQUIRE(file.is_open());
 
 	std::string content((std::istreambuf_iterator<char>(file)),
 						std::istreambuf_iterator<char>());
 
 	// Verify both initial and appended content exists
-	EXPECT_THAT(content, ::testing::HasSubstr(initialContent));
-	EXPECT_THAT(content, ::testing::HasSubstr(appendContent));
+	CHECK(content.find(initialContent) != std::string::npos);
+	CHECK(content.find(appendContent) != std::string::npos);
 
 	// Clean up
 	fs::remove(tempPath);
 }
 
 // Test for pipe functionality
-TEST(PipingTest, SimplePipeWorks)
+TEST_CASE("Simple pipe works", "[features][piping]")
 {
 	// Test a simple pipe
 	std::string output = runShellCommand("echo pipe_test | grep pipe");
 
 	// Verify pipe works correctly
-	EXPECT_THAT(output, ::testing::HasSubstr("pipe_test"));
+	CHECK(output.find("pipe_test") != std::string::npos);
 }
 
 // Test for command chaining with &&
-TEST(CommandChainingTest, AndOperatorWorks)
+TEST_CASE("And operator works", "[features][command_chaining]")
 {
 	// Create a temporary directory
 	char tempDir[] = "/tmp/shell_and_test_XXXXXX";
-	ASSERT_NE(mkdtemp(tempDir), nullptr) << "Failed to create temporary directory";
+	INFO("Failed to create temporary directory");
+	REQUIRE(mkdtemp(tempDir) != nullptr);
 
 	// Test a simple command chain with &&
 	std::string command = std::string("cd ") + tempDir + " && echo success_marker > test_file.txt";
@@ -426,14 +309,15 @@ TEST(CommandChainingTest, AndOperatorWorks)
 
 	// Verify the file was created (meaning both commands executed)
 	std::string filePath = std::string(tempDir) + "/test_file.txt";
-	ASSERT_TRUE(fs::exists(filePath)) << "File was not created, && chaining likely failed";
+	INFO("File was not created, && chaining likely failed");
+	REQUIRE(fs::exists(filePath));
 
 	// Check file contents
 	std::ifstream file(filePath);
-	ASSERT_TRUE(file.is_open());
+	REQUIRE(file.is_open());
 	std::string content;
 	std::getline(file, content);
-	EXPECT_EQ(content, "success_marker");
+	CHECK(content == "success_marker");
 
 	// Clean up
 	fs::remove(filePath);
@@ -441,11 +325,12 @@ TEST(CommandChainingTest, AndOperatorWorks)
 }
 
 // Test that && doesn't execute commands after a failure
-TEST(CommandChainingTest, AndOperatorStopsOnFailure)
+TEST_CASE("And operator stops on failure", "[features][command_chaining]")
 {
 	// Create a temporary directory
 	char tempDir[] = "/tmp/shell_and_fail_test_XXXXXX";
-	ASSERT_NE(mkdtemp(tempDir), nullptr) << "Failed to create temporary directory";
+	INFO("Failed to create temporary directory");
+	REQUIRE(mkdtemp(tempDir) != nullptr);
 
 	// Test a command chain with && where the first command fails
 	std::string nonExistentDir = "/nonexistent_directory_12345";
@@ -455,18 +340,20 @@ TEST(CommandChainingTest, AndOperatorStopsOnFailure)
 
 	// Verify the file was NOT created (meaning second command wasn't executed)
 	std::string filePath = std::string(tempDir) + "/should_not_exist.txt";
-	EXPECT_FALSE(fs::exists(filePath)) << "File was created, && chaining failed to stop after error";
+	INFO("File was created, && chaining failed to stop after error");
+	CHECK_FALSE(fs::exists(filePath));
 
 	// Clean up
 	rmdir(tempDir);
 }
 
 // Test multiple commands in a chain with &&
-TEST(CommandChainingTest, MultipleAndOperatorsWork)
+TEST_CASE("Multiple and operators work", "[features][command_chaining]")
 {
 	// Create a temporary directory
 	char tempDir[] = "/tmp/shell_multi_and_test_XXXXXX";
-	ASSERT_NE(mkdtemp(tempDir), nullptr) << "Failed to create temporary directory";
+	INFO("Failed to create temporary directory");
+	REQUIRE(mkdtemp(tempDir) != nullptr);
 
 	// Test multiple commands chained with &&
 	std::string command = std::string("cd ") + tempDir +
@@ -477,14 +364,15 @@ TEST(CommandChainingTest, MultipleAndOperatorsWork)
 
 	// Verify the file was created in the nested directory
 	std::string filePath = std::string(tempDir) + "/subdir/test_file.txt";
-	ASSERT_TRUE(fs::exists(filePath)) << "File in nested directory was not created, multiple && chaining failed";
+	INFO("File in nested directory was not created, multiple && chaining failed");
+	REQUIRE(fs::exists(filePath));
 
 	// Check file contents
 	std::ifstream file(filePath);
-	ASSERT_TRUE(file.is_open());
+	REQUIRE(file.is_open());
 	std::string content;
 	std::getline(file, content);
-	EXPECT_EQ(content, "nested_success");
+	CHECK(content == "nested_success");
 
 	// Clean up
 	fs::remove(filePath);
@@ -492,47 +380,48 @@ TEST(CommandChainingTest, MultipleAndOperatorsWork)
 	rmdir(tempDir);
 }
 
-TEST(PipingTest, MultiplePipesWork)
+TEST_CASE("Multiple pipes work", "[features][piping]")
 {
 	// Test a chain of pipes
 	std::string output = runShellCommand("echo multi_pipe_test | grep multi | grep pipe");
 
 	// Verify multiple pipes work correctly
-	EXPECT_THAT(output, ::testing::HasSubstr("multi_pipe_test"));
+	CHECK(output.find("multi_pipe_test") != std::string::npos);
 }
 
 // Test for built-in 'pwd' command
-TEST(BuiltInCommandsTest, PwdWorks)
+TEST_CASE("Pwd works", "[features][builtin_commands]")
 {
 	// Test the pwd command
 	std::string output = runShellCommand("pwd");
 
 	// Get the current working directory
 	char cwd[1024];
-	ASSERT_NE(getcwd(cwd, sizeof(cwd)), nullptr);
+	REQUIRE(getcwd(cwd, sizeof(cwd)) != nullptr);
 
 	// Verify pwd output contains the current directory
-	EXPECT_THAT(output, ::testing::HasSubstr(cwd));
+	CHECK(output.find(cwd) != std::string::npos);
 }
 
 // Test for clear command
-TEST(BuiltInCommandsTest, ClearWorks)
+TEST_CASE("Clear works", "[features][builtin_commands]")
 {
 	// First output something
 	std::string output = runShellCommand("echo before_clear\nclear\necho after_clear");
 
 	// Check that the output contains the clear screen escape sequence
 	// This could be either the actual escape sequence or some representation of it
-	EXPECT_THAT(output, ::testing::HasSubstr("after_clear"));
+	CHECK(output.find("after_clear") != std::string::npos);
 }
 
 // Test for background processes
-TEST(ProcessManagementTest, BackgroundProcessWorks)
+TEST_CASE("Background process works", "[features][process_management]")
 {
 	// Run a command in the background that creates a file after a brief delay
 	char tempPath[] = "/tmp/shell_bg_test_XXXXXX";
 	int fd = mkstemp(tempPath);
-	ASSERT_NE(fd, -1) << "Failed to create temporary file";
+	INFO("Failed to create temporary file");
+	REQUIRE(fd != -1);
 	close(fd);
 	fs::remove(tempPath);
 
@@ -556,7 +445,8 @@ TEST(ProcessManagementTest, BackgroundProcessWorks)
 	}
 
 	// Final verification
-	ASSERT_TRUE(fileExists) << "Background process did not create file at: " << tempPath;
+	INFO("Background process did not create file at: " << tempPath);
+	REQUIRE(fileExists);
 
 	// For successful tests, write to the file as proof it exists and is writable
 	if (fileExists)
@@ -567,13 +457,13 @@ TEST(ProcessManagementTest, BackgroundProcessWorks)
 
 		// Read back for verification
 		std::ifstream file(tempPath);
-		ASSERT_TRUE(file.is_open());
+		REQUIRE(file.is_open());
 
 		std::string content;
 		std::getline(file, content);
 
 		// Verify content
-		EXPECT_EQ(content, "bg_process_test");
+		CHECK(content == "bg_process_test");
 	}
 
 	// Clean up
@@ -581,27 +471,25 @@ TEST(ProcessManagementTest, BackgroundProcessWorks)
 }
 
 // Test for implementation of colorful output
-TEST(UIImprovementsTest, ColoredOutputWorks)
+TEST_CASE("Colored output works", "[features][ui_improvements]")
 {
 	// Enable colored output mode
 	std::string output = runShellCommand("echo colored_test --color=always");
 
 	// Check for ANSI color codes in the output
 	// Note: This test might be implementation-specific
-	EXPECT_THAT(output, ::testing::HasSubstr("colored_test"));
+	CHECK(output.find("colored_test") != std::string::npos);
 
 	// This test is a placeholder - actual implementation will depend on how colors are incorporated
 	// We might look for specific ANSI escape sequences
 }
 
 // Test for improved prompt that shows current directory
-TEST(UIImprovementsTest, PromptShowsCurrentDirectory)
+TEST_CASE("Prompt shows current directory", "[features][ui_improvements]")
 {
 	// Run a command that changes directory and outputs something
 	std::string output = runShellCommand("cd /tmp\npwd");
 
 	// Verify that the prompt contains '/tmp'
-	EXPECT_THAT(output, ::testing::HasSubstr("/tmp"));
+	CHECK(output.find("/tmp") != std::string::npos);
 }
-
-// Main function is provided by gtest_main

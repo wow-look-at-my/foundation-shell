@@ -1,14 +1,15 @@
+#include "StdioFix.hpp" // Must be first to handle stdio identifiers
 #include "CommandChain.hpp"
-#include "Command.hpp"
 #include "Token.hpp"
+#include "Command.hpp"
+#include <stdexcept>
 #include <iostream>
+#include <cstdio>
+#include "io/IPipe.hpp" // For IPipe
+#include <cstdio>
 #include <format>
 #include <vector>
 #include <stdexcept>
-
-// External globals from config.hpp - declared in other files
-extern bool debugMode;
-extern DebugInfo debugInfo;
 
 // Constructor that parses tokens into a command chain
 CommandChain::CommandChain(const std::vector<std::string> &tokens)
@@ -58,10 +59,6 @@ static std::variant<ValueToken, OperatorToken> parseStringToToken(const std::str
 	else if (tokenStr == "||")
 	{
 		return OperatorToken(TokenType::Or);
-	}
-	else if (tokenStr == "&" && isLastToken)
-	{
-		return OperatorToken(TokenType::Background);
 	}
 	else if (tokenStr == "<")
 	{
@@ -127,11 +124,8 @@ CommandChain CommandChain::parseFromTokens(const std::vector<std::string> &token
 		}
 		catch (const std::invalid_argument &e)
 		{
-			// Skip invalid tokens, but log them in debug mode
-			if (debugMode)
-			{
-				std::cerr << std::format("Debug: Invalid token: {} - {}", tokens[i], e.what()) << std::endl;
-			}
+			// Skip invalid tokens with a log message
+			std::print("Debug: Invalid token: {} - {}", tokens[i], e.what());
 		}
 	}
 
@@ -170,28 +164,6 @@ CommandChain CommandChain::parseFromTokens(const std::vector<std::string> &token
 						chain.commands_.push_back(std::move(currentCommand));
 					}
 					currentCommand = Command(); // Reset for next command
-					resetCommand = true;
-				}
-			}
-			else if (tokenType == TokenType::Background)
-			{
-				// Background process - mark the current command
-				currentCommand.backgroundProcess = true;
-
-				// Add the command to the chain if it's not empty
-				if (!currentCommand.args.empty())
-				{
-					if (chain.commands_.empty())
-					{
-						// First command in chain
-						chain.commands_.push_back(std::move(currentCommand));
-					}
-					else
-					{
-						// Add with the appropriate operator
-						chain.operators_.push_back(TokenType::None);
-						chain.commands_.push_back(std::move(currentCommand));
-					}
 					resetCommand = true;
 				}
 			}
@@ -299,51 +271,53 @@ Task<int> CommandChain::executeCommandsWithPipesAsync(const std::vector<Command>
 		co_return 0;
 	}
 
-	if (debugMode)
-	{
-		std::cerr << "Debug: Executing piped commands with " << commands.size() << " commands" << std::endl;
-		debugInfo.pipelineCount++;
-	}
+	// Log message about executing piped commands
+	std::cerr << "Debug: Executing piped commands with " << commands.size() << " commands" << std::endl;
 
 	// If there's only one command, execute it directly
 	if (commands.size() == 1)
 	{
-		debugInfo.commandCount++;
+		// Command executed
 		bool result = co_await commands[0].executeAsync();
 		co_return result ? 0 : 1; // Convert bool to exit status
 	}
 
-	// For multiple commands, we need to set up pipes
+	// For multiple commands, we need to set up pipes between commands
 	int lastExitStatus = 0;
 
-	// Implementation of piping using IPipe for platform-agnostic inter-command communication
-	std::vector<std::unique_ptr<IPipe>> pipes;
+	// Create pipes between commands
+	std::vector<std::shared_ptr<IPipe>> pipes;
 	for (size_t i = 0; i < commands.size() - 1; ++i)
 	{
-		pipes.emplace_back(CreatePipe()); // Assume createPipe() is a factory method to be implemented
+		// Use the static create method from IPipe interface
+		pipes.emplace_back(IPipe::create());
 	}
 
-	// Set up output redirection for each command to pipe to the next
+	// Execute all commands concurrently with pipe connections
+	std::vector<Task<bool>> tasks;
 	for (size_t i = 0; i < commands.size(); ++i)
 	{
-		debugInfo.commandCount++;
-		if (i > 0)
+		// Command executed
+		if (i > 0 && i < commands.size() - 1)
 		{
-			// Set input from the previous pipe
-			commands[i].setInputSource(pipes[i - 1]->getSource());
+			// Middle command: input from previous pipe, output to next pipe
+			tasks.push_back(commands[i].executeAsync(pipes[i - 1]->getSource(), pipes[i]->getSink()));
 		}
-		if (i < commands.size() - 1)
+		else if (i > 0)
 		{
-			// Set output to the next pipe
-			commands[i].setOutputSink(pipes[i]->getSink());
+			// Last command: input from previous pipe
+			tasks.push_back(commands[i].executeAsync(pipes[i - 1]->getSource()));
 		}
-	}
-
-	// Execute all commands concurrently
-	std::vector<Task<bool>> tasks;
-	for (auto &cmd : commands)
-	{
-		tasks.push_back(cmd.executeAsync());
+		else if (i < commands.size() - 1)
+		{
+			// First command: output to next pipe
+			tasks.push_back(commands[i].executeAsync(nullptr, pipes[i]->getSink()));
+		}
+		else
+		{
+			// Single command: no pipes
+			tasks.push_back(commands[i].executeAsync());
+		}
 	}
 
 	// Wait for all commands to complete
@@ -360,54 +334,38 @@ Task<int> CommandChain::executeCommandsWithPipesAsync(const std::vector<Command>
 }
 
 // Execute the command chain asynchronously
-Task<int> CommandChain::executeAsync(const ShellConfig &config) const
+Task<int> CommandChain::executeAsync() const
 {
 	if (commands_.empty())
 	{
 		co_return 0;
 	}
 
-	if (debugMode)
-	{
-		std::cerr << "Debug: Executing command chain with " << commands_.size() << " commands" << std::endl;
-		debugInfo.pipelineCount++;
-	}
+	// Log message about executing command chain
+	std::cerr << "Debug: Executing command chain with " << commands_.size() << " commands" << std::endl;
 
 	// If there's only one command, execute it directly
 	if (commands_.size() == 1)
 	{
-		if (debugMode)
+		// Log single command execution info
+		std::cerr << "Debug: Executing single command: " << commands_[0].args[0] << std::endl;
+
+		// Log redirections
+		if (!commands_[0].inputFile.empty())
 		{
-			std::cerr << "Debug: Executing single command: " << commands_[0].args[0] << std::endl;
-
-			// Count redirections
-			if (!commands_[0].inputFile.empty())
-			{
-				debugInfo.redirectionCount++;
-				std::cerr << "Debug: Input redirection from " << commands_[0].inputFile << std::endl;
-			}
-			if (!commands_[0].outputFile.empty())
-			{
-				debugInfo.redirectionCount++;
-				std::cerr << "Debug: Output redirection to " << commands_[0].outputFile
-						  << (commands_[0].appendOutput ? " (append)" : "") << std::endl;
-			}
-			if (!commands_[0].errorFile.empty())
-			{
-				debugInfo.redirectionCount++;
-				std::cerr << "Debug: Error redirection to " << commands_[0].errorFile
-						  << (commands_[0].appendError ? " (append)" : "") << std::endl;
-			}
-
-			// Count background processes
-			if (commands_[0].backgroundProcess)
-			{
-				debugInfo.backgroundProcessCount++;
-				std::cerr << "Debug: Running as background process" << std::endl;
-			}
+			std::cerr << "Debug: Input redirection from " << commands_[0].inputFile << std::endl;
+		}
+		if (!commands_[0].outputFile.empty())
+		{
+			std::cerr << "Debug: Output redirection to " << commands_[0].outputFile
+					  << (commands_[0].appendOutput ? " (append)" : "") << std::endl;
+		}
+		if (!commands_[0].errorFile.empty())
+		{
+			std::cerr << "Debug: Error redirection to " << commands_[0].errorFile
+					  << (commands_[0].appendError ? " (append)" : "") << std::endl;
 		}
 
-		debugInfo.commandCount++;
 		bool result = co_await commands_[0].executeAsync();
 		co_return result ? 0 : 1; // Convert bool to exit status
 	}
@@ -458,7 +416,7 @@ Task<int> CommandChain::executeAsync(const ShellConfig &config) const
 		else
 		{
 			// For non-pipe operators or the last command, execute directly
-			debugInfo.commandCount++;
+			// Command executed
 
 			// Check if we should execute this command based on the previous exit status
 			if (i > 0 && i - 1 < operators_.size())
@@ -466,19 +424,13 @@ Task<int> CommandChain::executeAsync(const ShellConfig &config) const
 				if (operators_[i - 1] == TokenType::And && lastExitStatus != 0)
 				{
 					// Skip this command if the previous one failed for AND
-					if (debugMode)
-					{
-						std::cerr << "Debug: Skipping command due to AND operator and previous command failure" << std::endl;
-					}
+					std::cerr << "Debug: Skipping command due to AND operator and previous command failure" << std::endl;
 					continue;
 				}
 				else if (operators_[i - 1] == TokenType::Or && lastExitStatus == 0)
 				{
 					// Skip this command if the previous one succeeded for OR
-					if (debugMode)
-					{
-						std::cerr << "Debug: Skipping command due to OR operator and previous command success" << std::endl;
-					}
+					std::cerr << "Debug: Skipping command due to OR operator and previous command success" << std::endl;
 					continue;
 				}
 			}

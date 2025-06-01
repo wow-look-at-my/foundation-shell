@@ -1,77 +1,23 @@
 #pragma once
 
-#include <string>
-#include <map>
-#include <fstream>
-#include <iostream>
-
-// Shell configuration class
-class ShellConfig {
-public:
-    ShellConfig();
-
-    // Load configuration from file
-    void loadConfig();
-
-    // Save configuration to file
-    void saveConfig();
-
-    // Get a color from the current theme
-    std::string getThemeColor(const std::string& key) const;
-
-    // Format the prompt template
-    std::string formatPrompt(const std::string& templ, int exitStatus) const;
-
-    // Public properties
-    std::string themeName;
-    std::map<std::string, std::string> themeColors;
-    std::string promptTemplate;
-    bool showExitStatus;
-    std::string welcomeMessage;
-    bool colorEnabled;
-    bool enableCommandSuggestions;
-    int suggestionThreshold;
-
-private:
-    // Helper to get the configuration file path
-    std::string getConfigFilePath() const;
-};
+#include <string_view>
 
 // Global color constants
-namespace Colors {
-    extern const std::string COLOR_RESET;
-    extern const std::string COLOR_RED;
-    extern const std::string COLOR_GREEN;
-    extern const std::string COLOR_YELLOW;
-    extern const std::string COLOR_BLUE;
-    extern const std::string COLOR_MAGENTA;
-    extern const std::string COLOR_CYAN;
-    extern const std::string COLOR_WHITE;
-    extern const std::string COLOR_BOLD;
+namespace Colors
+{
+	inline constexpr std::string_view COLOR_RESET = "\033[0m";
+	inline constexpr std::string_view COLOR_RED = "\033[31m";
+	inline constexpr std::string_view COLOR_GREEN = "\033[32m";
+	inline constexpr std::string_view COLOR_YELLOW = "\033[33m";
+	inline constexpr std::string_view COLOR_BLUE = "\033[34m";
+	inline constexpr std::string_view COLOR_MAGENTA = "\033[35m";
+	inline constexpr std::string_view COLOR_CYAN = "\033[36m";
+	inline constexpr std::string_view COLOR_WHITE = "\033[37m";
+	inline constexpr std::string_view COLOR_BOLD = "\033[1m";
 }
 
 // Global constants
-namespace Constants {
-    extern const std::string HISTORY_FILE_NAME;
-    extern const std::string JOBS_FILE_NAME;
-    extern const std::string CONFIG_FILE_NAME;
-    extern const std::string ALIASES_FILE_NAME;
-    extern const int MAX_HISTORY_LINES;
-
-    // Map of theme names to color values
-    extern std::map<std::string, std::map<std::string, std::string>> predefinedThemes;
+namespace Constants
+{
+	inline constexpr int MAX_HISTORY_LINES = 1000;
 }
-
-// Debug mode flag
-extern bool debugMode;
-
-// Global debug info structure
-struct DebugInfo {
-    std::chrono::steady_clock::time_point startTime;
-    int commandCount = 0;
-    int pipelineCount = 0;
-    int redirectionCount = 0;
-    int backgroundProcessCount = 0;
-};
-
-extern DebugInfo debugInfo;

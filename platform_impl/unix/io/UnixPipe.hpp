@@ -1,6 +1,6 @@
 #pragma once
 
-#include "io/IPipe.hpp"
+#include "src/io/IPipe.hpp"
 #include "FDSource.hpp"
 #include "FDSink.hpp"
 #include <memory>
