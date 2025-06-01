@@ -263,7 +263,7 @@ CommandChain CommandChain::parseFromTokens(const std::vector<std::string> &token
 }
 
 // Implementation of the private method to execute piped commands
-Task<int> CommandChain::executeCommandsWithPipesAsync(const std::vector<Command> &commands) const
+mh::task<int> CommandChain::executeCommandsWithPipesAsync(const std::vector<Command> &commands) const
 {
 	if (commands.empty())
 	{
@@ -293,7 +293,7 @@ Task<int> CommandChain::executeCommandsWithPipesAsync(const std::vector<Command>
 	}
 
 	// Execute all commands concurrently with pipe connections
-	std::vector<Task<bool>> tasks;
+	std::vector<mh::task<bool>> tasks;
 	for (size_t i = 0; i < commands.size(); ++i)
 	{
 		// Command executed
@@ -333,7 +333,7 @@ Task<int> CommandChain::executeCommandsWithPipesAsync(const std::vector<Command>
 }
 
 // Execute the command chain asynchronously
-Task<int> CommandChain::executeAsync() const
+mh::task<int> CommandChain::executeAsync() const
 {
 	if (commands_.empty())
 	{

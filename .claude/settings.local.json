@@ -8,7 +8,9 @@
       "Bash(just build)",
       "Bash(clang++:*)",
       "Bash(just clean:*)",
-      "Bash(just test)"
+      "Bash(just test)",
+      "Bash(rg:*)",
+      "Bash(cmake:*)"
     ],
     "deny": []
   },

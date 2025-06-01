@@ -42,7 +42,7 @@ public:
 	 * Wait for the process to complete
 	 * @return Exit code of the process
 	 */
-	Task<int> waitAsync() override;
+	mh::task<int> waitAsync() override;
 
 	/**
 	 * Check if the process is running

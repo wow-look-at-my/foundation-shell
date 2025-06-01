@@ -11,6 +11,9 @@ file(GLOB_RECURSE UNIX_SOURCES
 add_library(platform_impl STATIC ${UNIX_SOURCES})
 target_compile_features(platform_impl PUBLIC cxx_std_23)
 
+# Link with mh-stuff to get access to task.hpp
+target_link_libraries(platform_impl PRIVATE mh-stuff)
+
 # Include directories for finding header files
 # This is internal - only for building this library
 target_include_directories(platform_impl

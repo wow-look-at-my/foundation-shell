@@ -81,7 +81,7 @@ bool UnixProcess::start()
 }
 
 // Wait for the process to complete
-Task<int> UnixProcess::waitAsync()
+mh::task<int> UnixProcess::waitAsync()
 {
 	if (!started_)
 	{

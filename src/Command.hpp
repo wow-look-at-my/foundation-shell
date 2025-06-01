@@ -37,7 +37,7 @@ public:
 	Source m_stderr;
 
 	// Execute the command with optional I/O redirection (async) - stateless version
-	Task<bool> executeAsync(Source inputSource = nullptr, Sink outputSink = nullptr) const;
+	mh::task<bool> executeAsync(Source inputSource = nullptr, Sink outputSink = nullptr) const;
 
 private:
 	// Helper method to handle built-in commands - stateless version

@@ -115,7 +115,7 @@ int Command::handleBuiltins() const
 // now handles all process creation and management.
 
 // Function to execute a command asynchronously
-Task<bool> Command::executeAsync(Source inputSource, Sink outputSink) const
+mh::task<bool> Command::executeAsync(Source inputSource, Sink outputSink) const
 {
 	if (args.empty())
 	{

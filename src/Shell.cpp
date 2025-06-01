@@ -38,7 +38,7 @@ Shell::~Shell()
 }
 
 // Implements the main shell loop as a coroutine
-Task<int> Shell::runAsync()
+mh::task<int> Shell::runAsync()
 {
 	std::string input;
 	int lastExitStatus = 0;
