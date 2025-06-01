@@ -1,5 +1,6 @@
 #include "IPipe.hpp"
 #include "IOFactory.hpp"
+#include "LastCppInclude.hpp"
 
 std::shared_ptr<IPipe> IPipe::create()
 {

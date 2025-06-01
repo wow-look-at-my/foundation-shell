@@ -1,8 +1,8 @@
 #include "Command.hpp"
 #include <filesystem>
-#include <iostream>
 #include <cstdio>
 #include <cstring>
+#include <ostream>
 #include <wordexp.h>
 #include <filesystem>
 #include <signal.h>
@@ -16,6 +16,7 @@
 #include "io/FileSource.hpp"
 #include "io/FileSink.hpp"
 #include "Main.hpp"
+#include "LastCppInclude.hpp"
 
 // Command implementation
 Command::Command()
@@ -112,24 +113,29 @@ int Command::handleBuiltins() const
 }
 
 // Helper function to check if a token is an environment variable assignment
-static bool isEnvironmentAssignment(const std::string& token) {
+static bool isEnvironmentAssignment(const std::string &token)
+{
 	// Must contain '=' and start with a valid variable name
 	size_t eq_pos = token.find('=');
-	if (eq_pos == std::string::npos || eq_pos == 0) {
+	if (eq_pos == std::string::npos || eq_pos == 0)
+	{
 		return false;
 	}
-	
+
 	// Check if everything before '=' is a valid variable name
-	for (size_t i = 0; i < eq_pos; ++i) {
+	for (size_t i = 0; i < eq_pos; ++i)
+	{
 		char c = token[i];
-		if (!std::isalnum(c) && c != '_') {
+		if (!std::isalnum(c) && c != '_')
+		{
 			return false;
 		}
-		if (i == 0 && std::isdigit(c)) {
+		if (i == 0 && std::isdigit(c))
+		{
 			return false; // Can't start with digit
 		}
 	}
-	
+
 	return true;
 }
 
@@ -148,70 +154,83 @@ mh::task<bool> Command::executeAsync(Source inputSource, Sink outputSink) const
 	// Process environment variable assignments and extract actual command
 	std::vector<std::pair<std::string, std::string>> env_assignments;
 	std::vector<std::string> command_args;
-	
+
 	// Find where environment assignments end and command begins
 	size_t first_command_index = 0;
-	for (size_t i = 0; i < args.size(); ++i) {
-		if (isEnvironmentAssignment(args[i])) {
+	for (size_t i = 0; i < args.size(); ++i)
+	{
+		if (isEnvironmentAssignment(args[i]))
+		{
 			// Extract variable name and value
 			size_t eq_pos = args[i].find('=');
 			std::string var_name = args[i].substr(0, eq_pos);
 			std::string var_value = args[i].substr(eq_pos + 1);
 			env_assignments.emplace_back(var_name, var_value);
-		} else {
+		}
+		else
+		{
 			first_command_index = i;
 			break;
 		}
 	}
-	
+
 	// Copy remaining arguments as the actual command
-	for (size_t i = first_command_index; i < args.size(); ++i) {
+	for (size_t i = first_command_index; i < args.size(); ++i)
+	{
 		command_args.push_back(args[i]);
 	}
-	
+
 	// If no actual command after environment assignments, just set the variables
-	if (command_args.empty()) {
+	if (command_args.empty())
+	{
 		// Set environment variables and return success
-		for (const auto& [name, value] : env_assignments) {
+		for (const auto &[name, value] : env_assignments)
+		{
 			setenv(name.c_str(), value.c_str(), 1);
 		}
 		co_return true;
 	}
-	
+
 	// Check if this is a builtin command (without executing)
 	bool isBuiltin = false;
-	if (!command_args.empty()) {
-		const std::string& cmd = command_args[0];
+	if (!command_args.empty())
+	{
+		const std::string &cmd = command_args[0];
 		isBuiltin = (cmd == "cd" || cmd == "exit" || cmd == "pwd" || cmd == "clear" || cmd == "help");
 	}
-	
+
 	if (isBuiltin)
 	{
 		// Set environment variables for builtin command execution
 		std::vector<std::string> saved_values;
 		std::vector<bool> was_set;
-		
-		for (const auto& [name, value] : env_assignments) {
-			const char* old_value = getenv(name.c_str());
+
+		for (const auto &[name, value] : env_assignments)
+		{
+			const char *old_value = getenv(name.c_str());
 			saved_values.push_back(old_value ? old_value : "");
 			was_set.push_back(old_value != nullptr);
 			setenv(name.c_str(), value.c_str(), 1);
 		}
-		
+
 		// Execute builtin with the command arguments
 		Command builtin_cmd = *this;
 		builtin_cmd.args = command_args;
 		int result = builtin_cmd.handleBuiltins();
-		
+
 		// Restore environment
-		for (size_t i = 0; i < env_assignments.size(); ++i) {
-			if (was_set[i]) {
+		for (size_t i = 0; i < env_assignments.size(); ++i)
+		{
+			if (was_set[i])
+			{
 				setenv(env_assignments[i].first.c_str(), saved_values[i].c_str(), 1);
-			} else {
+			}
+			else
+			{
 				unsetenv(env_assignments[i].first.c_str());
 			}
 		}
-		
+
 		co_return result == 0; // Convert exit status to bool
 	}
 
@@ -246,9 +265,10 @@ mh::task<bool> Command::executeAsync(Source inputSource, Sink outputSink) const
 	// Set environment variables before creating the process
 	std::vector<std::string> saved_values;
 	std::vector<bool> was_set;
-	
-	for (const auto& [name, value] : env_assignments) {
-		const char* old_value = getenv(name.c_str());
+
+	for (const auto &[name, value] : env_assignments)
+	{
+		const char *old_value = getenv(name.c_str());
 		saved_values.push_back(old_value ? old_value : "");
 		was_set.push_back(old_value != nullptr);
 		setenv(name.c_str(), value.c_str(), 1);
@@ -256,42 +276,50 @@ mh::task<bool> Command::executeAsync(Source inputSource, Sink outputSink) const
 
 	// Create the process with proper I/O redirection using command_args
 	ProcessPtr process = createProcess(
-		command_args.at(0),	 // Command
-		command_args,		 // Arguments (including command)
-		inputSource, // Input source
-		outputSink,	 // Output sink
-		errorSink	 // Error sink
+		command_args.at(0), // Command
+		command_args,		// Arguments (including command)
+		inputSource,		// Input source
+		outputSink,			// Output sink
+		errorSink			// Error sink
 	);
 
 	// Start the process
 	if (!process->start())
 	{
 		std::cerr << Colors::COLOR_RED << "Failed to start process: " << command_args.at(0) << Colors::COLOR_RESET << "\n";
-		
+
 		// Restore environment before returning
-		for (size_t i = 0; i < env_assignments.size(); ++i) {
-			if (was_set[i]) {
+		for (size_t i = 0; i < env_assignments.size(); ++i)
+		{
+			if (was_set[i])
+			{
 				setenv(env_assignments[i].first.c_str(), saved_values[i].c_str(), 1);
-			} else {
+			}
+			else
+			{
 				unsetenv(env_assignments[i].first.c_str());
 			}
 		}
-		
+
 		co_return false;
 	}
 
 	// Wait for the process to complete
 	int exitCode = co_await process->waitAsync();
-	
+
 	// Restore environment variables after process completes
-	for (size_t i = 0; i < env_assignments.size(); ++i) {
-		if (was_set[i]) {
+	for (size_t i = 0; i < env_assignments.size(); ++i)
+	{
+		if (was_set[i])
+		{
 			setenv(env_assignments[i].first.c_str(), saved_values[i].c_str(), 1);
-		} else {
+		}
+		else
+		{
 			unsetenv(env_assignments[i].first.c_str());
 		}
 	}
-	
+
 	co_return exitCode == 0; // Convert exit status to bool
 }
 
@@ -471,18 +499,28 @@ std::vector<std::string> bashSplitString(const std::string &input)
 
 	for (const auto &ctx : token_contexts)
 	{
+		std::string token_result;
 		if (ctx.was_single_quoted)
 		{
 			// Single-quoted tokens: no expansions
-			result.push_back(ctx.content);
+			token_result = ctx.content;
 		}
 		else
 		{
 			// Double-quoted or unquoted tokens: perform expansions
 			std::string expanded = expandTilde(ctx.content);
 			expanded = expandEnvironmentVariables(expanded);
-			result.push_back(expanded);
+			token_result = expanded;
 		}
+
+		// Debug: Check for empty tokens
+		if (token_result.empty())
+		{
+			std::print(stderr, "Warning: Empty token generated from input '{}'\n", input);
+			continue; // Skip empty tokens
+		}
+
+		result.push_back(token_result);
 	}
 
 	return result;

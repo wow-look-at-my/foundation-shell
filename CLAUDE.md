@@ -117,3 +117,7 @@ The shell supports:
 ## Coding Practices
 
 - We always use exact equality in string comparison checks in tests.
+
+## Scripting
+
+- For scripts, use C# with dotnet run.

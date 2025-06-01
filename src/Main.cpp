@@ -1,6 +1,7 @@
 #include "Shell.hpp"
 #include <iostream>
 #include <mh/concurrency/dispatcher.hpp>
+#include "LastCppInclude.hpp"
 
 // Global dispatcher for async operations
 mh::dispatcher g_dispatcher;

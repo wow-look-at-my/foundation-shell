@@ -1,5 +1,6 @@
 #include "IProcess.hpp"
 #include "ProcessFactory.hpp"
+#include "LastCppInclude.hpp"
 
 ProcessPtr IProcess::create(const ProcessOptions &options)
 {

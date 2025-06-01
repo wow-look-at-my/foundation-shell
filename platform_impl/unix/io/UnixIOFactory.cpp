@@ -2,6 +2,7 @@
 #include "UnixFileSink.hpp"
 #include "UnixFileSource.hpp"
 #include "UnixPipe.hpp"
+#include "LastCppInclude.hpp"
 
 // Implementation of the singleton getInstance method
 IOFactory &IOFactory::getInstance()

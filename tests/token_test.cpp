@@ -2,6 +2,7 @@
 #include "src/Token.hpp"
 #include <stdexcept>
 #include <string>
+#include "LastCppInclude.hpp"
 
 TEST_CASE("Value token types are identified correctly", "[token]")
 {

@@ -2,6 +2,7 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <stdexcept>
+#include "LastCppInclude.hpp"
 
 UnixFileSource::UnixFileSource(const std::filesystem::path &path)
 	: FDSource(::open(path.c_str(), O_RDONLY))

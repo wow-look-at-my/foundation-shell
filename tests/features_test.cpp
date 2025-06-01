@@ -13,6 +13,7 @@
 #include <filesystem>
 #include <sys/stat.h>
 #include <cstdio> // For stdout
+#include "LastCppInclude.hpp"
 
 // Fallback functions for filesystem operations
 // to avoid compiler-specific variations in std::filesystem

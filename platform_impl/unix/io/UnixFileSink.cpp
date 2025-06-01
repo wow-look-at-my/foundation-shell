@@ -2,6 +2,7 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <stdexcept>
+#include "LastCppInclude.hpp"
 
 UnixFileSink::UnixFileSink(const std::filesystem::path &path, bool append)
 	: FDSink(::open(path.c_str(),

@@ -1,5 +1,6 @@
 #include "UnixProcessFactory.hpp"
 #include "UnixProcess.hpp"
+#include "LastCppInclude.hpp"
 
 // Implementation of the singleton getInstance method
 ProcessFactory &ProcessFactory::getInstance()

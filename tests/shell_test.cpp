@@ -9,6 +9,7 @@
 #include <cstdlib>
 #include <unistd.h>
 #include <format>
+#include "LastCppInclude.hpp"
 
 // Tests for the basic shell functionality
 TEST_CASE("Executes simple command", "[shell]")

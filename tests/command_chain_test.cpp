@@ -5,6 +5,7 @@
 #include <stdexcept>
 #include <string>
 #include <vector>
+#include "LastCppInclude.hpp"
 
 // Test creating a CommandChain with valid commands
 TEST_CASE("CommandChain valid construction", "[command_chain]")

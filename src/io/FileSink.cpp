@@ -1,5 +1,6 @@
 #include "FileSink.hpp"
 #include "IOFactory.hpp"
+#include "LastCppInclude.hpp"
 
 std::shared_ptr<ISink> FileSink::create(const std::filesystem::path &path, bool append)
 {

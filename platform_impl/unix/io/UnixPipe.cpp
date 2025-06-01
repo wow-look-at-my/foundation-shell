@@ -2,6 +2,7 @@
 #include <unistd.h>
 #include <stdexcept>
 #include <memory>
+#include "LastCppInclude.hpp"
 
 UnixPipe::UnixPipe()
 {

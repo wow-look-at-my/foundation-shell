@@ -11,6 +11,7 @@
 #include <chrono>
 #include <csignal>
 #include <unistd.h>
+#include "LastCppInclude.hpp"
 
 // Constructor with RAII initialization
 Shell::Shell()

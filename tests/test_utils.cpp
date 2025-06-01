@@ -10,6 +10,7 @@
 #include <fcntl.h>
 #include <cstring>
 #include <cstdio>
+#include "LastCppInclude.hpp"
 
 // Helper function to execute a command in the shell and get output
 std::string runShellCommand(const std::string &command, bool use_bash)

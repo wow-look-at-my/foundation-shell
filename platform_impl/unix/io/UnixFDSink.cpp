@@ -2,6 +2,7 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <sys/select.h>
+#include "LastCppInclude.hpp"
 
 FDSink::FDSink(NativeHandle fd)
     : fd(fd), closed(false)
