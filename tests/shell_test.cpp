@@ -12,21 +12,19 @@
 TEST_CASE("Executes simple command", "[shell]")
 {
 	std::string output = runShellCommand("echo hello");
-	CHECK(output.find("hello") != std::string::npos);
+	CHECK(output == "hello");
 }
 
 TEST_CASE("Executes command with arguments", "[shell]")
 {
 	std::string output = runShellCommand("echo arg1 arg2 arg3");
-	CHECK(output.find("arg1") != std::string::npos);
-	CHECK(output.find("arg2") != std::string::npos);
-	CHECK(output.find("arg3") != std::string::npos);
+	CHECK(output == "arg1 arg2 arg3");
 }
 
 TEST_CASE("Handles quoted arguments", "[shell]")
 {
 	std::string output = runShellCommand("echo \"hello world\"");
-	CHECK(output.find("hello world") != std::string::npos);
+	CHECK(output == "hello world");
 }
 
 TEST_CASE("Handles environment variables", "[shell]")
@@ -35,7 +33,7 @@ TEST_CASE("Handles environment variables", "[shell]")
 	setenv("TEST_VAR", "test_value", 1);
 
 	std::string output = runShellCommand("echo $TEST_VAR");
-	CHECK(output.find("test_value") != std::string::npos);
+	CHECK(output == "test_value");
 
 	// Clean up
 	unsetenv("TEST_VAR");
@@ -44,34 +42,34 @@ TEST_CASE("Handles environment variables", "[shell]")
 TEST_CASE("Handles home directory", "[shell]")
 {
 	std::string output = runShellCommand("echo ~");
-	CHECK(output.find(getenv("HOME")) != std::string::npos);
+	CHECK(output == getenv("HOME"));
 }
 
 TEST_CASE("Handles tilde expansion", "[shell]")
 {
 	std::string output = runShellCommand("echo ~/test");
 	std::string expected = std::string(getenv("HOME")) + "/test";
-	CHECK(output.find(expected) != std::string::npos);
+	CHECK(output == expected);
 }
 
 TEST_CASE("Handles escaped characters", "[shell]")
 {
 	std::string output = runShellCommand("echo hello\\\\world");
-	CHECK(output.find("hello\\world") != std::string::npos);
+	CHECK(output == "hello\\world");
 }
 
 TEST_CASE("Handles invalid command", "[shell]")
 {
 	std::string output = runShellCommand("nonexistentcommand123");
-	CHECK(output.find("Command not found") != std::string::npos);
+	CHECK(output == "Command not found");
 }
 
 // Tests for built-in commands
 TEST_CASE("Built-in exit", "[shell][builtins]")
 {
 	std::string output = runShellCommand("echo before_exit\nexit\necho after_exit");
-	CHECK(output.find("before_exit") != std::string::npos);
-	CHECK(output.find("after_exit") == std::string::npos);
+	CHECK(output == "before_exit");
+	CHECK(output != "after_exit");
 }
 
 // Test for creating temporary files
@@ -110,8 +108,7 @@ TEST_CASE("Handles complex command line", "[shell]")
 {
 	setenv("TEST_VAR", "test_value", 1);
 	std::string output = runShellCommand("echo \"$TEST_VAR in quotes\" and \\'escaped\\' characters");
-	CHECK(output.find("test_value in quotes") != std::string::npos);
-	CHECK(output.find("'escaped'") != std::string::npos);
+	CHECK(output == "test_value in quotes and 'escaped' characters");
 	unsetenv("TEST_VAR");
 }
 
@@ -129,7 +126,7 @@ TEST_CASE("Confirm stateless", "[shell]")
 	// (these are maintained by the OS, not shell state)
 	setenv("STATELESS_TEST_VAR", "test_environment_value", 1);
 	std::string envOutput = runShellCommand("echo $STATELESS_TEST_VAR");
-	CHECK(envOutput.find("test_environment_value") != std::string::npos);
+	CHECK(envOutput == "test_environment_value");
 
 	// Now for the actual statelessness test:
 	// Run two commands: one attempting to set a variable and one trying to echo it
@@ -143,7 +140,7 @@ TEST_CASE("Confirm stateless", "[shell]")
 	// Skip past the prompt and command lines
 	while (std::getline(iss, line))
 	{
-		if (line.find("echo $INTERNAL_VAR") != std::string::npos)
+		if (line == "echo $INTERNAL_VAR")
 		{
 			// Get the next line, which should be the output of echo
 			if (std::getline(iss, echoOutput))
@@ -155,7 +152,7 @@ TEST_CASE("Confirm stateless", "[shell]")
 
 	// The important part: in a stateless shell, executing "echo $INTERNAL_VAR" should
 	// not print "unique_test_string" because the INTERNAL_VAR assignment doesn't persist
-	CHECK(echoOutput.find("unique_test_string") == std::string::npos);
+	CHECK(echoOutput != "unique_test_string");
 	INFO("Shell incorrectly preserved variable value between commands");
 
 	// Clean up
@@ -209,7 +206,7 @@ TEST_CASE("Built-in cd command", "[shell][builtins]")
 	// Test cd to home directory (no args)
 	std::string output = runShellCommand("cd\npwd");
 	std::string homePath = getenv("HOME");
-	CHECK(output.contains(homePath));
+	CHECK(output == homePath);
 
 	// Test cd to /tmp
 	output = runShellCommand("cd /tmp\npwd");
@@ -256,15 +253,11 @@ TEST_CASE("Argument handling and field splitting", "[shell][args]")
 {
 	// Test multiple space-separated arguments
 	std::string output = runShellCommand("echo arg1 arg2 arg3");
-	CHECK(output == "arg1");
-	CHECK(output == "arg2");
-	CHECK(output == "arg3");
+	CHECK(output == "arg1 arg2 arg3");
 
 	// Test arguments with extra spaces
 	output = runShellCommand("echo   arg1    arg2   arg3   ");
-	CHECK(output == "arg1");
-	CHECK(output == "arg2");
-	CHECK(output == "arg3");
+	CHECK(output == "arg1 arg2 arg3");
 
 	// Test quoted arguments preserve spaces
 	output = runShellCommand("echo \"multiple   spaces   preserved\"");
@@ -299,7 +292,7 @@ TEST_CASE("File operations and existence", "[shell][files]")
 
 	// Test file existence with ls
 	std::string output = runShellCommand("ls " + std::string(tempPath));
-	CHECK(output.contains(tempPath));
+	CHECK(output == tempPath);
 
 	// Test directory operations
 	output = runShellCommand("mkdir /tmp/test_shell_dir");
@@ -473,11 +466,11 @@ TEST_CASE("Command substitution", "[shell][substitution]")
 {
 	// Test basic command substitution with $(...)
 	std::string output = runShellCommand("echo 'Current dir: $(pwd)'");
-	CHECK(output.contains("Current dir:"));
+	CHECK(output.find("Current dir:") != std::string::npos);
 
 	// Test backtick command substitution
 	output = runShellCommand("echo 'Files: `ls | wc -l`'");
-	CHECK(output.contains("Files:"));
+	CHECK(output.find("Files:") != std::string::npos);
 
 	// Test command substitution with no output
 	output = runShellCommand("echo 'Result: $(true)'");
@@ -489,15 +482,15 @@ TEST_CASE("Built-in export command", "[shell][builtins][export]")
 {
 	// Test basic export
 	std::string output = runShellCommand("export TEST_EXPORT=exported_value\necho $TEST_EXPORT");
-	CHECK(output.contains("exported_value"));
+	CHECK(output == "exported_value");
 
 	// Test export with spaces
 	output = runShellCommand("export TEST_SPACES='value with spaces'\necho \"$TEST_SPACES\"");
-	CHECK(output.contains("value with spaces"));
+	CHECK(output == "value with spaces");
 
 	// Test export display (show all env vars)
 	output = runShellCommand("export");
-	CHECK(output.contains("PATH"));
+	CHECK(output.find("PATH") != std::string::npos);
 }
 
 // Test Case: Built-in unset command (from gemini aistudio test plan)
@@ -506,7 +499,7 @@ TEST_CASE("Built-in unset command", "[shell][builtins][unset]")
 	// Set a variable then unset it
 	std::string output = runShellCommand("export TO_UNSET=temporary\necho $TO_UNSET\nunset TO_UNSET\necho $TO_UNSET");
 	// The output should contain "temporary" from the first echo, but be empty for the second
-	CHECK(output.contains("temporary"));
+	CHECK(output.find("temporary") != std::string::npos);
 
 	// Test unsetting non-existent variable (should not error)
 	output = runShellCommand("unset NON_EXISTENT_VAR");
@@ -555,10 +548,9 @@ TEST_CASE("Empty arguments handling", "[shell][args][empty]")
 {
 	// Test empty string as argument
 	std::string output = runShellCommand("echo '' next");
-	CHECK(output.contains("next"));
+	CHECK(output == "next");
 
 	// Test multiple empty arguments
 	output = runShellCommand("echo first '' '' last");
-	CHECK(output.contains("first"));
-	CHECK(output.contains("last"));
+	CHECK(output == "first  last");
 }

@@ -113,7 +113,7 @@ std::string extractCommandOutput(const std::string &shellOutput, const std::stri
 		while (std::getline(stream, line))
 		{
 			// Look for the history command itself
-			if (!inHistory && line.find(command) != std::string::npos)
+			if (!inHistory && line == command)
 			{
 				inHistory = true;
 				continue;
@@ -122,15 +122,15 @@ std::string extractCommandOutput(const std::string &shellOutput, const std::stri
 			// If we're in the history section and find a line with a number followed by text,
 			// it's likely a history entry
 			if (inHistory && !line.empty() &&
-				((std::isdigit(line[0]) && line.find("  ") != std::string::npos) ||
-				 line.find("[32m") != std::string::npos))
+				((std::isdigit(line[0]) && line == "  ") ||
+				 line == "[32m"))
 			{ // Also look for color codes
 				output += line + "\n";
 			}
 
 			// Stop when we reach the exit command or a new prompt
-			if (line.find("exit") != std::string::npos ||
-				(inHistory && line.find(" $ ") != std::string::npos))
+			if (line == "exit" ||
+				(inHistory && line == " $ "))
 			{
 				break;
 			}
@@ -141,19 +141,19 @@ std::string extractCommandOutput(const std::string &shellOutput, const std::stri
 		// Standard extraction for other commands
 		while (std::getline(stream, line))
 		{
-			if (!foundCommand && line.find(command) != std::string::npos)
+			if (!foundCommand && line == command)
 			{
 				foundCommand = true;
 				continue;
 			}
 
 			// Skip lines containing prompts (look for "$" which is part of all prompts)
-			if (foundCommand && line.find(" $ ") == std::string::npos && line != "exit")
+			if (foundCommand && line != " $ " && line != "exit")
 			{
 				output += line + "\n";
 			}
 
-			if (line.find("exit") != std::string::npos)
+			if (line == "exit")
 			{
 				break;
 			}

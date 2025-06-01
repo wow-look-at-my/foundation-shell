@@ -91,7 +91,7 @@ TEST_CASE("Input redirection works", "[features][redirection]")
 	std::string output = runShellCommand(std::string("cat < ") + tempPath);
 
 	// Verify input was correctly redirected
-	CHECK(output.find(testContent) != std::string::npos);
+	CHECK(output == testContent);
 
 	// Clean up
 	fs::remove(tempPath);
@@ -135,7 +135,7 @@ TEST_CASE("Simple pipe works", "[features][piping]")
 	std::string output = runShellCommand("echo pipe_test | grep pipe");
 
 	// Verify pipe works correctly
-	CHECK(output.find("pipe_test") != std::string::npos);
+	CHECK(output == "pipe_test");
 }
 
 // Test for command chaining with &&
@@ -229,15 +229,15 @@ TEST_CASE("cd works in command chains", "[features][cd][command_chaining]")
 	// Create a temporary directory
 	char tempDir[] = "/tmp/shell_cd_test_XXXXXX";
 	REQUIRE(mkdtemp(tempDir) != nullptr);
-	
+
 	// Test that cd && pwd shows we're in the new directory
 	std::string command = std::string("cd ") + tempDir + " && pwd";
 	std::string output = runShellCommand(command);
-	
+
 	// Extract the pwd output (should show the temp directory path)
 	std::string extractedOutput = extractCommandOutput(output, command);
-	CHECK(extractedOutput.find(tempDir) != std::string::npos);
-	
+	CHECK(extractedOutput == tempDir);
+
 	// Clean up
 	rmdir(tempDir);
 }
@@ -250,31 +250,31 @@ TEST_CASE("cd changes are temporary per command chain", "[features][cd][stateles
 	char tempDir2[] = "/tmp/shell_cd_temp2_XXXXXX";
 	REQUIRE(mkdtemp(tempDir1) != nullptr);
 	REQUIRE(mkdtemp(tempDir2) != nullptr);
-	
+
 	// Run first command chain: cd to tempDir1 and create a file
 	std::string command1 = std::string("cd ") + tempDir1 + " && echo 'first' > file1.txt";
 	runShellCommand(command1);
-	
+
 	// Run second command chain: cd to tempDir2 and create a file
 	std::string command2 = std::string("cd ") + tempDir2 + " && echo 'second' > file2.txt";
 	runShellCommand(command2);
-	
+
 	// Verify both files were created in their respective directories
 	std::string filePath1 = std::string(tempDir1) + "/file1.txt";
 	std::string filePath2 = std::string(tempDir2) + "/file2.txt";
-	
+
 	REQUIRE(fs::exists(filePath1));
 	REQUIRE(fs::exists(filePath2));
-	
+
 	// Verify file contents
 	std::ifstream file1(filePath1), file2(filePath2);
 	std::string content1, content2;
 	std::getline(file1, content1);
 	std::getline(file2, content2);
-	
+
 	CHECK(content1 == "'first'");
 	CHECK(content2 == "'second'");
-	
+
 	// Clean up
 	fs::remove(filePath1);
 	fs::remove(filePath2);
@@ -288,10 +288,10 @@ TEST_CASE("cd fails gracefully with nonexistent directory", "[features][cd][erro
 	// Try to cd to a directory that doesn't exist
 	std::string command = "cd /this/directory/should/not/exist && echo should_not_run";
 	std::string output = runShellCommand(command);
-	
+
 	// The command chain should fail and 'should_not_run' should not appear in output
 	std::string extractedOutput = extractCommandOutput(output, command);
-	CHECK(extractedOutput.find("should_not_run") == std::string::npos);
+	CHECK(extractedOutput != "should_not_run");
 }
 
 TEST_CASE("Multiple pipes work", "[features][piping]")
@@ -300,7 +300,7 @@ TEST_CASE("Multiple pipes work", "[features][piping]")
 	std::string output = runShellCommand("echo multi_pipe_test | grep multi | grep pipe");
 
 	// Verify multiple pipes work correctly
-	CHECK(output.find("multi_pipe_test") != std::string::npos);
+	CHECK(output == "multi_pipe_test");
 }
 
 // Test for built-in 'pwd' command
@@ -314,7 +314,7 @@ TEST_CASE("Pwd works", "[features][builtin_commands]")
 	REQUIRE(getcwd(cwd, sizeof(cwd)) != nullptr);
 
 	// Verify pwd output contains the current directory
-	CHECK(output.find(cwd) != std::string::npos);
+	CHECK(output == cwd);
 }
 
 // Test for clear command
@@ -325,7 +325,7 @@ TEST_CASE("Clear works", "[features][builtin_commands]")
 
 	// Check that the output contains the clear screen escape sequence
 	// This could be either the actual escape sequence or some representation of it
-	CHECK(output.find("after_clear") != std::string::npos);
+	CHECK(output == "after_clear");
 }
 
 // Test for background processes
@@ -392,9 +392,9 @@ TEST_CASE("Colored output works", "[features][ui_improvements]")
 
 	// Check for ANSI color codes in the output
 	// Note: This test might be implementation-specific
-	CHECK(output.find("colored_test") != std::string::npos);
+	CHECK(output == "colored_test");
 
-	// This test is a placeholder - actual implementation will depend on how colors are incorporated
+	CHECK(!"This test is a placeholder - actual implementation will depend on how colors are incorporated");
 	// We might look for specific ANSI escape sequences
 }
 
@@ -405,5 +405,5 @@ TEST_CASE("Prompt shows current directory", "[features][ui_improvements]")
 	std::string output = runShellCommand("cd /tmp\npwd");
 
 	// Verify that the prompt contains '/tmp'
-	CHECK(output.find("/tmp") != std::string::npos);
+	CHECK(output == "/tmp");
 }
