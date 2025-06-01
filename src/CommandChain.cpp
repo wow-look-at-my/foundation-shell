@@ -292,8 +292,8 @@ mh::task<int> CommandChain::executeCommandsWithPipesAsync(const std::vector<Comm
 		co_return 0;
 	}
 
-	// Log message about executing piped commands
-	std::cerr << "Debug: Executing piped commands with " << commands.size() << " commands" << std::endl;
+	// Log message about executing piped commands (disabled for tests)
+	// std::cerr << "Debug: Executing piped commands with " << commands.size() << " commands" << std::endl;
 
 	// If there's only one command, execute it directly
 	if (commands.size() == 1)
@@ -363,28 +363,28 @@ mh::task<int> CommandChain::executeAsync() const
 	}
 
 	// Log message about executing command chain
-	std::cerr << "Debug: Executing command chain with " << commands_.size() << " commands" << std::endl;
+	// std::cerr << "Debug: Executing command chain with " << commands_.size() << " commands" << std::endl;
 
 	// If there's only one command, execute it directly
 	if (commands_.size() == 1)
 	{
 		// Log single command execution info
-		std::cerr << "Debug: Executing single command: " << commands_[0].args[0] << std::endl;
+		// std::cerr << "Debug: Executing single command: " << commands_[0].args[0] << std::endl;
 
 		// Log redirections
 		if (!commands_[0].inputFile.empty())
 		{
-			std::cerr << "Debug: Input redirection from " << commands_[0].inputFile << std::endl;
+			// std::cerr << "Debug: Input redirection from " << commands_[0].inputFile << std::endl;
 		}
 		if (!commands_[0].outputFile.empty())
 		{
-			std::cerr << "Debug: Output redirection to " << commands_[0].outputFile
-					  << (commands_[0].appendOutput ? " (append)" : "") << std::endl;
+			// std::cerr << "Debug: Output redirection to " << commands_[0].outputFile
+			//		  << (commands_[0].appendOutput ? " (append)" : "") << std::endl;
 		}
 		if (!commands_[0].errorFile.empty())
 		{
-			std::cerr << "Debug: Error redirection to " << commands_[0].errorFile
-					  << (commands_[0].appendError ? " (append)" : "") << std::endl;
+			// std::cerr << "Debug: Error redirection to " << commands_[0].errorFile
+			//		  << (commands_[0].appendError ? " (append)" : "") << std::endl;
 		}
 
 		bool result = co_await commands_[0].executeAsync();
@@ -445,13 +445,13 @@ mh::task<int> CommandChain::executeAsync() const
 				if (operators_[i - 1] == TokenType::And && lastExitStatus != 0)
 				{
 					// Skip this command if the previous one failed for AND
-					std::cerr << "Debug: Skipping command due to AND operator and previous command failure" << std::endl;
+					// std::cerr << "Debug: Skipping command due to AND operator and previous command failure" << std::endl;
 					continue;
 				}
 				else if (operators_[i - 1] == TokenType::Or && lastExitStatus == 0)
 				{
 					// Skip this command if the previous one succeeded for OR
-					std::cerr << "Debug: Skipping command due to OR operator and previous command success" << std::endl;
+					// std::cerr << "Debug: Skipping command due to OR operator and previous command success" << std::endl;
 					continue;
 				}
 			}

@@ -139,7 +139,7 @@ mh::task<bool> Command::executeAsync(Source inputSource, Sink outputSink) const
 		// Create platform-agnostic FileSource
 		inputSource = FileSource::create(inputFile);
 		// For now, rely on process implementation to handle this
-		std::cerr << "Warning: File input redirection is platform-specific\n";
+		// std::cerr << "Warning: File input redirection is platform-specific\n";
 	}
 
 	if (!outputFile.empty())
@@ -147,7 +147,7 @@ mh::task<bool> Command::executeAsync(Source inputSource, Sink outputSink) const
 		// Create platform-agnostic FileSink
 		outputSink = FileSink::create(outputFile, appendOutput);
 		// For now, rely on process implementation to handle this
-		std::cerr << "Warning: File output redirection is platform-specific\n";
+		// std::cerr << "Warning: File output redirection is platform-specific\n";
 	}
 
 	if (!errorFile.empty())
@@ -155,7 +155,7 @@ mh::task<bool> Command::executeAsync(Source inputSource, Sink outputSink) const
 		// Create platform-agnostic FileSink
 		outputSink = FileSink::create(outputFile, appendOutput);
 		// For now, rely on process implementation to handle this
-		std::cerr << "Warning: File error redirection is platform-specific\n";
+		// std::cerr << "Warning: File error redirection is platform-specific\n";
 	}
 
 	// Create the process with proper I/O redirection
@@ -179,35 +179,155 @@ mh::task<bool> Command::executeAsync(Source inputSource, Sink outputSink) const
 	co_return exitCode == 0; // Convert exit status to bool
 }
 
-// Helper function to split a string into tokens respecting quotes and escapes using wordexp
+// Helper function to expand tilde in a token
+static std::string expandTilde(const std::string& token) {
+	if (!token.empty() && token[0] == '~') {
+		const char* home = getenv("HOME");
+		if (home) {
+			if (token.length() == 1) {
+				return home;
+			} else if (token[1] == '/') {
+				return std::string(home) + token.substr(1);
+			}
+		}
+	}
+	return token;
+}
+
+// Helper function to expand environment variables in a token
+static std::string expandEnvironmentVariables(const std::string& token) {
+	std::string result = token;
+	size_t pos = 0;
+	
+	// Handle variable expansion (skip escaped dollars marked with \x01)
+	while ((pos = result.find('$', pos)) != std::string::npos) {
+		// Check if this is an escaped dollar (marked with \x01)
+		if (pos > 0 && result[pos - 1] == '\x01') {
+			pos++; // Skip this escaped dollar
+			continue;
+		}
+		
+		if (pos + 1 < result.length()) {
+			size_t start = pos + 1;
+			size_t end = start;
+			
+			// Find the end of the variable name
+			while (end < result.length() && 
+				   (std::isalnum(result[end]) || result[end] == '_')) {
+				end++;
+			}
+			
+			if (end > start) {
+				std::string varName = result.substr(start, end - start);
+				const char* varValue = getenv(varName.c_str());
+				if (varValue) {
+					result.replace(pos, end - pos, varValue);
+					pos += std::strlen(varValue);
+				} else {
+					result.replace(pos, end - pos, "");
+				}
+			} else {
+				pos++;
+			}
+		} else {
+			pos++;
+		}
+	}
+	
+	// Clean up escape markers
+	pos = 0;
+	while ((pos = result.find("\x01$", pos)) != std::string::npos) {
+		result.replace(pos, 2, "$");  // Replace \x01$ with literal $
+		pos += 1;
+	}
+	
+	return result;
+}
+
+// Structure to track token context during parsing
+struct TokenContext {
+	std::string content;
+	bool was_single_quoted = false;
+};
+
+// Helper function to tokenize input respecting quotes
+static std::vector<TokenContext> tokenizeInput(const std::string& input) {
+	std::vector<TokenContext> tokens;
+	TokenContext current_token;
+	bool in_single_quotes = false;
+	bool in_double_quotes = false;
+	
+	for (size_t i = 0; i < input.length(); ++i) {
+		char c = input[i];
+		
+		if (c == '\\' && !in_single_quotes && i + 1 < input.length()) {
+			// Handle escape sequences
+			char next_char = input[i + 1];
+			if (next_char == '\\') {
+				// \\ becomes \
+				current_token.content += '\\';
+				i++; // Skip the next character
+			} else if (next_char == '$') {
+				// \$ becomes literal $ (use special marker to prevent expansion)
+				current_token.content += "\x01$";  // Use special marker
+				i++; // Skip the next character
+			} else if (next_char == ' ') {
+				// Escaped space
+				current_token.content += ' ';
+				i++; // Skip the next character
+			} else {
+				// Other escapes - just add the escaped character
+				current_token.content += next_char;
+				i++; // Skip the next character
+			}
+		}
+		else if (c == '\'' && !in_double_quotes) {
+			if (!in_single_quotes) {
+				current_token.was_single_quoted = true;
+			}
+			in_single_quotes = !in_single_quotes;
+		}
+		else if (c == '"' && !in_single_quotes) {
+			in_double_quotes = !in_double_quotes;
+		}
+		else if (std::isspace(c) && !in_single_quotes && !in_double_quotes) {
+			if (!current_token.content.empty()) {
+				tokens.push_back(current_token);
+				current_token = TokenContext{};
+			}
+		}
+		else {
+			current_token.content += c;
+		}
+	}
+	
+	// Add the last token if any
+	if (!current_token.content.empty()) {
+		tokens.push_back(current_token);
+	}
+	
+	return tokens;
+}
+
+// Main function to split a string into tokens with bash-like expansion
 std::vector<std::string> bashSplitString(const std::string &input)
 {
-	std::vector<std::string> tokens;
-	wordexp_t p;
-
-	// Use wordexp to perform bash-like word expansion
-	int status = wordexp(input.c_str(), &p, 0);
-	if (status == 0)
-	{
-		// Copy the expanded words to our vector
-		for (size_t i = 0; i < p.we_wordc; i++)
-		{
-			tokens.push_back(p.we_wordv[i]);
-		}
-		wordfree(&p);
-	}
-	else
-	{
-		// If wordexp failed, fallback to simple splitting
-		std::istringstream iss(input);
-		std::string token;
-		while (iss >> token)
-		{
-			tokens.push_back(token);
+	auto token_contexts = tokenizeInput(input);
+	std::vector<std::string> result;
+	
+	for (const auto& ctx : token_contexts) {
+		if (ctx.was_single_quoted) {
+			// Single-quoted tokens: no expansions
+			result.push_back(ctx.content);
+		} else {
+			// Double-quoted or unquoted tokens: perform expansions
+			std::string expanded = expandTilde(ctx.content);
+			expanded = expandEnvironmentVariables(expanded);
+			result.push_back(expanded);
 		}
 	}
-
-	return tokens;
+	
+	return result;
 }
 
 // Helper function to identify token type

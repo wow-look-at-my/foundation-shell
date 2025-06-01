@@ -10,6 +10,7 @@
 #include <sstream>
 #include <chrono>
 #include <csignal>
+#include <unistd.h>
 
 // Constructor with RAII initialization
 Shell::Shell()
@@ -40,20 +41,32 @@ mh::task<int> Shell::runAsync()
 	std::string input;
 	int lastExitStatus = 0;
 
-	// Display welcome message
-	std::print(stderr, "{}Welcome to Foundation Shell{}\n", Colors::COLOR_BOLD, Colors::COLOR_RESET);
+	// Check if running interactively (when stdin is a terminal)
+	bool isInteractive = isatty(STDIN_FILENO);
+	
+	// Display welcome message only in interactive mode
+	if (isInteractive)
+	{
+		std::print(stderr, "{}Welcome to Foundation Shell{}\n", Colors::COLOR_BOLD, Colors::COLOR_RESET);
+	}
 
 	while (true)
 	{
-		// Simple prompt with last exit status color
-		std::string prompt_color = lastExitStatus == 0 ? std::string{Colors::COLOR_GREEN} : std::string{Colors::COLOR_RED};
-		std::print(stderr, "{}${} ", prompt_color, Colors::COLOR_RESET);
+		// Simple prompt with last exit status color - only in interactive mode
+		if (isInteractive)
+		{
+			std::string prompt_color = lastExitStatus == 0 ? std::string{Colors::COLOR_GREEN} : std::string{Colors::COLOR_RED};
+			std::print(stderr, "{}${} ", prompt_color, Colors::COLOR_RESET);
+		}
 
 		// Get user input
 		if (!std::getline(std::cin, input))
 		{
-			// Handle EOF (Ctrl+D)
-			std::print(stderr, "\nExiting shell\n");
+			// Handle EOF (Ctrl+D) - only show message in interactive mode
+			if (isInteractive)
+			{
+				std::print(stderr, "\nExiting shell\n");
+			}
 			break;
 		}
 
@@ -67,6 +80,12 @@ mh::task<int> Shell::runAsync()
 		{
 			// Split the input into tokens using bash-like expansion
 			std::vector<std::string> tokens = bashSplitString(input);
+
+			// Skip if no tokens were generated (e.g., only whitespace)
+			if (tokens.empty())
+			{
+				continue;
+			}
 
 			// Parse the command with potential redirections, pipes, and command chains
 			CommandChain commandChain(tokens);
