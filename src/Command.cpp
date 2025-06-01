@@ -14,6 +14,8 @@
 #include <thread>
 #include <chrono>
 #include <mh/concurrency/dispatcher.hpp>
+#include <mh/io/source.hpp>
+#include <mh/io/sink.hpp>
 #include "io/FileSource.hpp"
 #include "io/FileSink.hpp"
 #include "Main.hpp"
@@ -145,7 +147,7 @@ static bool isEnvironmentAssignment(const std::string &token)
 // now handles all process creation and management.
 
 // Function to execute a command asynchronously
-mh::task<bool> Command::executeAsync(Source inputSource, Sink outputSink) const
+mh::task<bool> Command::executeAsync(mh::io::source_ptr inputSource, mh::io::sink_ptr outputSink) const
 {
 	if (args.empty())
 	{

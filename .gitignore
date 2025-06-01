@@ -6,6 +6,7 @@
 .idea/
 *.swp
 *.swo
+.cache/
 
 # Compiled Object files
 *.o

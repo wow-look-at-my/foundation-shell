@@ -1,5 +1,8 @@
 cmake_minimum_required(VERSION 3.12)
 
+# Enable compile_commands.json generation for all projects
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
 # Set compiler to Homebrew Clang for macOS
 if(APPLE)
   set(CMAKE_C_COMPILER "/opt/homebrew/bin/clang")
