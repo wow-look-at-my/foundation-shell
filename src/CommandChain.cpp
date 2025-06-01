@@ -6,6 +6,9 @@
 #include <future>
 #include <iostream>
 #include <mh/concurrency/dispatcher.hpp>
+#include <mh/io/pipe.hpp>
+#include <mh/io/sink.hpp>
+#include <mh/io/source.hpp>
 #include <stdexcept>
 #include <thread>
 #include <vector>
@@ -13,7 +16,6 @@
 #include "Command.hpp"
 #include "LastCppInclude.hpp"
 #include "Token.hpp"
-#include "io/IPipe.hpp" // For IPipe
 
 // Constructor that parses tokens into a command chain
 CommandChain::CommandChain(const std::vector<std::string>& tokens)
@@ -356,10 +358,10 @@ mh::task<int> CommandChain::executeAsync() const
 			else
 			{
 				// Create pipes between commands
-				std::vector<std::shared_ptr<IPipe>> pipes;
+				std::vector<mh::io::pipe_ptr> pipes;
 				for (size_t k = 0; k < pipelineCommands.size() - 1; ++k)
 				{
-					pipes.emplace_back(IPipe::create());
+					pipes.emplace_back(mh::io::pipe::create());
 				}
 
 				// Start all commands concurrently
@@ -372,17 +374,17 @@ mh::task<int> CommandChain::executeAsync() const
 					{
 						// Middle command: input from previous pipe, output to next pipe
 						tasks.emplace_back(
-						    pipelineCommands[k].executeAsync(pipes[k - 1]->getSource(), pipes[k]->getSink()));
+						    pipelineCommands[k].executeAsync(pipes[k - 1]->out, pipes[k]->in));
 					}
 					else if (k > 0)
 					{
 						// Last command: input from previous pipe
-						tasks.emplace_back(pipelineCommands[k].executeAsync(pipes[k - 1]->getSource()));
+						tasks.emplace_back(pipelineCommands[k].executeAsync(pipes[k - 1]->out));
 					}
 					else
 					{
 						// First command: output to next pipe
-						tasks.emplace_back(pipelineCommands[k].executeAsync(nullptr, pipes[k]->getSink()));
+						tasks.emplace_back(pipelineCommands[k].executeAsync(nullptr, pipes[k]->in));
 					}
 				}
 

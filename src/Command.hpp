@@ -2,14 +2,14 @@
 
 #include <chrono>
 #include <memory>
+#include <mh/io/sink.hpp>
+#include <mh/io/source.hpp>
 #include <mh/process/process.hpp> // Include mh::process
 #include <string>
 #include <vector>
 
 #include "Config.hpp"            // Include ShellConfig
 #include "TokenType.hpp"         // Include TokenType enum
-#include "io/ISink.hpp"          // Include ISink interface
-#include "io/ISource.hpp"        // Include ISource interface
 #include "mh/coroutine/task.hpp" // Include the Task type
 
 // Async sleep function using the dispatcher
@@ -35,13 +35,8 @@ public:
 	bool appendOutput = false;
 	bool appendError = false;
 
-	// I/O interfaces
-	Sink m_stdin;
-	Source m_stdout;
-	Source m_stderr;
-
 	// Execute the command with optional I/O redirection (async) - stateless version
-	mh::task<bool> executeAsync(Source inputSource = nullptr, Sink outputSink = nullptr) const;
+	mh::task<bool> executeAsync(mh::io::source_ptr inputSource = nullptr, mh::io::sink_ptr outputSink = nullptr) const;
 
 private:
 	// Helper method to handle built-in commands - stateless version

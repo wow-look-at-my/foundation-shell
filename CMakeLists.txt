@@ -86,9 +86,6 @@ add_subdirectory(extern/mh_stuff)
 # Add core library (shared between main and platform implementations)
 add_subdirectory(src/core)
 
-# Add platform implementation library
-add_subdirectory(platform_impl)
-
 # Add JSON library (header-only)
 CPMAddPackage(
   NAME nlohmann_json
@@ -113,7 +110,7 @@ add_library(foundation_shell_lib ${SOURCES})
 target_compile_features(foundation_shell_lib PUBLIC cxx_std_23)
 
 # Link against dependencies
-target_link_libraries(foundation_shell_lib PUBLIC core mh-stuff platform_impl nlohmann_json)
+target_link_libraries(foundation_shell_lib PUBLIC core mh-stuff nlohmann_json)
 
 # Set include directories for library
 target_include_directories(foundation_shell_lib PUBLIC src)
