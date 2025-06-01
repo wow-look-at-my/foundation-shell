@@ -15,10 +15,10 @@ struct ShellOutput
 };
 
 // Helper function to execute a command in the shell and get output
-std::string runShellCommand(const std::string &command);
+std::string runShellCommand(const std::string &command, bool use_bash = false);
 
 // Helper function to execute a command and get separate stdout/stderr
-ShellOutput runShellCommandSeparate(const std::string &command);
+ShellOutput runShellCommandSeparate(const std::string &command, bool use_bash = false);
 
 // Helper function to extract the actual command output from the shell output
 // (stripping prompts and commands)

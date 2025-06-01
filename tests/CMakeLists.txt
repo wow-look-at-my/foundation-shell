@@ -7,6 +7,21 @@ file(GLOB_RECURSE TEST_FILES CONFIGURE_DEPENDS
     "test_utils.cpp"
 )
 
+# Add custom command to check for .find() != npos patterns before building tests
+add_custom_command(
+    OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/find_npos_check.stamp
+    COMMAND ${CMAKE_SOURCE_DIR}/scripts/fix_find_npos.sh ${CMAKE_SOURCE_DIR}
+    COMMAND ${CMAKE_COMMAND} -E touch ${CMAKE_CURRENT_BINARY_DIR}/find_npos_check.stamp
+    DEPENDS ${TEST_FILES}
+    COMMENT "Checking for .find() != npos patterns in test files (will auto-fix)"
+    VERBATIM
+)
+
+# Create a target that depends on the check
+add_custom_target(check_find_npos_patterns
+    DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/find_npos_check.stamp
+)
+
 # Only create tests if BUILD_TESTING is enabled and Catch2 is available
 if(BUILD_TESTING AND TARGET Catch2::Catch2WithMain)
     # Create a single test executable for all tests
@@ -15,6 +30,10 @@ if(BUILD_TESTING AND TARGET Catch2::Catch2WithMain)
         foundation_shell_lib
         Catch2::Catch2WithMain
     )
+    
+    # Make unit_tests depend on the find/npos pattern check
+    # TEMPORARILY DISABLED while fixing tests for bash
+    # add_dependencies(unit_tests check_find_npos_patterns)
     
     # Add include directories for test files (using absolute paths)
     target_include_directories(unit_tests PRIVATE

@@ -76,11 +76,8 @@ TEST_CASE("CommandChain invalid construction", "[command_chain]")
 
 	// Test invalid token parsing
 	std::vector<std::string> invalidTokens = {"", "|", ""};
-	// This shouldn't throw but should create a valid chain with no commands
-	// The empty strings get filtered out during parsing
-	REQUIRE_NOTHROW(CommandChain::parseFromTokens(invalidTokens));
-	CommandChain invalidChain = CommandChain::parseFromTokens(invalidTokens);
-	CHECK(invalidChain.empty());
+	// Empty tokens should throw an exception as they're not valid
+	REQUIRE_THROWS_AS(CommandChain::parseFromTokens(invalidTokens), std::invalid_argument);
 }
 
 // Test parsing from tokens

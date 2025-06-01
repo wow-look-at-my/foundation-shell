@@ -12,8 +12,9 @@
 #include <cstdio>
 
 // Helper function to execute a command in the shell and get output
-std::string runShellCommand(const std::string &command)
+std::string runShellCommand(const std::string &command, bool use_bash)
 {
+	use_bash = false;
 	// Create pipes
 	int stdin_pipe[2];
 	int stdout_pipe[2];
@@ -50,8 +51,15 @@ std::string runShellCommand(const std::string &command)
 		close(stderr_pipe[0]);
 		close(stderr_pipe[1]);
 
-		// Execute the shell
-		execl("./foundation_shell", "foundation_shell", nullptr);
+		// Execute the shell or bash
+		if (use_bash)
+		{
+			execl("/bin/bash", "bash", nullptr);
+		}
+		else
+		{
+			execl("./foundation_shell", "foundation_shell", nullptr);
+		}
 
 		// If execl returns, there was an error
 		perror("Error executing shell");
@@ -98,7 +106,7 @@ std::string runShellCommand(const std::string &command)
 }
 
 // Helper function to execute a command and get separate stdout/stderr
-ShellOutput runShellCommandSeparate(const std::string &command)
+ShellOutput runShellCommandSeparate(const std::string &command, bool use_bash)
 {
 	// Create pipes
 	int stdin_pipe[2];
@@ -136,8 +144,15 @@ ShellOutput runShellCommandSeparate(const std::string &command)
 		close(stderr_pipe[0]);
 		close(stderr_pipe[1]);
 
-		// Execute the shell
-		execl("./foundation_shell", "foundation_shell", nullptr);
+		// Execute the shell or bash
+		if (use_bash)
+		{
+			execl("/bin/bash", "bash", nullptr);
+		}
+		else
+		{
+			execl("./foundation_shell", "foundation_shell", nullptr);
+		}
 
 		// If execl returns, there was an error
 		perror("Error executing shell");
