@@ -1,5 +1,6 @@
 #include <catch2/catch_all.hpp>
 #include "test_utils.hpp"
+#include "Config.hpp"
 #include <iostream>
 #include <fstream>
 #include <string>
@@ -61,7 +62,7 @@ TEST_CASE("Handles escaped characters", "[shell]")
 TEST_CASE("Handles invalid command", "[shell]")
 {
 	std::string output = runShellCommand("nonexistentcommand123");
-	CHECK(output == "Command not found");
+	CHECK(output == ErrorMessages::COMMAND_NOT_FOUND);
 }
 
 // Tests for built-in commands
@@ -172,7 +173,7 @@ TEST_CASE("Exit status propagation", "[shell][exitstatus]")
 
 	// Test non-existent command returns 127
 	output = runShellCommand("command_that_definitely_does_not_exist_12345");
-	CHECK(output == "Command not found");
+	CHECK(output == ErrorMessages::COMMAND_NOT_FOUND);
 }
 
 // Test Case: Command Not Found scenarios (from test plan)
@@ -180,15 +181,15 @@ TEST_CASE("Command not found scenarios", "[shell][errors]")
 {
 	// Test completely non-existent command
 	std::string output = runShellCommand("nonexistent_command");
-	CHECK(output == "Command not found");
+	CHECK(output == ErrorMessages::COMMAND_NOT_FOUND);
 
 	// Test misspelled command
 	output = runShellCommand("ech hello"); // misspelled "echo"
-	CHECK(output == "Command not found");
+	CHECK(output == ErrorMessages::COMMAND_NOT_FOUND);
 
 	// Test case sensitivity
 	output = runShellCommand("Echo hello"); // wrong case
-	CHECK(output == "Command not found");
+	CHECK(output == ErrorMessages::COMMAND_NOT_FOUND);
 }
 
 // Test Case: Built-in pwd command (from test plan)
@@ -218,9 +219,7 @@ TEST_CASE("Built-in cd command", "[shell][builtins]")
 
 	// Test cd to non-existent directory
 	output = runShellCommand("cd /nonexistent_directory_12345");
-	CHECK(output == "No such file or directory" ||
-		  output == "cannot access" ||
-		  output == "not found");
+	CHECK(output == ErrorMessages::FS_ENTRY_NOT_FOUND);
 }
 
 // Test Case: Quote types and escaping (from test plan)
@@ -277,8 +276,7 @@ TEST_CASE("Path resolution", "[shell][path]")
 
 	// Test current directory execution (assuming echo exists there, which it won't)
 	output = runShellCommand("./nonexistent_in_current_dir");
-	CHECK(output == "Command not found" ||
-		  output == "No such file");
+	CHECK(output == ErrorMessages::COMMAND_NOT_FOUND);
 }
 
 // Test Case: File existence tests (from test plan)

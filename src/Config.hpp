@@ -21,3 +21,10 @@ namespace Constants
 {
 	inline constexpr int MAX_HISTORY_LINES = 1000;
 }
+
+// Error message constants
+namespace ErrorMessages
+{
+	inline constexpr std::string_view COMMAND_NOT_FOUND = "Command not found";
+	inline constexpr std::string_view FS_ENTRY_NOT_FOUND = "No such file or directory";
+}

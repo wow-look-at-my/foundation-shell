@@ -19,15 +19,12 @@ Shell::Shell()
 		signal(SIGINT, [](int)
 			   {
 				   // Just print a newline and return to the prompt
-				   std::print("\n"); });
+				   std::print(stderr, "\n"); });
 
 		// Basic SIGCHLD handler for background processes
 		signal(SIGCHLD, SIG_IGN);
 
-		signal(SIGTSTP, [](int)
-			   {
- 					// Handle Ctrl+Z (suspend process)
- 					std::print("\n"); });
+		// No SIGTSTP handler needed - we don't support background processes
 	}
 }
 

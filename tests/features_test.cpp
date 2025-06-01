@@ -88,10 +88,12 @@ TEST_CASE("Input redirection works", "[features][redirection]")
 	close(fd);
 
 	// Run command with input redirection
-	std::string output = runShellCommand(std::string("cat < ") + tempPath);
+	std::string command = std::string("cat < ") + tempPath;
+	std::string output = runShellCommand(command);
+	std::string extractedOutput = extractCommandOutput(output, command);
 
 	// Verify input was correctly redirected
-	CHECK(output == testContent);
+	CHECK(extractedOutput == testContent);
 
 	// Clean up
 	fs::remove(tempPath);
@@ -132,10 +134,12 @@ TEST_CASE("Append redirection works", "[features][redirection]")
 TEST_CASE("Simple pipe works", "[features][piping]")
 {
 	// Test a simple pipe
-	std::string output = runShellCommand("echo pipe_test | grep pipe");
+	std::string command = "echo pipe_test | grep pipe";
+	std::string output = runShellCommand(command);
+	std::string extractedOutput = extractCommandOutput(output, command);
 
 	// Verify pipe works correctly
-	CHECK(output == "pipe_test");
+	CHECK(extractedOutput == "pipe_test");
 }
 
 // Test for command chaining with &&
