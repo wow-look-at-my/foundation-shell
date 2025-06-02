@@ -1,206 +1,109 @@
 #include "TestUtils.hpp"
 
-#include <fcntl.h>
-#include <sys/wait.h>
-#include <unistd.h>
-
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <fstream>
 #include <iostream>
 #include <sstream>
+#include <stdexcept>
 #include <string>
 #include <vector>
 
+#include <catch2/catch_test_macros.hpp>
+#include <mh/concurrency/dispatcher.hpp>
+#include <mh/io/pipe.hpp>
+#include <mh/memory/buffer.hpp>
+#include <mh/process/process.hpp>
+
 #include "LastCppInclude.hpp"
 
-// Helper function to execute a command in the shell and get output
-std::string runShellCommand(const std::string& command, bool use_bash)
+// Constructor implementation for ShellOutput
+ShellOutput::ShellOutput(std::string combined, std::string out, std::string err)
+    : combined_output(std::move(combined)), stdout_output(std::move(out)), stderr_output(std::move(err))
 {
-	use_bash = false;
-	// Create pipes
-	int stdin_pipe[2];
-	int stdout_pipe[2];
-	int stderr_pipe[2];
-
-	if (pipe(stdin_pipe) == -1 || pipe(stdout_pipe) == -1 || pipe(stderr_pipe) == -1)
-	{
-		return "Error creating pipes";
-	}
-
-	// Fork a child process
-	pid_t pid = fork();
-
-	if (pid == -1)
-	{
-		return "Error forking process";
-	}
-	else if (pid == 0)
-	{
-		// Child process
-
-		// Redirect stdin to read from stdin_pipe
-		dup2(stdin_pipe[0], STDIN_FILENO);
-		close(stdin_pipe[0]);
-		close(stdin_pipe[1]);
-
-		// Redirect stdout to write to stdout_pipe
-		dup2(stdout_pipe[1], STDOUT_FILENO);
-		close(stdout_pipe[0]);
-		close(stdout_pipe[1]);
-
-		// Redirect stderr to write to stderr_pipe
-		dup2(stderr_pipe[1], STDERR_FILENO);
-		close(stderr_pipe[0]);
-		close(stderr_pipe[1]);
-
-		// Execute the shell or bash
-		if (use_bash)
-		{
-			execl("/bin/bash", "bash", nullptr);
-		}
-		else
-		{
-			execl("./foundation_shell", "foundation_shell", nullptr);
-		}
-
-		// If execl returns, there was an error
-		perror("Error executing shell");
-		exit(1);
-	}
-
-	// Parent process
-
-	// Close unused pipe ends
-	close(stdin_pipe[0]);
-	close(stdout_pipe[1]);
-	close(stderr_pipe[1]);
-
-	// Write command to the shell's stdin
-	std::string full_command = command + "\nexit\n";
-	write(stdin_pipe[1], full_command.c_str(), full_command.size());
-	close(stdin_pipe[1]);
-
-	// Read output from the shell's stdout
-	char buffer[4096];
-	std::string result;
-	ssize_t bytes;
-
-	while ((bytes = read(stdout_pipe[0], buffer, sizeof(buffer) - 1)) > 0)
-	{
-		buffer[bytes] = '\0';
-		result += buffer;
-	}
-	close(stdout_pipe[0]);
-
-	// Read output from the shell's stderr and append to result
-	while ((bytes = read(stderr_pipe[0], buffer, sizeof(buffer) - 1)) > 0)
-	{
-		buffer[bytes] = '\0';
-		result += buffer;
-	}
-	close(stderr_pipe[0]);
-
-	// Wait for the child to finish
-	int status;
-	waitpid(pid, &status, 0);
-
-	return result;
+	CHECK(combined.empty() == out.empty());
+	CHECK(combined.empty() == err.empty());
 }
 
-// Helper function to execute a command and get separate stdout/stderr
-ShellOutput runShellCommandSeparate(const std::string& command, bool use_bash)
+// Coroutine to handle async shell command execution
+mh::task<ShellOutput> runShellCommandAsync(const std::string& command, bool use_bash)
 {
-	// Create pipes
-	int stdin_pipe[2];
-	int stdout_pipe[2];
-	int stderr_pipe[2];
+	use_bash = false;
 
-	if (pipe(stdin_pipe) == -1 || pipe(stdout_pipe) == -1 || pipe(stderr_pipe) == -1)
+	// Create pipes for communication
+	auto stdin_pipe = mh::io::pipe::create();
+	auto stdout_pipe = mh::io::pipe::create();
+	auto stderr_pipe = mh::io::pipe::create();
+
+	// Create process
+	std::string shell_path = use_bash ? "/bin/bash" : "./foundation_shell";
+	mh::process proc(shell_path, {}, stdin_pipe->out, stdout_pipe->in, stderr_pipe->in);
+
+	// Start the process
+	if (!proc.start())
 	{
-		return {"Error creating pipes", "Error creating pipes"};
+		throw std::runtime_error("Error starting shell process");
 	}
 
-	// Fork a child process
-	pid_t pid = fork();
-
-	if (pid == -1)
-	{
-		return {"Error forking process", "Error forking process"};
-	}
-	else if (pid == 0)
-	{
-		// Child process
-
-		// Redirect stdin to read from stdin_pipe
-		dup2(stdin_pipe[0], STDIN_FILENO);
-		close(stdin_pipe[0]);
-		close(stdin_pipe[1]);
-
-		// Redirect stdout to write to stdout_pipe
-		dup2(stdout_pipe[1], STDOUT_FILENO);
-		close(stdout_pipe[0]);
-		close(stdout_pipe[1]);
-
-		// Redirect stderr to write to stderr_pipe
-		dup2(stderr_pipe[1], STDERR_FILENO);
-		close(stderr_pipe[0]);
-		close(stderr_pipe[1]);
-
-		// Execute the shell or bash
-		if (use_bash)
-		{
-			execl("/bin/bash", "bash", nullptr);
-		}
-		else
-		{
-			execl("./foundation_shell", "foundation_shell", nullptr);
-		}
-
-		// If execl returns, there was an error
-		perror("Error executing shell");
-		exit(1);
-	}
-
-	// Parent process
-
-	// Close unused pipe ends
-	close(stdin_pipe[0]);
-	close(stdout_pipe[1]);
-	close(stderr_pipe[1]);
-
-	// Write command to the shell's stdin
+	// Write command to stdin
 	std::string full_command = command + "\nexit\n";
-	write(stdin_pipe[1], full_command.c_str(), full_command.size());
-	close(stdin_pipe[1]);
+	mh::buffer cmd_buffer(full_command.size());
+	std::memcpy(cmd_buffer.data(), full_command.c_str(), full_command.size());
 
-	// Read output from the shell's stdout
-	char buffer[4096];
+	// Write command and close stdin
+	co_await stdin_pipe->in->write_async(cmd_buffer.data(), cmd_buffer.size());
+	stdin_pipe->in->close();
+
+	// Read from stdout and stderr
 	std::string stdout_result;
 	std::string stderr_result;
-	ssize_t bytes;
+	mh::buffer read_buffer(4096);
 
-	while ((bytes = read(stdout_pipe[0], buffer, sizeof(buffer) - 1)) > 0)
+	// Read stdout
+	while (stdout_pipe->out->is_open())
 	{
-		buffer[bytes] = '\0';
-		stdout_result += buffer;
-	}
-	close(stdout_pipe[0]);
+		size_t bytes_read = co_await stdout_pipe->out->read_async(read_buffer.data(), read_buffer.size());
+		if (bytes_read == 0)
+			break;
 
-	// Read output from the shell's stderr separately
-	while ((bytes = read(stderr_pipe[0], buffer, sizeof(buffer) - 1)) > 0)
+		stdout_result.append(reinterpret_cast<const char*>(read_buffer.data()), bytes_read);
+	}
+
+	// Read stderr
+	while (stderr_pipe->out->is_open())
 	{
-		buffer[bytes] = '\0';
-		stderr_result += buffer;
+		size_t bytes_read = co_await stderr_pipe->out->read_async(read_buffer.data(), read_buffer.size());
+		if (bytes_read == 0)
+			break;
+
+		stderr_result.append(reinterpret_cast<const char*>(read_buffer.data()), bytes_read);
 	}
-	close(stderr_pipe[0]);
 
-	// Wait for the child to finish
-	int status;
-	waitpid(pid, &status, 0);
+	// Wait for process to complete
+	co_await proc.wait_async();
 
-	return {stdout_result, stderr_result};
+	// Combine stdout and stderr for the combined output
+	std::string combined_result = stdout_result + stderr_result;
+
+	co_return ShellOutput{combined_result, stdout_result, stderr_result};
+}
+
+// Helper function to execute a command in the shell and get output
+ShellOutput runShellCommand(const std::string& command, bool use_bash)
+{
+	use_bash = false;
+
+	// Get the dispatcher for this thread - should always exist
+	auto& disp = mh::dispatcher::get();
+
+	// Start the async operation
+	auto task = runShellCommandAsync(command, use_bash);
+
+	// Run the dispatcher until the task completes
+	disp.run_while([&]() { return !task.is_ready(); });
+
+	return task.get();
 }
 
 // Helper function to extract the actual command output from the shell output

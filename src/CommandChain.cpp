@@ -5,16 +5,18 @@
 #include <format>
 #include <future>
 #include <iostream>
-#include <mh/concurrency/dispatcher.hpp>
-#include <mh/io/pipe.hpp>
-#include <mh/io/sink.hpp>
-#include <mh/io/source.hpp>
 #include <stdexcept>
 #include <thread>
 #include <vector>
 
+#include <mh/concurrency/dispatcher.hpp>
+#include <mh/io/pipe.hpp>
+#include <mh/io/sink.hpp>
+#include <mh/io/source.hpp>
+
 #include "Command.hpp"
 #include "Token.hpp"
+
 #include "LastCppInclude.hpp"
 
 // Constructor that parses tokens into a command chain
@@ -373,8 +375,7 @@ mh::task<int> CommandChain::executeAsync() const
 					if (k > 0 && k < pipelineCommands.size() - 1)
 					{
 						// Middle command: input from previous pipe, output to next pipe
-						tasks.emplace_back(
-						    pipelineCommands[k].executeAsync(pipes[k - 1]->out, pipes[k]->in));
+						tasks.emplace_back(pipelineCommands[k].executeAsync(pipes[k - 1]->out, pipes[k]->in));
 					}
 					else if (k > 0)
 					{

@@ -16,15 +16,20 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "Clang" OR CMAKE_CXX_COMPILER_ID MATCHES "GNU")
     add_compile_options(-Werror -fdiagnostics-color=always)
 endif()
 
-# Ensure debug symbols are generated for Debug builds
+# ALWAYS generate maximum debug symbols because CMake leadership is embarrassingly wrong about this
+if(CMAKE_CXX_COMPILER_ID MATCHES "Clang" OR CMAKE_CXX_COMPILER_ID MATCHES "GNU")
+    add_compile_options(-g3)
+endif()
+
+# For Debug builds specifically, also disable optimization
 if(CMAKE_BUILD_TYPE STREQUAL "Debug")
-    add_compile_options(-g -O0)
+    add_compile_options(-O0)
 endif()
 
 # Fix shebang lines in C# scripts first
 file(GLOB CS_SCRIPTS "${CMAKE_SOURCE_DIR}/scripts/*.cs")
 add_custom_target(fix_shebangs ALL
-  COMMAND pwsh ${CMAKE_SOURCE_DIR}/scripts/fix_shebangs.ps1
+  COMMAND ${CMAKE_SOURCE_DIR}/scripts/fix_shebangs.ps1
   WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
   COMMENT "Fixing shebang lines in C# checker scripts..."
   DEPENDS ${CS_SCRIPTS}
@@ -133,7 +138,7 @@ add_library(foundation_shell_lib ${SOURCES})
 target_compile_features(foundation_shell_lib PUBLIC cxx_std_23)
 
 # Link against dependencies
-target_link_libraries(foundation_shell_lib PUBLIC core mh-stuff nlohmann_json)
+target_link_libraries(foundation_shell_lib PUBLIC mh-stuff nlohmann_json)
 
 # Set include directories for library
 target_include_directories(foundation_shell_lib PUBLIC src)

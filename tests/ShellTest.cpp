@@ -1,17 +1,18 @@
-#include <unistd.h>
-
-#include <catch2/catch_all.hpp>
-#include <catch2/matchers/catch_matchers_string.hpp>
 #include <cstdlib>
 #include <format>
 #include <sstream>
 #include <string>
 
+#include <unistd.h>
+
+#include <catch2/catch_all.hpp>
+#include <catch2/matchers/catch_matchers_string.hpp>
 #include <mh/io/file.hpp>
 
 #include "Config.hpp"
-#include "LastCppInclude.hpp"
 #include "TestUtils.hpp"
+
+#include "LastCppInclude.hpp"
 
 // Tests for the basic shell functionality
 TEST_CASE("Executes simple command", "[shell]")
@@ -559,7 +560,7 @@ TEST_CASE("Empty arguments handling", "[shell][args][empty]")
 // Tests for stdout/stderr separation
 TEST_CASE("Command output goes to stdout only", "[shell][stdout_stderr]")
 {
-	ShellOutput output = runShellCommandSeparate("echo hello_world");
+	ShellOutput output = runShellCommand("echo hello_world");
 
 	// Command output should be in stdout
 	CHECK(output.stdout_output == "hello_world\n");
@@ -571,7 +572,7 @@ TEST_CASE("Command output goes to stdout only", "[shell][stdout_stderr]")
 
 TEST_CASE("Error messages go to stderr only", "[shell][stdout_stderr]")
 {
-	ShellOutput output = runShellCommandSeparate("nonexistent_command_xyz");
+	ShellOutput output = runShellCommand("nonexistent_command_xyz");
 
 	// Debug: print actual output to see what we get
 	INFO("STDOUT: '" << output.stdout_output << "'");
@@ -589,7 +590,7 @@ TEST_CASE("Error messages go to stderr only", "[shell][stdout_stderr]")
 
 TEST_CASE("Built-in command output goes to stdout", "[shell][stdout_stderr][builtins]")
 {
-	ShellOutput output = runShellCommandSeparate("pwd");
+	ShellOutput output = runShellCommand("pwd");
 
 	// pwd output should be in stdout
 	CHECK(!output.stdout_output.empty());

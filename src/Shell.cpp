@@ -1,7 +1,5 @@
 #include "Shell.hpp"
 
-#include <unistd.h>
-
 #include <chrono>
 #include <csignal>
 #include <cstdio>
@@ -9,12 +7,16 @@
 #include <format>
 #include <iostream>
 #include <memory>
-#include <mh/concurrency/dispatcher.hpp>
 #include <sstream>
 #include <string>
 
+#include <unistd.h>
+
+#include <mh/concurrency/dispatcher.hpp>
+
 #include "Command.hpp"
 #include "CommandChain.hpp"
+
 #include "LastCppInclude.hpp"
 
 

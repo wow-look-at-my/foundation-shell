@@ -1,12 +1,15 @@
-#include <catch2/catch_all.hpp>
+#include "src/CommandChain.hpp"
+
 #include <stdexcept>
 #include <string>
 #include <vector>
 
-#include "LastCppInclude.hpp"
+#include <catch2/catch_all.hpp>
+
 #include "src/Command.hpp"
-#include "src/CommandChain.hpp"
 #include "src/Token.hpp"
+
+#include "LastCppInclude.hpp"
 
 // Test creating a CommandChain with valid commands
 TEST_CASE("CommandChain valid construction", "[command_chain]")

@@ -1,24 +1,26 @@
 #include "Command.hpp"
 
-#include <dirent.h>
-#include <signal.h>
-#include <wordexp.h>
-
 #include <algorithm>
 #include <chrono>
 #include <cstdio>
 #include <cstring>
 #include <filesystem>
-#include <mh/concurrency/dispatcher.hpp>
-#include <mh/io/sink.hpp>
-#include <mh/io/source.hpp>
 #include <ostream>
 #include <regex>
 #include <sstream>
 #include <thread>
 
+#include <dirent.h>
+#include <signal.h>
+#include <wordexp.h>
+
+#include <mh/concurrency/dispatcher.hpp>
+#include <mh/io/sink.hpp>
+#include <mh/io/source.hpp>
+
 #include "EnvManager.hpp"
 #include "Main.hpp"
+
 #include "LastCppInclude.hpp"
 
 // Command implementation

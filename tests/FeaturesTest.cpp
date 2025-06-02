@@ -1,3 +1,9 @@
+#include <cstdio> // For stdout
+#include <cstdlib>
+#include <cstring>
+#include <filesystem>
+#include <string>
+
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <sys/wait.h>
@@ -5,15 +11,11 @@
 
 #include <catch2/catch_all.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
-#include <cstdio> // For stdout
-#include <cstdlib>
-#include <cstring>
-#include <filesystem>
 #include <mh/io/file.hpp>
-#include <string>
+
+#include "TestUtils.hpp"
 
 #include "LastCppInclude.hpp"
-#include "TestUtils.hpp"
 
 namespace fs = std::filesystem;
 
@@ -250,8 +252,9 @@ TEST_CASE("cd fails gracefully with nonexistent directory", "[features][cd][erro
 	std::string command = "cd /this/directory/should/not/exist && echo should_not_run";
 	std::string output = runShellCommand(command);
 
-	// The command chain should fail and 'should_not_run' should not appear in output
-	// For bash, check that it contains an error message and not the success string
+	// The command chain should fail and 'should_not_run' should not appear in
+	// output For bash, check that it contains an error message and not the
+	// success string
 	CHECK_THAT(output, !Catch::Matchers::ContainsSubstring("should_not_run"));
 }
 
@@ -284,8 +287,8 @@ TEST_CASE("Clear works", "[features][builtin_commands]")
 	// First output something
 	std::string output = runShellCommand("echo before_clear\nclear\necho after_clear");
 
-	// Check that the output contains both before and after text plus clear escape sequences
-	// Bash clear outputs ANSI escape sequences
+	// Check that the output contains both before and after text plus clear escape
+	// sequences Bash clear outputs ANSI escape sequences
 	CHECK_THAT(output, Catch::Matchers::ContainsSubstring("before_clear"));
 	CHECK_THAT(output, Catch::Matchers::ContainsSubstring("after_clear"));
 }
@@ -301,14 +304,16 @@ TEST_CASE("Background process works", "[features][process_management]")
 	close(fd);
 	fs::remove(tempPath);
 
-	// Make the background command more direct to avoid shell interpretation issues
+	// Make the background command more direct to avoid shell interpretation
+	// issues
 	std::string command = "touch " + std::string(tempPath) + " &";
 	std::string output = runShellCommand(command + "\nsleep 3");
 
 	// Add more verbose output to help with debugging
 	std::print("Background process test output: {}\n", output);
 
-	// Wait and retry a few times if necessary - file system operations can be async
+	// Wait and retry a few times if necessary - file system operations can be
+	// async
 	bool fileExists = false;
 	for (int i = 0; i < 5 && !fileExists; i++)
 	{
@@ -350,8 +355,8 @@ TEST_CASE("Colored output works", "[features][ui_improvements]")
 	// Note: This test might be implementation-specific
 	CHECK(output == "colored_test\n");
 
-	// This test is a placeholder - actual implementation will depend on how colors are incorporated
-	// We might look for specific ANSI escape sequences
+	// This test is a placeholder - actual implementation will depend on how
+	// colors are incorporated We might look for specific ANSI escape sequences
 }
 
 // Test for improved prompt that shows current directory
