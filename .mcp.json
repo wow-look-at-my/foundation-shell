@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "claude_debugs_for_you": {
+      "type": "sse",
+      "url": "http://localhost:4711/sse"
+    }
+  }
+}

@@ -3,8 +3,8 @@ enable_testing()
 
 # Find all test files
 file(GLOB_RECURSE TEST_FILES CONFIGURE_DEPENDS
-    "*_test.cpp"
-    "test_utils.cpp"
+    "*Test.cpp"
+    "TestUtils.cpp"
 )
 
 # Add custom command to check for .find() != npos patterns before building tests

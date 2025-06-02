@@ -11,7 +11,7 @@
 
 #include "Config.hpp"
 #include "LastCppInclude.hpp"
-#include "test_utils.hpp"
+#include "TestUtils.hpp"
 
 // Tests for the basic shell functionality
 TEST_CASE("Executes simple command", "[shell]")

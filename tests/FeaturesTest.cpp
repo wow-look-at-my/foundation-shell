@@ -13,7 +13,7 @@
 #include <string>
 
 #include "LastCppInclude.hpp"
-#include "test_utils.hpp"
+#include "TestUtils.hpp"
 
 namespace fs = std::filesystem;
 

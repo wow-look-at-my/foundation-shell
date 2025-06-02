@@ -7,6 +7,20 @@ using System.Text.RegularExpressions;
 
 class Program
 {
+    static string ConvertToCamelCase(string filename)
+    {
+        var parts = filename.Split('_');
+        var result = "";
+        foreach (var part in parts)
+        {
+            if (part.Length > 0)
+            {
+                result += char.ToUpper(part[0]) + part.Substring(1);
+            }
+        }
+        return result;
+    }
+
     static int Main(string[] args)
     {
         Console.WriteLine("Checking for proper upper CamelCase (PascalCase) naming convention...");
@@ -45,7 +59,7 @@ class Program
                 issuesCount++;
 
                 // Create the properly cased filename for reference
-                var properName = char.ToUpper(filename[0]) + filename.Substring(1);
+                var properName = ConvertToCamelCase(filename);
                 Console.WriteLine($"  Should be: {Path.GetDirectoryName(file)}/{properName}");
             }
         }

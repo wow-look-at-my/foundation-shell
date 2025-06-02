@@ -70,6 +70,8 @@ IncludeCategories:
     Priority:        2
   - Regex:           '^".*"'
     Priority:        3
+  - Regex:           '^"LastCppInclude\.hpp"'
+    Priority:        4
 
 # Namespaces
 NamespaceIndentation: None

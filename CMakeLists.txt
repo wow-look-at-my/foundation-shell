@@ -16,9 +16,14 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "Clang" OR CMAKE_CXX_COMPILER_ID MATCHES "GNU")
     add_compile_options(-Werror -fdiagnostics-color=always)
 endif()
 
+# Ensure debug symbols are generated for Debug builds
+if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+    add_compile_options(-g -O0)
+endif()
+
 # Fix shebang lines in C# scripts first
 file(GLOB CS_SCRIPTS "${CMAKE_SOURCE_DIR}/scripts/*.cs")
-add_custom_target(fix_shebangs
+add_custom_target(fix_shebangs ALL
   COMMAND pwsh ${CMAKE_SOURCE_DIR}/scripts/fix_shebangs.ps1
   WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
   COMMENT "Fixing shebang lines in C# checker scripts..."
@@ -26,7 +31,7 @@ add_custom_target(fix_shebangs
 )
 
 # Add a custom command to check for incorrect static_assert usage
-add_custom_target(check_static_asserts
+add_custom_target(check_static_asserts ALL
   COMMAND ${CMAKE_SOURCE_DIR}/scripts/fix_static_asserts.cs
   WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
   COMMENT "Checking for incorrect static_assert usage..."
@@ -34,7 +39,7 @@ add_custom_target(check_static_asserts
 )
 
 # Add a custom command to check for proper upper CamelCase (PascalCase) file naming
-add_custom_target(check_casing
+add_custom_target(check_casing ALL
   COMMAND ${CMAKE_SOURCE_DIR}/scripts/check_casing.cs
   WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
   COMMENT "Checking for proper upper CamelCase (PascalCase) file naming..."
@@ -42,7 +47,7 @@ add_custom_target(check_casing
 )
 
 # Add a custom command to check for proper include paths
-add_custom_target(check_includes
+add_custom_target(check_includes ALL
   COMMAND ${CMAKE_SOURCE_DIR}/scripts/check_includes.cs ${CMAKE_SOURCE_DIR}
   WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
   COMMENT "Checking for proper include paths..."
@@ -50,7 +55,7 @@ add_custom_target(check_includes
 )
 
 # Add a custom command to check that LastCppInclude.hpp is the last include in all cpp files
-add_custom_target(check_last_include
+add_custom_target(check_last_include ALL
   COMMAND ${CMAKE_SOURCE_DIR}/scripts/check_last_include.cs
   WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
   COMMENT "Checking that LastCppInclude.hpp is the last include in all cpp files..."
@@ -103,8 +108,6 @@ endif()
 # Add MH stuff submodule
 add_subdirectory(extern/mh_stuff)
 
-# Add core library (shared between main and platform implementations)
-add_subdirectory(src/core)
 
 # Add JSON library (header-only)
 CPMAddPackage(

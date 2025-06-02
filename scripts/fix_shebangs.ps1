@@ -1,4 +1,4 @@
-#!/usr/bin/env pwsh
+#!/usr/bin/env pwsh -NoProfile
 
 # Fix shebang lines in C# scripts that may have been corrupted by VS Code C# extension formatter
 
