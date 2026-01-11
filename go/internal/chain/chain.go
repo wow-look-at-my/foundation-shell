@@ -12,6 +12,18 @@ import (
 	"foundation-shell/pkg/parser"
 )
 
+// syncWriter wraps a writer with a mutex for thread-safe concurrent writes.
+type syncWriter struct {
+	mu sync.Mutex
+	w  io.Writer
+}
+
+func (sw *syncWriter) Write(p []byte) (n int, err error) {
+	sw.mu.Lock()
+	defer sw.mu.Unlock()
+	return sw.w.Write(p)
+}
+
 // Execute runs a command chain, handling pipelines and logical operators.
 // Returns the exit code of the last executed command.
 func Execute(ctx context.Context, chain *parser.Chain) (exitCode int, err error) {
@@ -111,6 +123,9 @@ func executePipelineWithIO(ctx context.Context, commands []*parser.CommandSpec, 
 		pipes[i], pipeWriters[i] = io.Pipe()
 	}
 
+	// Wrap stderr in a synchronized writer for concurrent access
+	safeStderr := &syncWriter{w: defaultStderr}
+
 	var wg sync.WaitGroup
 	exitCodes := make([]int, len(commands))
 	errors := make([]error, len(commands))
@@ -138,7 +153,7 @@ func executePipelineWithIO(ctx context.Context, commands []*parser.CommandSpec, 
 				defer pipeWriters[idx].Close()
 			}
 
-			exitCodes[idx], errors[idx] = command.Execute(ctx, cmd, stdin, stdout, defaultStderr)
+			exitCodes[idx], errors[idx] = command.Execute(ctx, cmd, stdin, stdout, safeStderr)
 		}(i, cmd, stdin, stdout)
 	}
 
