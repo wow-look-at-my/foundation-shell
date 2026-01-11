@@ -1,0 +1,19 @@
+{
+  "$schema": "lib/git-hooks.schema.json",
+  "_comment": "Available library hooks. Copy to git-hooks.json to enable.",
+  "hooks": {
+    "post-merge": {
+      "lib:prune-local-branches": true
+    },
+    "pre-commit": {
+      "lib:auto-version-userscript": true,
+      "lib:block-branch-commit": true,
+      "lib:require-tab-indent": true
+    },
+    "pre-push": {
+      "lib:block-branch-push": true,
+      "lib:block-force-push": true,
+      "lib:check-dirty-submodules": true
+    }
+  }
+}
