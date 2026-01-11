@@ -26,7 +26,7 @@ make
 After building, run the shell:
 
 ```bash
-./base_shell
+./foundation_shell
 ```
 
 Enter commands at the prompt:

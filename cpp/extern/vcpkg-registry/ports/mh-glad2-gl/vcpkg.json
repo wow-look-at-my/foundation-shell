@@ -1,0 +1,12 @@
+{
+  "name": "mh-glad2-gl",
+  "version-date": "2021-11-02",
+  "port-version": 2,
+  "description": "Output of https://github.com/dav1dde/glad-web",
+  "homepage": "https://github.com/PazerOP/glad2-gl",
+  "dependencies": [
+    "mh-cmake-common",
+    "vcpkg-cmake",
+    "vcpkg-cmake-config"
+  ]
+}

@@ -1,0 +1,11 @@
+# Build all three executables
+build:
+    @mkdir -p bin
+    go build -o bin/fsh-repl ./cmd/fsh-repl
+    go build -o bin/fsh ./cmd/fsh
+    go build -o bin/fsh-exec ./cmd/fsh-exec
+    @echo "Built: bin/fsh-repl, bin/fsh, bin/fsh-exec"
+
+# Run all tests
+test:
+    TMPDIR={{justfile_directory()}} go test -v -race ./...

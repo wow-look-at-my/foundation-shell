@@ -1,0 +1,177 @@
+name: C/C++ CI
+
+on: [push]
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  build-linux:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: true
+      matrix:
+        MH_STUFF_COMPILE_LIBRARY: [true, false]
+        compiler:
+          # Modern compilers available on ubuntu-latest (Ubuntu 22.04/24.04)
+          - exe: g++-12
+            deps: g++-12
+          - exe: g++-13
+            deps: g++-13
+          - exe: clang++-14
+            deps: clang-14 libc++-14-dev libc++abi-14-dev
+          - exe: clang++-15
+            deps: clang-15 libc++-15-dev libc++abi-15-dev
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install compilers and tools
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y ${{ matrix.compiler.deps }} ninja-build libcurl4-openssl-dev
+        pip3 install gcovr
+
+        echo "Ensuring programs work..."
+        ${{ matrix.compiler.exe }} --version
+        ninja --version
+        gcovr --version
+
+    # - name: Run tests
+    #   working-directory: ./test
+    #   run: make -j`grep -c ^processor /proc/cpuinfo` ${{ matrix.compiler }}_test_output.txt
+
+    - name: Build
+      env:
+        CXX: ${{ matrix.compiler.exe }}
+        CXXFLAGS: -Wall -Wpedantic -Wextra -Werror
+      run: |
+        mkdir build
+        cd build
+
+        cmake --version
+
+        cmake -G Ninja \
+          -DMH_STUFF_COMPILE_LIBRARY=${{ matrix.MH_STUFF_COMPILE_LIBRARY }} \
+          ../
+
+        cmake --build .
+
+    - name: Run tests
+      env:
+        CXX: ${{ matrix.compiler.exe }}
+      run: |
+        cd build
+
+        ctest --version
+        ctest --output-on-failure
+
+        gcovr --version
+        gcovr --root "../" --exclude ".*/catch.hpp" --exclude ".*/test_compile_file/.*" --exclude ".*/test/.*" --sort-percentage --html-details "results_${{ matrix.compiler.exe }}.html" .
+
+    - name: Save test results
+      if: ${{ matrix.MH_STUFF_COMPILE_LIBRARY }}
+      uses: actions/upload-artifact@v4
+      with:
+        name: gcovr_results_${{ matrix.compiler.exe }}
+        path: build/results*.html
+
+
+
+  # build-windows:
+  #   runs-on: windows-latest
+  #   strategy:
+  #     fail-fast: false
+  #     matrix:
+  #       MH_STUFF_COMPILE_LIBRARY: [true, false]
+
+  #   steps:
+  #   - uses: actions/checkout@v4
+
+  #   - uses: lukka/run-vcpkg@v11
+  #     with:
+  #       vcpkgGitCommitId: ${{ env.VCPKG_COMMIT }}
+
+  #   - uses: seanmiddleditch/gha-setup-ninja@v5
+  #   - name: Setup compiler paths
+  #     uses: ilammy/msvc-dev-cmd@v1
+
+  #   - name: Build
+  #     run: |
+  #       mkdir build
+  #       cd build
+
+  #       cmake -G Ninja \
+  #         -DCMAKE_TOOLCHAIN_FILE="$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake" \
+  #         -DMH_STUFF_COMPILE_LIBRARY=${{ matrix.MH_STUFF_COMPILE_LIBRARY }} \
+  #         ../
+
+  #       cmake --build .
+
+  #   - name: Run tests
+  #     run: |
+  #       cd build
+  #       ctest --output-on-failure
+
+
+  # registry-update:
+  #   needs: [build-linux]
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #   - uses: PazerOP/vcpkg-registry-update@HEAD
+  #     with:
+  #       port-name: mh-stuff
+  #       workflow-pat: ${{ secrets.WORKFLOW_PAT }}
+
+  sanitizers:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: true
+      matrix:
+        sanitizer:
+          - name: asan
+            flags: -fsanitize=address -fno-omit-frame-pointer
+          - name: tsan
+            flags: -fsanitize=thread
+          - name: ubsan
+            flags: -fsanitize=undefined -fno-omit-frame-pointer
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install tools
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y clang-15 libc++-15-dev libc++abi-15-dev ninja-build libcurl4-openssl-dev
+
+    - name: Build with ${{ matrix.sanitizer.name }}
+      env:
+        CXX: clang++-15
+        CXXFLAGS: ${{ matrix.sanitizer.flags }} -g -O1
+      run: |
+        mkdir build
+        cd build
+        cmake -G Ninja -DMH_STUFF_COMPILE_LIBRARY=ON ../
+        cmake --build .
+
+    - name: Run tests with ${{ matrix.sanitizer.name }}
+      env:
+        ASAN_OPTIONS: detect_leaks=1:abort_on_error=1
+        TSAN_OPTIONS: abort_on_error=1
+        UBSAN_OPTIONS: print_stacktrace=1:abort_on_error=1
+      run: |
+        cd build
+        ctest --output-on-failure
+
+  all-checks-passed:
+    if: always()
+    needs: [build-linux, sanitizers]
+    runs-on: ubuntu-latest
+    steps:
+    - name: Verify all checks passed
+      if: ${{ !(contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')) }}
+      run: echo "All checks passed!"
+    - name: Fail if any check failed
+      if: ${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') }}
+      run: exit 1
