@@ -24,7 +24,11 @@
       "Bash(just:*)",
       "mcp__claude_debugs_for_you__listFiles",
       "Bash(git mv:*)",
-      "Bash(./tests/unit_tests --list-tests)"
+      "Bash(./tests/unit_tests --list-tests)",
+      "Skill(github:wait-ci)",
+      "Bash(gh run view:*)",
+      "Bash(gh wait-ci:*)",
+      "Bash(xargs cat:*)"
     ],
     "deny": []
   },
