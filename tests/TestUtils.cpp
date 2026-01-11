@@ -94,6 +94,8 @@ ShellOutput runShellCommand(const std::string& command, bool use_bash)
 {
 	use_bash = false;
 
+	std::print("{}(\"{}\")\n", use_bash ? "bash" : "foundation_shell", command);
+
 	// Get the dispatcher for this thread - should always exist
 	auto& disp = mh::dispatcher::get();
 

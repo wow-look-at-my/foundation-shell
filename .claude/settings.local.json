@@ -23,11 +23,12 @@
       "Bash(just profile:*)",
       "Bash(just:*)",
       "mcp__claude_debugs_for_you__listFiles",
-      "Bash(git mv:*)"
+      "Bash(git mv:*)",
+      "Bash(./tests/unit_tests --list-tests)"
     ],
     "deny": []
   },
-  "enableAllProjectMcpServers": false,
+  "enableAllProjectMcpServers": true,
   "enabledMcpjsonServers": [
     "claude_debugs_for_you"
   ]

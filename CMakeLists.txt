@@ -97,8 +97,8 @@ if(BUILD_TESTING)
   CPMAddPackage(
     NAME Catch2
     GITHUB_REPOSITORY catchorg/Catch2
-    VERSION 3.4.0
-    GIT_TAG v3.4.0
+    VERSION 3.8.0
+    GIT_TAG v3.8.0
   )
 
   # Disable deprecated literal operator warning for Catch2
