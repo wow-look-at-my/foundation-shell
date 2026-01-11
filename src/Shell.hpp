@@ -1,7 +1,6 @@
 #pragma once
 
 #include <memory>
-#include <thread>
 
 #include "mh/coroutine/task.hpp"
 
@@ -27,10 +26,4 @@ public:
 private:
 	// Signal handlers
 	void setupSignalHandlers();
-
-	// Timeout thread for testing
-	std::thread timeoutThread_;
-
-	// Dispatcher for async operations (registered for current thread)
-	std::unique_ptr<mh::dispatcher> dispatcher_;
 };

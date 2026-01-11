@@ -1,51 +1,29 @@
+#include <cstdio> // For stdout
+#include <cstdlib>
+#include <cstring>
+#include <filesystem>
+#include <string>
+
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <sys/wait.h>
 #include <unistd.h>
 
 #include <catch2/catch_all.hpp>
-#include <cstdio> // For stdout
-#include <cstdlib>
-#include <cstring>
-#include <filesystem>
-#include <fstream>
-#include <iostream>
-#include <sstream>
-#include <string>
-#include <vector>
+#include <catch2/matchers/catch_matchers_string.hpp>
+#include <mh/io/file.hpp>
+
+#include "TestUtils.hpp"
 
 #include "LastCppInclude.hpp"
-#include "test_utils.hpp"
 
-// Fallback functions for filesystem operations
-// to avoid compiler-specific variations in std::filesystem
-namespace fs
-{
-bool exists(const std::string& path)
-{
-	struct stat buffer;
-	return (stat(path.c_str(), &buffer) == 0);
-}
-
-bool remove(const std::string& path)
-{
-	return (::remove(path.c_str()) == 0);
-}
-
-std::uintmax_t file_size(const std::string& path)
-{
-	struct stat buffer;
-	if (stat(path.c_str(), &buffer) == 0)
-	{
-		return buffer.st_size;
-	}
-	return 0;
-}
-} // namespace fs
+namespace fs = std::filesystem;
 
 // Tests for redirection
 TEST_CASE("Output redirection works", "[features][redirection]")
 {
+	std::print(stderr, "Running test: Output redirection works\n");
+
 	// Create a temporary file path
 	char tempPath[] = "/tmp/shell_redir_test_XXXXXX";
 	int fd = mkstemp(tempPath);
@@ -64,14 +42,10 @@ TEST_CASE("Output redirection works", "[features][redirection]")
 	REQUIRE(fs::exists(tempPath));
 
 	// Read back the file contents
-	std::ifstream file(tempPath);
-	REQUIRE(file.is_open());
+	std::string content = mh::read_file(tempPath);
 
-	std::string content;
-	std::getline(file, content);
-
-	// Verify content was redirected
-	CHECK(content == "redirect_test_content");
+	// Verify content was redirected (mh::read_file includes trailing newline)
+	CHECK(content == "redirect_test_content\n");
 
 	// Clean up
 	fs::remove(tempPath);
@@ -86,12 +60,11 @@ TEST_CASE("Input redirection works", "[features][redirection]")
 	REQUIRE(fd != -1);
 
 	// Write test content to the file
-	std::string testContent = "input_redirection_test_content";
-	write(fd, testContent.c_str(), testContent.size());
-	close(fd);
+	constexpr const char* testContent = "input_redirection_test_content";
+	mh::write_file(tempPath, testContent);
 
 	// Run command with input redirection
-	std::string command = std::string("cat < ") + tempPath;
+	std::string command = std::format("cat < {}", tempPath);
 	std::string output = runShellCommand(command);
 
 	// Verify input was correctly redirected
@@ -118,10 +91,7 @@ TEST_CASE("Append redirection works", "[features][redirection]")
 	runShellCommand(std::string("echo ") + appendContent + " >> " + tempPath);
 
 	// Read back the file contents
-	std::ifstream file(tempPath);
-	REQUIRE(file.is_open());
-
-	std::string content((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
+	std::string content = mh::read_file(tempPath);
 
 	// Verify both initial and appended content exists
 	std::string expectedContent = "initial_content\nappended_content\n";
@@ -160,11 +130,8 @@ TEST_CASE("And operator works", "[features][command_chaining]")
 	REQUIRE(fs::exists(filePath));
 
 	// Check file contents
-	std::ifstream file(filePath);
-	REQUIRE(file.is_open());
-	std::string content;
-	std::getline(file, content);
-	CHECK(content == "success_marker");
+	std::string content = mh::read_file(filePath);
+	CHECK(content == "success_marker\n");
 
 	// Clean up
 	fs::remove(filePath);
@@ -213,11 +180,8 @@ TEST_CASE("Multiple and operators work", "[features][command_chaining]")
 	REQUIRE(fs::exists(filePath));
 
 	// Check file contents
-	std::ifstream file(filePath);
-	REQUIRE(file.is_open());
-	std::string content;
-	std::getline(file, content);
-	CHECK(content == "nested_success");
+	std::string content = mh::read_file(filePath);
+	CHECK(content == "nested_success\n");
 
 	// Clean up
 	fs::remove(filePath);
@@ -268,13 +232,11 @@ TEST_CASE("cd changes are temporary per command chain", "[features][cd][stateles
 	REQUIRE(fs::exists(filePath2));
 
 	// Verify file contents
-	std::ifstream file1(filePath1), file2(filePath2);
-	std::string content1, content2;
-	std::getline(file1, content1);
-	std::getline(file2, content2);
+	std::string content1 = mh::read_file(filePath1);
+	std::string content2 = mh::read_file(filePath2);
 
-	CHECK(content1 == "first");
-	CHECK(content2 == "second");
+	CHECK(content1 == "first\n");
+	CHECK(content2 == "second\n");
 
 	// Clean up
 	fs::remove(filePath1);
@@ -290,9 +252,10 @@ TEST_CASE("cd fails gracefully with nonexistent directory", "[features][cd][erro
 	std::string command = "cd /this/directory/should/not/exist && echo should_not_run";
 	std::string output = runShellCommand(command);
 
-	// The command chain should fail and 'should_not_run' should not appear in output
-	// For bash, check that it contains an error message and not the success string
-	CHECK(output.find("should_not_run") == std::string::npos);
+	// The command chain should fail and 'should_not_run' should not appear in
+	// output For bash, check that it contains an error message and not the
+	// success string
+	CHECK_THAT(output, !Catch::Matchers::ContainsSubstring("should_not_run"));
 }
 
 TEST_CASE("Multiple pipes work", "[features][piping]")
@@ -324,10 +287,10 @@ TEST_CASE("Clear works", "[features][builtin_commands]")
 	// First output something
 	std::string output = runShellCommand("echo before_clear\nclear\necho after_clear");
 
-	// Check that the output contains both before and after text plus clear escape sequences
-	// Bash clear outputs ANSI escape sequences
-	CHECK(output.find("before_clear") != std::string::npos);
-	CHECK(output.find("after_clear") != std::string::npos);
+	// Check that the output contains both before and after text plus clear escape
+	// sequences Bash clear outputs ANSI escape sequences
+	CHECK_THAT(output, Catch::Matchers::ContainsSubstring("before_clear"));
+	CHECK_THAT(output, Catch::Matchers::ContainsSubstring("after_clear"));
 }
 
 // Test for background processes
@@ -341,14 +304,16 @@ TEST_CASE("Background process works", "[features][process_management]")
 	close(fd);
 	fs::remove(tempPath);
 
-	// Make the background command more direct to avoid shell interpretation issues
+	// Make the background command more direct to avoid shell interpretation
+	// issues
 	std::string command = "touch " + std::string(tempPath) + " &";
 	std::string output = runShellCommand(command + "\nsleep 3");
 
 	// Add more verbose output to help with debugging
 	std::print("Background process test output: {}\n", output);
 
-	// Wait and retry a few times if necessary - file system operations can be async
+	// Wait and retry a few times if necessary - file system operations can be
+	// async
 	bool fileExists = false;
 	for (int i = 0; i < 5 && !fileExists; i++)
 	{
@@ -367,19 +332,13 @@ TEST_CASE("Background process works", "[features][process_management]")
 	// For successful tests, write to the file as proof it exists and is writable
 	if (fileExists)
 	{
-		std::ofstream testFile(tempPath);
-		testFile << "bg_process_test" << std::endl;
-		testFile.close();
+		mh::write_file(tempPath, "bg_process_test\n");
 
 		// Read back for verification
-		std::ifstream file(tempPath);
-		REQUIRE(file.is_open());
-
-		std::string content;
-		std::getline(file, content);
+		std::string content = mh::read_file(tempPath);
 
 		// Verify content
-		CHECK(content == "bg_process_test");
+		CHECK(content == "bg_process_test\n");
 	}
 
 	// Clean up
@@ -396,8 +355,8 @@ TEST_CASE("Colored output works", "[features][ui_improvements]")
 	// Note: This test might be implementation-specific
 	CHECK(output == "colored_test\n");
 
-	// This test is a placeholder - actual implementation will depend on how colors are incorporated
-	// We might look for specific ANSI escape sequences
+	// This test is a placeholder - actual implementation will depend on how
+	// colors are incorporated We might look for specific ANSI escape sequences
 }
 
 // Test for improved prompt that shows current directory

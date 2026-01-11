@@ -1,3 +1,4 @@
+#!/usr/bin/env dotnet run
 using System;
 using System.IO;
 using System.Linq;
@@ -7,14 +8,16 @@ class Program
 {
 	static int Main(string[] args)
 	{
-		var projectRoot = Path.GetFullPath(Path.Combine(Directory.GetCurrentDirectory(), ".."));
-		var directories = new[] { "src", "platform_impl", "tests" };
+		var projectRoot = Directory.GetCurrentDirectory();
+		var directories = new[] { "src", "tests" };
 
 		var cppFiles = directories
 			.Select(dir => Path.Combine(projectRoot, dir))
 			.Where(Directory.Exists)
 			.SelectMany(dir => Directory.GetFiles(dir, "*.cpp", SearchOption.AllDirectories))
 			.ToList();
+
+		Console.WriteLine($"Checking LastCppInclude.hpp in {cppFiles.Count} cpp files...");
 
 		var errors = 0;
 		var includePattern = new Regex(@"^\s*#include\s+");
@@ -66,10 +69,14 @@ class Program
 			Console.WriteLine($"Found {errors} errors in {cppFiles.Count} cpp files.");
 			return 1;
 		}
-		else
+		else if (cppFiles.Count > 0)
 		{
 			Console.WriteLine($"All {cppFiles.Count} cpp files have LastCppInclude.hpp as the last include.");
 			return 0;
+		}
+		else
+		{
+			throw new Exception("No cpp files found.");
 		}
 	}
 }

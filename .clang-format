@@ -64,12 +64,21 @@ AllowShortLoopsOnASingleLine: false
 SortIncludes: true
 IncludeBlocks: Regroup
 IncludeCategories:
-  - Regex:           '^<.*\.h>'
+  # STL and system C++ headers
+  - Regex:           '^<[^./]*>$'
     Priority:        1
-  - Regex:           '^<.*>'
+  # System C headers
+  - Regex:           '^<.*\.h>'
     Priority:        2
-  - Regex:           '^".*"'
+  # Third-party library headers
+  - Regex:           '^<(catch2|mh)/.*>'
     Priority:        3
+  # LastCppInclude must be last
+  - Regex:           '^"LastCppInclude\.hpp"'
+    Priority:        5
+  # Local project headers
+  - Regex:           '^".*"'
+    Priority:        4
 
 # Namespaces
 NamespaceIndentation: None

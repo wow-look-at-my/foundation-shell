@@ -20,9 +20,20 @@
       "Bash(./tests/unit_tests --help)",
       "Bash(just profile-analyze:*)",
       "Bash(just profile-test:*)",
-      "Bash(just profile:*)"
+      "Bash(just profile:*)",
+      "Bash(just:*)",
+      "mcp__claude_debugs_for_you__listFiles",
+      "Bash(git mv:*)",
+      "Bash(./tests/unit_tests --list-tests)",
+      "Skill(github:wait-ci)",
+      "Bash(gh run view:*)",
+      "Bash(gh wait-ci:*)",
+      "Bash(xargs cat:*)"
     ],
     "deny": []
   },
-  "enableAllProjectMcpServers": false
+  "enableAllProjectMcpServers": true,
+  "enabledMcpjsonServers": [
+    "claude_debugs_for_you"
+  ]
 }

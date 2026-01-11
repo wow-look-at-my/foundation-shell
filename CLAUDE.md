@@ -4,120 +4,81 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This repository contains a stateless shell implementation in C++ called the "Foundation Shell" (previously "Base Shell"). It's a simple, clean shell that doesn't preserve variables between commands but does support environment variables and includes built-in command handling.
+Foundation Shell is a stateless shell implementation in C++. It doesn't preserve variables between commands but supports environment variables and built-in command handling. The executable is `foundation_shell`.
 
 ## Build and Test Commands
 
-This project uses [Justfiles](https://github.com/casey/just) for simple frequently-used commands.
-
-### Building the Project
-
 ```sh
-just build
-```
-
-### Running the Shell
-
-```sh
-just run
-```
-
-### Running Tests
-
-```sh
-just test
+just build                      # Build the project
+just run                        # Build and run the shell
+just test                       # Run all tests
+just test-name "Test name"      # Run specific test by name
+just test-group "groupname"     # Run tests by group/tag
+just profile "Test name"        # Profile a test (macOS sample / Linux valgrind)
+just clean                      # Clean build directory
 ```
 
 ## Architecture
 
 ### Core Components
 
-1. **Shell**: The main shell controller that runs the command loop and manages user interaction.
-   - Implemented in `src/shell.cpp` and `include/shell.hpp`
-   - Uses C++20 coroutines for asynchronous execution
+1. **Shell** (`src/Shell.cpp`): Main shell controller. Uses C++20 coroutines via mh_stuff library for async execution. Runs the command loop and manages user interaction.
 
-2. **Command**: Represents a single command with arguments and I/O redirection options.
-   - Implemented in `src/command.cpp`, `src/command_async.cpp`, and `include/command.hpp`
-   - Handles command execution, built-in commands, and piping
+2. **CommandChain** (`src/CommandChain.cpp`): Parses token sequences into executable command chains. Handles operators (`&&`, `||`, `|`) for conditional execution and piping.
 
-3. **Task**: A C++20 coroutine implementation for asynchronous operations.
-   - Implemented in `include/task.hpp`
-   - Provides a simple way to write asynchronous code with coroutines
+3. **Command** (`src/Command.cpp`): Represents a single command with arguments and I/O redirection. Handles built-in commands (cd, pwd, exit, help) and external process execution.
 
-4. **Config**: Manages shell configuration including themes and prompt formatting.
-   - Implemented in `src/config.cpp` and `include/config.hpp`
-   - Loads/saves configuration from/to a file in the user's home directory
+4. **Token System** (`src/Token.hpp`, `src/TokenType.hpp`): Lexical analysis infrastructure. TokenType enum defines operators (Pipe, And, Or, redirections) and value types (Command, CommandArgument).
 
-5. **History**: Manages command history.
-   - Implemented in `src/history.cpp` and `include/history.hpp`
-   - Saves commands to history file and supports history retrieval
+### I/O Abstraction Layer
 
-6. **Job**: Handles background processes and job control.
-   - Implemented in `src/job.cpp` and `include/job.hpp`
-   - Supports listing jobs, bringing jobs to foreground/background
+The shell uses mh_stuff's platform-agnostic I/O abstractions:
+- `mh::io::source_ptr` / `mh::io::sink_ptr`: Abstract input/output streams
+- `mh::io::pipe`: Creates connected source/sink pairs for inter-process communication
+- `mh::process`: Process spawning with async wait support
 
-7. **Alias**: Manages command aliases.
-   - Implemented in `src/alias.cpp` and `include/alias.hpp`
-   - Loads aliases from file and expands aliases in commands
+### Async Execution Model
 
-### Data Flow
+- `mh::task<T>`: Coroutine task type for async operations
+- `mh::dispatcher`: Event loop that runs async tasks to completion
+- All async functions must have names ending in `Async`
+- Never pass by reference to coroutine functions (use value or pointer)
 
-1. User enters command → Shell reads input
-2. Input is tokenized and parsed into Command objects with redirections/pipes
-3. Commands are executed through the async Task system
-4. Output is displayed to user
-5. Shell returns to prompt for next command
+## Code Style Requirements
 
-### I/O Handling
+- **C++23 required** (uses `std::print`, `std::format`)
+- Use `std::print()` and `std::format()` instead of iostreams
+- `cout`/`cerr`/`cin` are forbidden (poisoned via `LastCppInclude.hpp`)
+- **LastCppInclude.hpp must be the last include in every .cpp file**
+- Include paths must be relative to project root (no `../` paths)
+- Same-directory includes use just the filename
+- PascalCase for file names
+- TODOs must use `static_assert(false, "TODO: ...")` or throw `std::runtime_error`
 
-The shell supports:
-- Input redirection (`<`)
-- Output redirection (`>` and `>>`)
-- Error redirection (`2>` and `2>>`)
-- Pipes for connecting commands (`|`)
-- Background processes (`&`)
-- Command chaining (`&&` and `||`)
+## Platform Abstraction
 
-## Key Features
-
-- **Stateless Design**: No variable persistence between commands (by design)
-- **Built-in Commands**: Includes cd, exit, pwd, clear, history, jobs, fg, bg, etc.
-- **Command History**: Stores command history in a file
-- **Job Control**: Background processes, jobs listing, foreground/background control
-- **Aliases**: Support for command aliases stored in config file
-- **Colorful Output**: Theme support and colored prompts
-- **Command Suggestions**: Suggests similar commands when a command is not found
-- **I/O Redirection**: Full support for input/output/error redirection
-- **Pipe Support**: Connect commands with pipes
-- **Command Chaining**: Execute commands conditionally with && and ||
-
-## Implementation Notes
-
-- The project uses C++20 features, particularly coroutines for async execution
-- Files are stored in the user's home directory with `.foundation_shell_` prefix
-- This is a stateless shell by design, so there's no variable preservation
-- `foundation_shell` is the executable name (CMakeLists.txt uses this, not base_shell)
-
-## Code Maintenance Guidelines
-
-- Get rid of backwards compatibility. We do not want old dead code hanging around in this project. If you must break something, mark the old version with [[deprecated]].
-- Make sure all async functions' names end with Async
-- Never pass by reference to coroutine/async functions, its way too dangerous.
-- Keep this project platform agnostic. There shouldn't be any mention of file descriptors outside of unix/ directories
-- Always use std::print() and std::format() instead of stringstreams or iostreams
-- Do not write code that encourages or easily allows the creation of invalid states. For example, an "index" value cannot logically be negative for an array type, so you would use an unsigned integer. For a class constructor, it should throw for any invalid states.
-- Format your code properly. If you do not format it to match the codebase style, expect it to get randomly autoformatted out from under you at some point in the future. Then you'll have reread the file and reorient yourself.
-- Always use include paths that are relative to the project root. Avoid "../" in include paths at all costs. For files that are in the same directory, just #include the filename with no relative path.
-- If you're going to add todos, use `static_assert(false, "TODO: <the todo>");` or `throw new std::runtime_error("TODO: <the todo>");`
+- Keep platform-specific code (file descriptors, etc.) in platform-specific directories
+- Main codebase must remain platform-agnostic
+- Use mh_stuff abstractions for I/O and process management
 
 ## Design Principles
 
-- On any kind of error, anywhere along the pipe, we should throw an exception to bail out and return back to our normal steady state prompt (easy to do because we don't have any state!)
+- Stateless by design - no variable preservation between commands
+- On any error in the pipeline, throw an exception to return to the steady-state prompt
+- Delete backwards-compatibility code; use `[[deprecated]]` only when breaking changes are necessary
+- Constructors must throw for invalid states
 
-## Coding Practices
+## Testing
 
-- We always use exact equality in string comparison checks in tests.
+- Uses Catch2 v3.8.0+
+- `runShellCommand("command")` returns `ShellOutput` with `stdout_output`, `stderr_output`, `combined_output`
+- Do not use `std::string::find()` or `contains()` in tests - use Catch2 matchers like `Catch::Matchers::ContainsSubstring()`
+- Tests run with 30-second timeout
+- Catch2 docs at `build/_deps/catch2-src/docs/`
 
-## Scripting
+## Build System Notes
 
-- For scripts, use C# with dotnet run.
+- Pre-build checks run automatically: shebang fixing, static_assert validation, PascalCase naming, include path validation, LastCppInclude verification
+- Scripts are in C# (dotnet run) in `scripts/` directory
+- Uses Ninja generator for fast builds
+- mh_stuff requires C++20 minimum; main project uses C++23

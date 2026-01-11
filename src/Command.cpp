@@ -1,27 +1,27 @@
 #include "Command.hpp"
 
-#include <dirent.h>
-#include <signal.h>
-#include <wordexp.h>
-
 #include <algorithm>
 #include <chrono>
 #include <cstdio>
 #include <cstring>
 #include <filesystem>
-#include <mh/concurrency/dispatcher.hpp>
-#include <mh/io/sink.hpp>
-#include <mh/io/source.hpp>
 #include <ostream>
 #include <regex>
 #include <sstream>
 #include <thread>
 
+#include <dirent.h>
+#include <signal.h>
+#include <wordexp.h>
+
+#include <mh/concurrency/dispatcher.hpp>
+#include <mh/io/sink.hpp>
+#include <mh/io/source.hpp>
+
 #include "EnvManager.hpp"
-#include "LastCppInclude.hpp"
 #include "Main.hpp"
-#include "io/FileSink.hpp"
-#include "io/FileSource.hpp"
+
+#include "LastCppInclude.hpp"
 
 // Command implementation
 Command::Command() : appendOutput(false), appendError(false) {}
@@ -215,32 +215,26 @@ mh::task<bool> Command::executeAsync(mh::io::source_ptr inputSource, mh::io::sin
 		co_return result == 0; // Convert exit status to bool
 	}
 
-	// Create a process using the platform-agnostic interface
-	Sink errorSink = nullptr; // Will use platform default if not provided
+	// Create a process using mh::process
+	mh::io::sink_ptr errorSink = nullptr; // Will use platform default if not provided
 
 	// Handle I/O redirection using files
 	if (!inputFile.empty())
 	{
-		// Create platform-agnostic FileSource
-		inputSource = FileSource::create(inputFile);
-		// For now, rely on process implementation to handle this
-		// std::cerr << "Warning: File input redirection is platform-specific\n";
+		// Use mh::io file source
+		inputSource = mh::io::source::create_file(inputFile);
 	}
 
 	if (!outputFile.empty())
 	{
-		// Create platform-agnostic FileSink
-		outputSink = FileSink::create(outputFile, appendOutput);
-		// For now, rely on process implementation to handle this
-		// std::cerr << "Warning: File output redirection is platform-specific\n";
+		// Use mh::io file sink
+		outputSink = mh::io::sink::create_file(outputFile, appendOutput);
 	}
 
 	if (!errorFile.empty())
 	{
-		// Create platform-agnostic FileSink
-		outputSink = FileSink::create(outputFile, appendOutput);
-		// For now, rely on process implementation to handle this
-		// std::cerr << "Warning: File error redirection is platform-specific\n";
+		// Use mh::io file sink for error output
+		errorSink = mh::io::sink::create_file(errorFile, appendError);
 	}
 
 	// Create the process with proper I/O redirection using command_args

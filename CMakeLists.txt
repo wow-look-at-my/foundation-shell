@@ -16,25 +16,55 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "Clang" OR CMAKE_CXX_COMPILER_ID MATCHES "GNU")
     add_compile_options(-Werror -fdiagnostics-color=always)
 endif()
 
+# ALWAYS generate maximum debug symbols because CMake leadership is embarrassingly wrong about this
+if(CMAKE_CXX_COMPILER_ID MATCHES "Clang" OR CMAKE_CXX_COMPILER_ID MATCHES "GNU")
+    add_compile_options(-g3)
+endif()
+
+# For Debug builds specifically, also disable optimization
+if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+    add_compile_options(-O0)
+endif()
+
+# Fix shebang lines in C# scripts first
+file(GLOB CS_SCRIPTS "${CMAKE_SOURCE_DIR}/scripts/*.cs")
+add_custom_target(fix_shebangs ALL
+  COMMAND ${CMAKE_SOURCE_DIR}/scripts/fix_shebangs.ps1
+  WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+  COMMENT "Fixing shebang lines in C# checker scripts..."
+  DEPENDS ${CS_SCRIPTS}
+)
+
 # Add a custom command to check for incorrect static_assert usage
-add_custom_target(check_static_asserts
+add_custom_target(check_static_asserts ALL
   COMMAND ${CMAKE_SOURCE_DIR}/scripts/fix_static_asserts.cs
   WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
   COMMENT "Checking for incorrect static_assert usage..."
+  DEPENDS fix_shebangs
 )
 
 # Add a custom command to check for proper upper CamelCase (PascalCase) file naming
-add_custom_target(check_casing
+add_custom_target(check_casing ALL
   COMMAND ${CMAKE_SOURCE_DIR}/scripts/check_casing.cs
   WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
   COMMENT "Checking for proper upper CamelCase (PascalCase) file naming..."
+  DEPENDS fix_shebangs
 )
 
 # Add a custom command to check for proper include paths
-add_custom_target(check_includes
+add_custom_target(check_includes ALL
   COMMAND ${CMAKE_SOURCE_DIR}/scripts/check_includes.cs ${CMAKE_SOURCE_DIR}
   WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
   COMMENT "Checking for proper include paths..."
+  DEPENDS fix_shebangs
+)
+
+# Add a custom command to check that LastCppInclude.hpp is the last include in all cpp files
+add_custom_target(check_last_include ALL
+  COMMAND ${CMAKE_SOURCE_DIR}/scripts/check_last_include.cs
+  WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+  COMMENT "Checking that LastCppInclude.hpp is the last include in all cpp files..."
+  DEPENDS fix_shebangs
 )
 
 # Check for filesystem support
@@ -67,8 +97,8 @@ if(BUILD_TESTING)
   CPMAddPackage(
     NAME Catch2
     GITHUB_REPOSITORY catchorg/Catch2
-    VERSION 3.4.0
-    GIT_TAG v3.4.0
+    VERSION 3.8.0
+    GIT_TAG v3.8.0
   )
 
   # Disable deprecated literal operator warning for Catch2
@@ -83,11 +113,6 @@ endif()
 # Add MH stuff submodule
 add_subdirectory(extern/mh_stuff)
 
-# Add core library (shared between main and platform implementations)
-add_subdirectory(src/core)
-
-# Add platform implementation library
-add_subdirectory(platform_impl)
 
 # Add JSON library (header-only)
 CPMAddPackage(
@@ -113,7 +138,7 @@ add_library(foundation_shell_lib ${SOURCES})
 target_compile_features(foundation_shell_lib PUBLIC cxx_std_23)
 
 # Link against dependencies
-target_link_libraries(foundation_shell_lib PUBLIC core mh-stuff platform_impl nlohmann_json)
+target_link_libraries(foundation_shell_lib PUBLIC mh-stuff nlohmann_json)
 
 # Set include directories for library
 target_include_directories(foundation_shell_lib PUBLIC src)
@@ -129,6 +154,6 @@ target_compile_definitions(foundation_shell PRIVATE FOUNDATION_SHELL_EXE)
 target_link_libraries(foundation_shell PRIVATE foundation_shell_lib)
 
 # Make sure all checks run before building
-add_dependencies(foundation_shell check_static_asserts check_casing check_includes)
+add_dependencies(foundation_shell check_static_asserts check_casing check_includes check_last_include)
 
 add_subdirectory(tests)

@@ -1,8 +1,5 @@
 #include "Shell.hpp"
 
-#include <pthread.h>
-#include <unistd.h>
-
 #include <chrono>
 #include <csignal>
 #include <cstdio>
@@ -10,19 +7,50 @@
 #include <format>
 #include <iostream>
 #include <memory>
-#include <mh/concurrency/dispatcher.hpp>
 #include <sstream>
 #include <string>
 
+#include <unistd.h>
+
+#include <mh/concurrency/dispatcher.hpp>
+
 #include "Command.hpp"
 #include "CommandChain.hpp"
+
 #include "LastCppInclude.hpp"
 
-// Constructor with RAII initialization
-Shell::Shell() : dispatcher_(std::make_unique<mh::dispatcher>())
+
+namespace
 {
-	// Register dispatcher for current thread
-	dispatcher_->register_for_current_thread();
+struct Init
+{
+	Init()
+	{
+		// Initialize the dispatcher
+		m_Dispatcher.register_for_current_thread();
+		m_Timeout = timeout_async();
+	}
+
+private:
+	mh::task<> timeout_async()
+	{
+		std::print(stderr, "Shell timeout started - waiting for 30 seconds\n");
+		// Wait for 30 seconds before exiting the shell
+		// This is a simple timeout mechanism and should be
+		co_await m_Dispatcher.co_delay_for(std::chrono::seconds(30));
+		std::print(stderr, "\nShell timeout reached - exiting\n");
+		exit(124); // Use exit code 124 for timeout
+	}
+
+	mh::dispatcher m_Dispatcher{true};
+	mh::task<> m_Timeout;
+
+} const s_init;
+} // namespace
+
+// Constructor with RAII initialization
+Shell::Shell()
+{
 	// Setup signal handlers
 	{
 		signal(SIGINT, [](int) {
@@ -35,25 +63,12 @@ Shell::Shell() : dispatcher_(std::make_unique<mh::dispatcher>())
 
 		// No SIGTSTP handler needed - we don't support background processes
 	}
-
-	// Start timeout thread for testing
-	timeoutThread_ = std::thread([this]() {
-		// Name the thread for debugging
-		pthread_setname_np("shell-timeout");
-		std::this_thread::sleep_for(std::chrono::seconds(30));
-		std::print(stderr, "\nShell timeout reached - exiting\n");
-		exit(124); // Use exit code 124 for timeout
-	});
 }
 
 // Destructor with cleanup
 Shell::~Shell()
 {
-	// Clean up timeout thread
-	if (timeoutThread_.joinable())
-	{
-		timeoutThread_.detach(); // Let it finish or terminate naturally
-	}
+	// No cleanup needed for task-based timeout
 }
 
 // Implements the main shell loop as a coroutine

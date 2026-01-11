@@ -1,17 +1,18 @@
+#include <cstdlib>
+#include <format>
+#include <sstream>
+#include <string>
+
 #include <unistd.h>
 
 #include <catch2/catch_all.hpp>
-#include <cstdlib>
-#include <format>
-#include <fstream>
-#include <iostream>
-#include <sstream>
-#include <string>
-#include <vector>
+#include <catch2/matchers/catch_matchers_string.hpp>
+#include <mh/io/file.hpp>
 
 #include "Config.hpp"
+#include "TestUtils.hpp"
+
 #include "LastCppInclude.hpp"
-#include "test_utils.hpp"
 
 // Tests for the basic shell functionality
 TEST_CASE("Executes simple command", "[shell]")
@@ -93,16 +94,10 @@ TEST_CASE("Creates temporary file", "[shell][redirection]")
 	runShellCommand(command);
 
 	// Read back the file contents
-	std::ifstream file(tempPath);
-	REQUIRE(file.is_open());
-	INFO("Failed to open temporary file");
+	std::string content = mh::read_file(tempPath);
 
-	std::string content;
-	std::getline(file, content);
-	file.close();
-
-	// The shell should implement redirection correctly
-	CHECK(content == "test content");
+	// The shell should implement redirection correctly (mh::read_file includes trailing newline)
+	CHECK(content == "test content\n");
 	INFO("Expected file to contain redirected content");
 
 	// Clean up
@@ -228,7 +223,7 @@ TEST_CASE("Built-in cd command", "[shell][builtins]")
 	// Test cd to previous directory (-)
 	output = runShellCommand("cd /tmp\ncd /\ncd -\npwd");
 	// This may output multiple lines, just check it ends with /tmp
-	CHECK(output.find("/tmp") != std::string::npos);
+	CHECK_THAT(output, Catch::Matchers::ContainsSubstring("/tmp"));
 
 	// Test cd to non-existent directory
 	output = runShellCommand("cd /nonexistent_directory_12345");
@@ -332,27 +327,18 @@ TEST_CASE("Basic output redirection", "[shell][redirection]")
 	runShellCommand(command);
 
 	// Read back the file contents
-	std::ifstream file(tempPath);
-	REQUIRE(file.is_open());
-	std::string content;
-	std::getline(file, content);
-	file.close();
+	std::string content = mh::read_file(tempPath);
 
-	CHECK(content == "redirected output");
+	CHECK(content == "redirected output\n");
 
 	// Test append redirection
 	command = "echo 'appended line' >> " + std::string(tempPath);
 	runShellCommand(command);
 
 	// Read back again
-	std::ifstream file2(tempPath);
-	std::string line1, line2;
-	std::getline(file2, line1);
-	std::getline(file2, line2);
-	file2.close();
+	std::string fullContent = mh::read_file(tempPath);
 
-	CHECK(line1 == "redirected output");
-	CHECK(line2 == "appended line");
+	CHECK(fullContent == "redirected output\nappended line\n");
 
 	// Clean up
 	unlink(tempPath);
@@ -574,7 +560,7 @@ TEST_CASE("Empty arguments handling", "[shell][args][empty]")
 // Tests for stdout/stderr separation
 TEST_CASE("Command output goes to stdout only", "[shell][stdout_stderr]")
 {
-	ShellOutput output = runShellCommandSeparate("echo hello_world");
+	ShellOutput output = runShellCommand("echo hello_world");
 
 	// Command output should be in stdout
 	CHECK(output.stdout_output == "hello_world\n");
@@ -586,7 +572,7 @@ TEST_CASE("Command output goes to stdout only", "[shell][stdout_stderr]")
 
 TEST_CASE("Error messages go to stderr only", "[shell][stdout_stderr]")
 {
-	ShellOutput output = runShellCommandSeparate("nonexistent_command_xyz");
+	ShellOutput output = runShellCommand("nonexistent_command_xyz");
 
 	// Debug: print actual output to see what we get
 	INFO("STDOUT: '" << output.stdout_output << "'");
@@ -604,7 +590,7 @@ TEST_CASE("Error messages go to stderr only", "[shell][stdout_stderr]")
 
 TEST_CASE("Built-in command output goes to stdout", "[shell][stdout_stderr][builtins]")
 {
-	ShellOutput output = runShellCommandSeparate("pwd");
+	ShellOutput output = runShellCommand("pwd");
 
 	// pwd output should be in stdout
 	CHECK(!output.stdout_output.empty());

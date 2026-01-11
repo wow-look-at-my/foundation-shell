@@ -7,23 +7,36 @@ using System.Text.RegularExpressions;
 
 class Program
 {
+    static string ConvertToCamelCase(string filename)
+    {
+        var parts = filename.Split('_');
+        var result = "";
+        foreach (var part in parts)
+        {
+            if (part.Length > 0)
+            {
+                result += char.ToUpper(part[0]) + part.Substring(1);
+            }
+        }
+        return result;
+    }
+
     static int Main(string[] args)
     {
         Console.WriteLine("Checking for proper upper CamelCase (PascalCase) naming convention...");
 
         var rootDir = args.Length > 0 ? args[0] : Directory.GetCurrentDirectory();
-        var srcDir = Path.Combine(rootDir, "src");
+        var directories = new[] { "src", "tests" };
 
-        if (!Directory.Exists(srcDir))
-        {
-            Console.WriteLine($"Source directory not found: {srcDir}");
-            return 1;
-        }
-
-        // Get all C++ files in the source directory (recursively)
-        var cppFiles = Directory.GetFiles(srcDir, "*", SearchOption.AllDirectories)
+        // Get all C++ files in the specified directories (recursively)
+        var cppFiles = directories
+            .Select(dir => Path.Combine(rootDir, dir))
+            .Where(Directory.Exists)
+            .SelectMany(dir => Directory.GetFiles(dir, "*", SearchOption.AllDirectories))
             .Where(f => f.EndsWith(".cpp") || f.EndsWith(".hpp"))
             .ToArray();
+
+        Console.WriteLine($"Checking {cppFiles.Length} C++ files for proper upper CamelCase (PascalCase) naming...");
 
         // Counter for issues found
         int issuesCount = 0;
@@ -46,7 +59,7 @@ class Program
                 issuesCount++;
 
                 // Create the properly cased filename for reference
-                var properName = char.ToUpper(filename[0]) + filename.Substring(1);
+                var properName = ConvertToCamelCase(filename);
                 Console.WriteLine($"  Should be: {Path.GetDirectoryName(file)}/{properName}");
             }
         }
