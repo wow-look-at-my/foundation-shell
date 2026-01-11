@@ -2,11 +2,10 @@ name: CI
 
 on:
   push:
-  pull_request:
-    branches: [main]
+  workflow_dispatch:
 
 jobs:
-  build-and-test:
+  build-test-benchmark:
     runs-on: self-hosted
 
     defaults:
@@ -27,12 +26,28 @@ jobs:
           go build -o build/fsh-repl ./cmd/fsh-repl
           go build -o build/fsh ./cmd/fsh
           go build -o build/fsh-exec ./cmd/fsh-exec
+          go build -o build/bench ./cmd/bench
 
       - name: Test
         run: go test -v -race ./...
 
-      - name: Upload binaries
+      - name: Install benchmark dependencies
+        run: |
+          command -v zsh || brew install zsh
+          command -v hyperfine || brew install hyperfine
+
+      - name: Run benchmarks
+        run: ./build/bench -fsh ./build/fsh-exec -warmup 5 -runs 20 | tee benchmark-results.md
+
+      - name: Write benchmark results to summary
+        run: cat benchmark-results.md >> $GITHUB_STEP_SUMMARY
+
+      - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: binaries
-          path: go/build/
+          name: build-artifacts
+          path: |
+            go/build/fsh-repl
+            go/build/fsh
+            go/build/fsh-exec
+            go/benchmark-results.md
