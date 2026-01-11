@@ -1,6 +1,0 @@
-[submodule "extern/mh_stuff"]
-	path = extern/mh_stuff
-	url = git@github.com:PazerOP/stuff.git
-[submodule "extern/vcpkg-registry"]
-	path = extern/vcpkg-registry
-	url = https://github.com/PazerOP/vcpkg-registry.git
