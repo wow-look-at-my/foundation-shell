@@ -18,10 +18,10 @@ jobs:
 
       - name: Build
         run: |
-          mkdir -p bin
-          go build -o bin/fsh-repl ./cmd/fsh-repl
-          go build -o bin/fsh ./cmd/fsh
-          go build -o bin/fsh-exec ./cmd/fsh-exec
+          mkdir -p build
+          go build -o build/fsh-repl ./cmd/fsh-repl
+          go build -o build/fsh ./cmd/fsh
+          go build -o build/fsh-exec ./cmd/fsh-exec
 
       - name: Test
         run: go test -v -race ./...
@@ -30,4 +30,4 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: binaries
-          path: go/bin/
+          path: go/build/
