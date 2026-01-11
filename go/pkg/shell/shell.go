@@ -55,13 +55,19 @@ func NewWithIO(stdin io.Reader, stdout, stderr io.Writer, interactive bool) *She
 	}
 }
 
-// IsTerminal checks if stdin is connected to a TTY.
+// IsTerminal checks if the given reader is connected to a TTY.
 func (s *Shell) IsTerminal() bool {
 	// Check if stdin is an *os.File with a valid file descriptor
 	if f, ok := s.stdin.(*os.File); ok {
 		return term.IsTerminal(int(f.Fd()))
 	}
 	return false
+}
+
+// IsTerminal checks if os.Stdin is connected to a TTY.
+// This is a convenience function for use before creating a Shell.
+func IsTerminal() bool {
+	return term.IsTerminal(int(os.Stdin.Fd()))
 }
 
 // Run starts the main REPL loop.
