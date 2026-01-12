@@ -10,16 +10,19 @@ import (
 	"os"
 
 	"foundation-shell/internal/chain"
+	"foundation-shell/internal/expander"
+	"foundation-shell/internal/syntax"
 	"foundation-shell/pkg/parser"
 
+	"github.com/chzyer/readline"
 	"golang.org/x/term"
 )
 
 const (
-	// ANSI escape codes for colors
-	colorGreen = "\033[32m"
-	colorRed   = "\033[31m"
-	colorReset = "\033[0m"
+	// ANSI escape codes for prompt styling
+	promptSuccess = "\033[32m" // Green for successful command
+	promptFailure = "\033[31m" // Red for failed command
+	promptReset   = "\033[0m"
 
 	welcomeMessage = "Welcome to Foundation Shell\n"
 )
@@ -31,6 +34,7 @@ type Shell struct {
 	stderr        io.Writer
 	isInteractive bool
 	lastExitCode  int
+	executor      expander.SubshellExecutor
 }
 
 // New creates a new Shell with standard I/O and the specified interactivity mode.
@@ -57,7 +61,6 @@ func NewWithIO(stdin io.Reader, stdout, stderr io.Writer, interactive bool) *She
 
 // IsTerminal checks if the given reader is connected to a TTY.
 func (s *Shell) IsTerminal() bool {
-	// Check if stdin is an *os.File with a valid file descriptor
 	if f, ok := s.stdin.(*os.File); ok {
 		return term.IsTerminal(int(f.Fd()))
 	}
@@ -65,7 +68,6 @@ func (s *Shell) IsTerminal() bool {
 }
 
 // IsTerminal checks if os.Stdin is connected to a TTY.
-// This is a convenience function for use before creating a Shell.
 func IsTerminal() bool {
 	return term.IsTerminal(int(os.Stdin.Fd()))
 }
@@ -73,11 +75,63 @@ func IsTerminal() bool {
 // Run starts the main REPL loop.
 // Returns the last exit code when the loop terminates.
 func (s *Shell) Run(ctx context.Context) int {
+	// Create executor for subshell expansion (same-process execution)
+	s.executor = chain.NewExecutor(ctx, s.stdin, s.stderr)
+
 	if s.isInteractive {
 		fmt.Fprint(s.stdout, welcomeMessage)
+		return s.runInteractive(ctx)
+	}
+	return s.runNonInteractive(ctx)
+}
+
+// executeCommand parses and executes a single command line.
+// Returns true if execution should continue, false on fatal errors.
+func (s *Shell) executeCommand(ctx context.Context, line string) bool {
+	cmdChain, err := parser.ParseWithExecutor(line, s.executor)
+	if err != nil {
+		if errors.Is(err, parser.ErrEmptyInput) {
+			return true
+		}
+		// Use syntax analyzer for better error display
+		result := syntax.Analyze(line)
+		if !result.Valid {
+			fmt.Fprint(s.stderr, syntax.FormatDiagnostics(line, result.Errors))
+		} else {
+			fmt.Fprintf(s.stderr, "parse error: %v\n", err)
+		}
+		s.lastExitCode = 1
+		return true
 	}
 
-	scanner := bufio.NewScanner(s.stdin)
+	exitCode, err := chain.ExecuteWithIO(ctx, cmdChain, s.stdin, s.stdout, s.stderr)
+	if err != nil {
+		fmt.Fprintf(s.stderr, "execution error: %v\n", err)
+	}
+	s.lastExitCode = exitCode
+	return true
+}
+
+// runInteractive handles the REPL loop for interactive mode using readline.
+func (s *Shell) runInteractive(ctx context.Context) int {
+	highlighter := syntax.NewHighlighter(syntax.DefaultTheme)
+
+	rl, err := readline.NewEx(&readline.Config{
+		Prompt:          s.getPrompt(),
+		InterruptPrompt: "^C",
+		EOFPrompt:       "exit",
+		Painter: func(line []rune, pos int) []rune {
+			return []rune(highlighter.Highlight(string(line)))
+		},
+		Stdin:  s.stdin,
+		Stdout: s.stdout,
+		Stderr: s.stderr,
+	})
+	if err != nil {
+		fmt.Fprintf(s.stderr, "readline init error: %v\n", err)
+		return 1
+	}
+	defer rl.Close()
 
 	for {
 		// Check for context cancellation
@@ -87,9 +141,46 @@ func (s *Shell) Run(ctx context.Context) int {
 		default:
 		}
 
-		// Print prompt in interactive mode
-		if s.isInteractive {
-			fmt.Fprint(s.stdout, s.getPrompt())
+		// Update prompt based on last exit code
+		rl.SetPrompt(s.getPrompt())
+
+		// Read next line
+		line, err := rl.Readline()
+		if err != nil {
+			if err == readline.ErrInterrupt {
+				// Ctrl+C pressed, continue to next prompt
+				continue
+			}
+			if err == io.EOF {
+				// Ctrl+D or EOF, graceful exit
+				break
+			}
+			fmt.Fprintf(s.stderr, "read error: %v\n", err)
+			s.lastExitCode = 1
+			break
+		}
+
+		// Skip empty lines
+		if line == "" {
+			continue
+		}
+
+		s.executeCommand(ctx, line)
+	}
+
+	return s.lastExitCode
+}
+
+// runNonInteractive handles the REPL loop for non-interactive mode (piped input).
+func (s *Shell) runNonInteractive(ctx context.Context) int {
+	scanner := bufio.NewScanner(s.stdin)
+
+	for {
+		// Check for context cancellation
+		select {
+		case <-ctx.Done():
+			return s.lastExitCode
+		default:
 		}
 
 		// Read next line
@@ -110,24 +201,7 @@ func (s *Shell) Run(ctx context.Context) int {
 			continue
 		}
 
-		// Parse the input
-		cmdChain, err := parser.Parse(line)
-		if err != nil {
-			// Handle empty input gracefully (not an error to user)
-			if errors.Is(err, parser.ErrEmptyInput) {
-				continue
-			}
-			fmt.Fprintf(s.stderr, "parse error: %v\n", err)
-			s.lastExitCode = 1
-			continue
-		}
-
-		// Execute the command chain
-		exitCode, err := chain.ExecuteWithIO(ctx, cmdChain, s.stdin, s.stdout, s.stderr)
-		if err != nil {
-			fmt.Fprintf(s.stderr, "execution error: %v\n", err)
-		}
-		s.lastExitCode = exitCode
+		s.executeCommand(ctx, line)
 	}
 
 	return s.lastExitCode
@@ -151,30 +225,17 @@ func (s *Shell) RunScript(ctx context.Context, filename string) int {
 // RunCommand executes a single command string.
 // Returns the exit code of the command.
 func (s *Shell) RunCommand(ctx context.Context, cmdStr string) int {
-	// Parse the command
-	cmdChain, err := parser.Parse(cmdStr)
-	if err != nil {
-		if errors.Is(err, parser.ErrEmptyInput) {
-			return 0
-		}
-		fmt.Fprintf(s.stderr, "parse error: %v\n", err)
-		return 1
+	if s.executor == nil {
+		s.executor = chain.NewExecutor(ctx, s.stdin, s.stderr)
 	}
-
-	// Execute the command chain
-	exitCode, err := chain.ExecuteWithIO(ctx, cmdChain, s.stdin, s.stdout, s.stderr)
-	if err != nil {
-		fmt.Fprintf(s.stderr, "execution error: %v\n", err)
-	}
-	s.lastExitCode = exitCode
-	return exitCode
+	s.executeCommand(ctx, cmdStr)
+	return s.lastExitCode
 }
 
-// getPrompt returns the shell prompt with color based on the last exit code.
-// Green for success (exit code 0), red for failure (non-zero exit code).
+// getPrompt returns the shell prompt styled based on the last exit code.
 func (s *Shell) getPrompt() string {
 	if s.lastExitCode == 0 {
-		return colorGreen + "$ " + colorReset
+		return promptSuccess + "$ " + promptReset
 	}
-	return colorRed + "$ " + colorReset
+	return promptFailure + "$ " + promptReset
 }

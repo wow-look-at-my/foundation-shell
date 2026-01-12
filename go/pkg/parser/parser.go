@@ -57,6 +57,8 @@ func parseOperator(s string) (token.TokenType, bool) {
 		return token.And, true
 	case "||":
 		return token.Or, true
+	case ";":
+		return token.Semicolon, true
 	case "<":
 		return token.RedirectStdIn, true
 	case ">":
@@ -72,9 +74,9 @@ func parseOperator(s string) (token.TokenType, bool) {
 	}
 }
 
-// isChainOperator returns true if the token type is a chain operator (|, &&, ||).
+// isChainOperator returns true if the token type is a chain operator (|, &&, ||, ;).
 func isChainOperator(t token.TokenType) bool {
-	return t == token.Pipe || t == token.And || t == token.Or
+	return t == token.Pipe || t == token.And || t == token.Or || t == token.Semicolon
 }
 
 // isRedirectionOperator returns true if the token type is a redirection operator.
@@ -86,7 +88,14 @@ func isRedirectionOperator(t token.TokenType) bool {
 
 // Parse parses the input string into a command chain.
 // It performs lexer tokenization, expansion, token classification, and chain building.
+// This version does not expand command substitutions ($(...) or backticks).
 func Parse(input string) (*Chain, error) {
+	return ParseWithExecutor(input, nil)
+}
+
+// ParseWithExecutor parses the input string into a command chain with optional subshell expansion.
+// If executor is non-nil, command substitutions ($(...) and `...`) will be expanded.
+func ParseWithExecutor(input string, executor expander.SubshellExecutor) (*Chain, error) {
 	// Step 1: Tokenize input
 	tokenContexts, err := lexer.Tokenize(input)
 	if err != nil {
@@ -120,6 +129,14 @@ func Parse(input string) (*Chain, error) {
 		if !tc.WasSingleQuoted {
 			expandedValue = expander.ExpandTilde(expandedValue)
 			expandedValue = expander.ExpandEnvironment(expandedValue)
+
+			// Expand command substitutions if executor provided
+			if executor != nil {
+				expandedValue, err = expander.ExpandCommandSubstitution(expandedValue, executor)
+				if err != nil {
+					return nil, fmt.Errorf("command substitution error: %w", err)
+				}
+			}
 		}
 		// Strip escape markers after expansion
 		expandedValue = lexer.StripEscapeMarkers(expandedValue)

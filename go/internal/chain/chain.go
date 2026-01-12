@@ -2,6 +2,7 @@
 package chain
 
 import (
+	"bytes"
 	"context"
 	"io"
 	"os"
@@ -11,6 +12,45 @@ import (
 	"foundation-shell/internal/token"
 	"foundation-shell/pkg/parser"
 )
+
+// Executor implements expander.SubshellExecutor for same-process subshell execution.
+// It parses and executes commands using the internal parser and chain executor,
+// capturing stdout for command substitution.
+type Executor struct {
+	ctx    context.Context
+	stdin  io.Reader
+	stderr io.Writer
+}
+
+// NewExecutor creates a new Executor for subshell execution.
+func NewExecutor(ctx context.Context, stdin io.Reader, stderr io.Writer) *Executor {
+	return &Executor{
+		ctx:    ctx,
+		stdin:  stdin,
+		stderr: stderr,
+	}
+}
+
+// Execute runs a command string and returns its output.
+// This implements expander.SubshellExecutor interface.
+func (e *Executor) Execute(command string) (output string, exitCode int, err error) {
+	// Parse the command using internal parser
+	chain, err := parser.Parse(command)
+	if err != nil {
+		return "", 1, err
+	}
+
+	// Capture stdout in a buffer
+	var stdout bytes.Buffer
+
+	// Execute using internal chain executor (same process, no external shell)
+	exitCode, err = ExecuteWithIO(e.ctx, chain, e.stdin, &stdout, e.stderr)
+	if err != nil {
+		return "", exitCode, err
+	}
+
+	return stdout.String(), exitCode, nil
+}
 
 // syncWriter wraps a writer with a mutex for thread-safe concurrent writes.
 type syncWriter struct {
@@ -93,6 +133,8 @@ func ExecuteWithIO(ctx context.Context, chain *parser.Chain, stdin io.Reader, st
 						i++
 					}
 				}
+			case token.Semicolon:
+				// Semicolon: unconditionally continue to next command
 			}
 		}
 	}
