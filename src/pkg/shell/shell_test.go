@@ -5,10 +5,67 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
 )
+
+// Diagnostic output format (from spec/diagnostics.md):
+//   Line 1: The input line
+//   Line 2: Caret markers (^) showing error location
+//   Line 3: "error: " prefix followed by message
+//
+// Example for input "|":
+//   |
+//   ^
+//   error: unexpected operator at end
+
+// assertDiagnostic validates that the diagnostic output matches the expected format.
+// It checks:
+// - The input line appears in the output
+// - Caret markers (^) appear on the line after the input
+// - "error: " prefix followed by the expected message
+func assertDiagnostic(t *testing.T, output, inputLine, expectedMessage string) {
+	t.Helper()
+
+	lines := strings.Split(output, "\n")
+
+	// Find the input line in output
+	inputLineIdx := -1
+	for i, line := range lines {
+		if line == inputLine {
+			inputLineIdx = i
+			break
+		}
+	}
+	if inputLineIdx == -1 {
+		t.Errorf("diagnostic output missing input line %q\ngot:\n%s", inputLine, output)
+		return
+	}
+
+	// Next line should be caret markers
+	if inputLineIdx+1 >= len(lines) {
+		t.Errorf("diagnostic output missing caret line after input\ngot:\n%s", output)
+		return
+	}
+	caretLine := lines[inputLineIdx+1]
+	if !regexp.MustCompile(`^\s*\^+$`).MatchString(caretLine) {
+		t.Errorf("diagnostic caret line should be spaces and ^ only, got %q\ngot:\n%s", caretLine, output)
+		return
+	}
+
+	// Next line should be "error: <message>"
+	if inputLineIdx+2 >= len(lines) {
+		t.Errorf("diagnostic output missing error message line\ngot:\n%s", output)
+		return
+	}
+	errorLine := lines[inputLineIdx+2]
+	expectedPrefix := "error: " + expectedMessage
+	if errorLine != expectedPrefix {
+		t.Errorf("diagnostic error message mismatch\nexpected: %q\ngot: %q", expectedPrefix, errorLine)
+	}
+}
 
 func TestRun_SimpleCommand(t *testing.T) {
 	stdin := strings.NewReader("echo hello\n")
@@ -69,10 +126,8 @@ func TestRun_ParseErrorGraceful(t *testing.T) {
 		t.Errorf("expected output to contain 'recovered', got %q", stdout.String())
 	}
 
-	// Should report parse error to stderr
-	if !strings.Contains(stderr.String(), "parse error") {
-		t.Errorf("expected stderr to contain 'parse error', got %q", stderr.String())
-	}
+	// Should report parse error to stderr with exact diagnostic format
+	assertDiagnostic(t, stderr.String(), "|", "unexpected operator at end")
 
 	// Last command succeeded, so exit code should be 0
 	if exitCode != 0 {
@@ -262,19 +317,35 @@ func TestInteractiveMode_WelcomeMessage(t *testing.T) {
 }
 
 func TestInteractiveMode_Prompt(t *testing.T) {
-	stdin := strings.NewReader("echo test\n")
+	// Note: readline requires io.ReadCloser for stdin, so we use os.Pipe
+	// to create a proper stdin that readline can use
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("failed to create pipe: %v", err)
+	}
+	defer r.Close()
+
 	stdout := &bytes.Buffer{}
 	stderr := &bytes.Buffer{}
 
-	sh := NewWithIO(stdin, stdout, stderr, true)
+	sh := NewWithIO(r, stdout, stderr, true)
 	ctx := context.Background()
+
+	// Write command and close to signal EOF
+	go func() {
+		w.WriteString("echo test\n")
+		w.Close()
+	}()
 
 	sh.Run(ctx)
 
 	output := stdout.String()
-	// Should contain colored prompt (green $ for success)
-	if !strings.Contains(output, "$ ") {
-		t.Errorf("expected prompt in output, got %q", output)
+	// Should contain welcome message and command output
+	if !strings.Contains(output, "Welcome to Foundation Shell") {
+		t.Errorf("expected welcome message in output, got %q", output)
+	}
+	if !strings.Contains(output, "test") {
+		t.Errorf("expected 'test' in output, got %q", output)
 	}
 }
 
@@ -282,8 +353,8 @@ func TestGetPrompt_SuccessColor(t *testing.T) {
 	sh := &Shell{lastExitCode: 0}
 	prompt := sh.getPrompt()
 
-	if !strings.Contains(prompt, colorGreen) {
-		t.Errorf("expected green color in prompt for success, got %q", prompt)
+	if !strings.Contains(prompt, promptSuccess) {
+		t.Errorf("expected success styling in prompt, got %q", prompt)
 	}
 	if !strings.Contains(prompt, "$ ") {
 		t.Errorf("expected '$ ' in prompt, got %q", prompt)
@@ -294,8 +365,8 @@ func TestGetPrompt_FailureColor(t *testing.T) {
 	sh := &Shell{lastExitCode: 1}
 	prompt := sh.getPrompt()
 
-	if !strings.Contains(prompt, colorRed) {
-		t.Errorf("expected red color in prompt for failure, got %q", prompt)
+	if !strings.Contains(prompt, promptFailure) {
+		t.Errorf("expected failure styling in prompt, got %q", prompt)
 	}
 	if !strings.Contains(prompt, "$ ") {
 		t.Errorf("expected '$ ' in prompt, got %q", prompt)
@@ -426,8 +497,63 @@ func TestRunCommand_ParseError(t *testing.T) {
 		t.Errorf("expected exit code 1 for parse error, got %d", exitCode)
 	}
 
-	if !strings.Contains(stderr.String(), "parse error") {
-		t.Errorf("expected stderr to contain 'parse error', got %q", stderr.String())
+	// Should report parse error to stderr with exact diagnostic format
+	assertDiagnostic(t, stderr.String(), "|", "unexpected operator at end")
+}
+
+func TestCommandSubstitution(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		contains string
+	}{
+		{
+			name:     "echo with which echo",
+			input:    "echo $(which echo)\n",
+			contains: "/echo", // path will contain /echo (e.g., /bin/echo or /usr/bin/echo)
+		},
+		{
+			name:     "simple command substitution",
+			input:    "echo $(echo hello)\n",
+			contains: "hello",
+		},
+		{
+			name:     "nested command substitution",
+			input:    "echo $(echo $(echo nested))\n",
+			contains: "nested",
+		},
+		{
+			name:     "backtick substitution",
+			input:    "echo `echo backtick`\n",
+			contains: "backtick",
+		},
+		{
+			name:     "substitution with pipe",
+			input:    "echo $(echo hello | tr a-z A-Z)\n",
+			contains: "HELLO",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			stdin := strings.NewReader(tt.input)
+			stdout := &bytes.Buffer{}
+			stderr := &bytes.Buffer{}
+
+			sh := NewWithIO(stdin, stdout, stderr, false)
+			ctx := context.Background()
+
+			exitCode := sh.Run(ctx)
+
+			if exitCode != 0 {
+				t.Errorf("expected exit code 0, got %d, stderr: %s", exitCode, stderr.String())
+			}
+
+			output := stdout.String()
+			if !strings.Contains(output, tt.contains) {
+				t.Errorf("expected output to contain %q, got %q", tt.contains, output)
+			}
+		})
 	}
 }
 

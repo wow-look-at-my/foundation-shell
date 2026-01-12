@@ -112,21 +112,34 @@ func (s *Shell) executeCommand(ctx context.Context, line string) bool {
 	return true
 }
 
+// syntaxPainter implements readline.Painter for syntax highlighting.
+type syntaxPainter struct {
+	highlighter *syntax.Highlighter
+}
+
+func (p *syntaxPainter) Paint(line []rune, pos int) []rune {
+	return []rune(p.highlighter.Highlight(string(line)))
+}
+
 // runInteractive handles the REPL loop for interactive mode using readline.
 func (s *Shell) runInteractive(ctx context.Context) int {
-	highlighter := syntax.NewHighlighter(syntax.DefaultTheme)
+	painter := &syntaxPainter{highlighter: syntax.NewHighlighter(syntax.DefaultTheme)}
 
-	rl, err := readline.NewEx(&readline.Config{
+	cfg := &readline.Config{
 		Prompt:          s.getPrompt(),
 		InterruptPrompt: "^C",
 		EOFPrompt:       "exit",
-		Painter: func(line []rune, pos int) []rune {
-			return []rune(highlighter.Highlight(string(line)))
-		},
-		Stdin:  s.stdin,
-		Stdout: s.stdout,
-		Stderr: s.stderr,
-	})
+		Painter:         painter,
+		Stdout:          s.stdout,
+		Stderr:          s.stderr,
+	}
+
+	// Only set Stdin if it's a ReadCloser (required by readline)
+	if rc, ok := s.stdin.(io.ReadCloser); ok {
+		cfg.Stdin = rc
+	}
+
+	rl, err := readline.NewEx(cfg)
 	if err != nil {
 		fmt.Fprintf(s.stderr, "readline init error: %v\n", err)
 		return 1

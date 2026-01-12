@@ -273,3 +273,161 @@ func TestIsVarChar(t *testing.T) {
 		})
 	}
 }
+
+// mockExecutor implements SubshellExecutor for testing.
+type mockExecutor struct {
+	outputs map[string]string
+	calls   []string
+}
+
+func newMockExecutor() *mockExecutor {
+	return &mockExecutor{
+		outputs: make(map[string]string),
+		calls:   make([]string, 0),
+	}
+}
+
+func (m *mockExecutor) Execute(command string) (string, int, error) {
+	m.calls = append(m.calls, command)
+	if output, ok := m.outputs[command]; ok {
+		return output, 0, nil
+	}
+	return "", 0, nil
+}
+
+func TestExpandCommandSubstitution(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		outputs  map[string]string
+		expected string
+	}{
+		{
+			name:     "no substitution",
+			input:    "hello world",
+			outputs:  map[string]string{},
+			expected: "hello world",
+		},
+		{
+			name:  "simple dollar paren",
+			input: "$(whoami)",
+			outputs: map[string]string{
+				"whoami": "testuser\n",
+			},
+			expected: "testuser",
+		},
+		{
+			name:  "dollar paren with surrounding text",
+			input: "hello $(whoami) there",
+			outputs: map[string]string{
+				"whoami": "testuser\n",
+			},
+			expected: "hello testuser there",
+		},
+		{
+			name:  "simple backtick",
+			input: "`whoami`",
+			outputs: map[string]string{
+				"whoami": "testuser\n",
+			},
+			expected: "testuser",
+		},
+		{
+			name:  "backtick with surrounding text",
+			input: "hello `whoami` there",
+			outputs: map[string]string{
+				"whoami": "testuser\n",
+			},
+			expected: "hello testuser there",
+		},
+		{
+			name:  "multiple substitutions",
+			input: "$(cmd1) and $(cmd2)",
+			outputs: map[string]string{
+				"cmd1": "one\n",
+				"cmd2": "two\n",
+			},
+			expected: "one and two",
+		},
+		{
+			name:  "nested dollar paren",
+			input: "$(echo $(whoami))",
+			outputs: map[string]string{
+				"whoami":        "testuser\n",
+				"echo testuser": "testuser\n",
+			},
+			expected: "testuser",
+		},
+		{
+			name:  "command with arguments",
+			input: "$(echo hello world)",
+			outputs: map[string]string{
+				"echo hello world": "hello world\n",
+			},
+			expected: "hello world",
+		},
+		{
+			name:  "echo which echo pattern",
+			input: "$(which echo)",
+			outputs: map[string]string{
+				"which echo": "/bin/echo\n",
+			},
+			expected: "/bin/echo",
+		},
+		{
+			name:  "trailing newlines stripped",
+			input: "$(cmd)",
+			outputs: map[string]string{
+				"cmd": "output\n\n\n",
+			},
+			expected: "output",
+		},
+		{
+			name:  "no trailing newline",
+			input: "$(cmd)",
+			outputs: map[string]string{
+				"cmd": "output",
+			},
+			expected: "output",
+		},
+		{
+			name:  "empty output",
+			input: "$(cmd)",
+			outputs: map[string]string{
+				"cmd": "",
+			},
+			expected: "",
+		},
+		{
+			name:  "mixed dollar and backtick",
+			input: "$(cmd1) and `cmd2`",
+			outputs: map[string]string{
+				"cmd1": "one\n",
+				"cmd2": "two\n",
+			},
+			expected: "one and two",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			executor := newMockExecutor()
+			executor.outputs = tt.outputs
+
+			result, err := ExpandCommandSubstitution(tt.input, executor)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if result != tt.expected {
+				t.Errorf("ExpandCommandSubstitution(%q) = %q, want %q", tt.input, result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestExpandCommandSubstitution_NilExecutor(t *testing.T) {
+	_, err := ExpandCommandSubstitution("$(cmd)", nil)
+	if err == nil {
+		t.Error("expected error for nil executor, got nil")
+	}
+}
