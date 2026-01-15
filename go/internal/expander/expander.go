@@ -2,10 +2,16 @@
 package expander
 
 import (
+	"errors"
 	"os"
 	"strings"
 	"unicode"
 )
+
+// SubshellExecutor is an interface for executing subshell commands.
+type SubshellExecutor interface {
+	Execute(command string) (output string, exitCode int, err error)
+}
 
 // EscapeMarker is the marker used to indicate an escaped dollar sign.
 // When a token contains \x01$, it should be converted to a literal $ without expansion.
@@ -151,4 +157,151 @@ func Expand(token string, wasSingleQuoted bool) string {
 	result = ExpandEnvironment(result)
 
 	return result
+}
+
+// ExpandCommandSubstitution expands $(...) and `...` command substitutions in a token.
+// It processes innermost substitutions first to handle nesting.
+// Trailing newlines are trimmed from command output (standard shell behavior).
+func ExpandCommandSubstitution(token string, executor SubshellExecutor) (string, error) {
+	if executor == nil {
+		return "", errors.New("executor cannot be nil")
+	}
+
+	result := token
+
+	// Keep expanding until no more substitutions are found.
+	// This naturally handles nesting by processing innermost first.
+	for {
+		// Try to find an innermost $(...) or `...` substitution
+		dollarStart, dollarEnd, dollarCmd := findInnermostDollarParen(result)
+		backtickStart, backtickEnd, backtickCmd := findInnermostBacktick(result)
+
+		// If no substitutions found, we're done
+		if dollarStart == -1 && backtickStart == -1 {
+			break
+		}
+
+		// Determine which substitution to process (prefer the one that appears first,
+		// or if they're at the same position, prefer $(...) syntax)
+		var start, end int
+		var cmd string
+
+		if dollarStart == -1 {
+			start, end, cmd = backtickStart, backtickEnd, backtickCmd
+		} else if backtickStart == -1 {
+			start, end, cmd = dollarStart, dollarEnd, dollarCmd
+		} else if dollarStart <= backtickStart {
+			start, end, cmd = dollarStart, dollarEnd, dollarCmd
+		} else {
+			start, end, cmd = backtickStart, backtickEnd, backtickCmd
+		}
+
+		// Execute the command
+		output, _, err := executor.Execute(cmd)
+		if err != nil {
+			return "", err
+		}
+
+		// Trim trailing newlines (standard shell behavior)
+		output = strings.TrimRight(output, "\n")
+
+		// Replace the substitution with the output
+		result = result[:start] + output + result[end:]
+	}
+
+	return result, nil
+}
+
+// findInnermostDollarParen finds the innermost $(...) substitution.
+// Returns the start index (at $), end index (after closing paren), and the command inside.
+// Returns -1, -1, "" if no substitution is found.
+func findInnermostDollarParen(s string) (start, end int, cmd string) {
+	// Find all $( positions and track parenthesis depth to find innermost
+	bestStart := -1
+	bestEnd := -1
+	bestCmd := ""
+
+	i := 0
+	for i < len(s)-1 {
+		if s[i] == '$' && s[i+1] == '(' {
+			// Found a $( - now find its matching )
+			parenStart := i + 2
+			matchEnd := findMatchingParen(s, parenStart)
+			if matchEnd != -1 {
+				innerCmd := s[parenStart:matchEnd]
+				// Check if this command contains no further $( - making it innermost
+				if !strings.Contains(innerCmd, "$(") {
+					// This is an innermost substitution
+					bestStart = i
+					bestEnd = matchEnd + 1
+					bestCmd = innerCmd
+					break
+				}
+			}
+			i++
+		} else {
+			i++
+		}
+	}
+
+	return bestStart, bestEnd, bestCmd
+}
+
+// findMatchingParen finds the closing parenthesis matching an opening paren.
+// startIdx should be the index right after the opening paren.
+// Returns the index of the closing paren, or -1 if not found.
+func findMatchingParen(s string, startIdx int) int {
+	depth := 1
+	for i := startIdx; i < len(s); i++ {
+		switch s[i] {
+		case '(':
+			depth++
+		case ')':
+			depth--
+			if depth == 0 {
+				return i
+			}
+		}
+	}
+	return -1
+}
+
+// findInnermostBacktick finds the innermost `...` substitution.
+// Returns the start index (at first backtick), end index (after closing backtick), and the command inside.
+// Returns -1, -1, "" if no substitution is found.
+func findInnermostBacktick(s string) (start, end int, cmd string) {
+	// For backticks, we need to find pairs. Nested backticks are tricky in real shells,
+	// but we'll implement a simple version: find the first backtick, then find its pair.
+	// For nested backticks like `echo `date``, we process innermost first.
+
+	backticks := []int{}
+	for i := 0; i < len(s); i++ {
+		if s[i] == '`' {
+			backticks = append(backticks, i)
+		}
+	}
+
+	// Need at least 2 backticks for a substitution
+	if len(backticks) < 2 {
+		return -1, -1, ""
+	}
+
+	// For innermost-first processing with backticks:
+	// If we have `echo `date``, we want to find the innermost pair first.
+	// We'll use a simple heuristic: find the shortest span between consecutive backticks
+	// that doesn't contain other backticks.
+
+	for i := 0; i < len(backticks)-1; i++ {
+		startPos := backticks[i]
+		endPos := backticks[i+1]
+		innerCmd := s[startPos+1 : endPos]
+
+		// Check if this span contains no backticks - making it innermost
+		if !strings.Contains(innerCmd, "`") {
+			return startPos, endPos + 1, innerCmd
+		}
+	}
+
+	// Fallback: use first and second backtick
+	return backticks[0], backticks[1] + 1, s[backticks[0]+1 : backticks[1]]
 }

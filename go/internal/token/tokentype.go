@@ -20,6 +20,8 @@ const (
 	And
 	// Or represents the logical OR operator (||).
 	Or
+	// Semicolon represents the command separator (;).
+	Semicolon
 	// RedirectStdIn represents input redirection (<).
 	RedirectStdIn
 	// RedirectStdOut represents output redirection (>).
@@ -40,7 +42,7 @@ func (t TokenType) IsValue() bool {
 // IsOperator returns true if the token type is an operator.
 func (t TokenType) IsOperator() bool {
 	switch t {
-	case Pipe, And, Or, RedirectStdIn, RedirectStdOut, RedirectStdOutAppend, RedirectStdErr, RedirectStdErrAppend:
+	case Pipe, And, Or, Semicolon, RedirectStdIn, RedirectStdOut, RedirectStdOutAppend, RedirectStdErr, RedirectStdErrAppend:
 		return true
 	default:
 		return false
@@ -60,6 +62,8 @@ func (t TokenType) String() string {
 		return "&&"
 	case Or:
 		return "||"
+	case Semicolon:
+		return ";"
 	case RedirectStdIn:
 		return "<"
 	case RedirectStdOut:
