@@ -338,7 +338,9 @@ func (a *analyzer) parseWord() {
 		}
 
 		// Check for word boundaries (whitespace or operators)
-		if singleQuoteDepth == 0 && doubleQuoteDepth == 0 && backtickDepth == 0 && parenDepth == 0 {
+		// We're outside quotes when the count is even (0, 2, 4, ...)
+		outsideQuotes := singleQuoteDepth%2 == 0 && doubleQuoteDepth%2 == 0 && backtickDepth%2 == 0 && parenDepth == 0
+		if outsideQuotes {
 			if unicode.IsSpace(c) {
 				break
 			}

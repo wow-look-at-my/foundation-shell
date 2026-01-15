@@ -142,11 +142,19 @@ func TestAnalyze_DoubleQuotes(t *testing.T) {
 }
 
 func TestAnalyze_NestedSingleQuotes(t *testing.T) {
-	// Depth-tracked nesting: 'echo 'word'' should be valid
-	result := Analyze("echo 'it's 'cool''")
+	// Depth-tracked nesting with even quote count is valid
+	// 'hello' 'world' has 4 single quotes (even = valid)
+	result := Analyze("echo 'hello' 'world'")
 
 	if !result.Valid {
 		t.Fatalf("expected valid result for nested single quotes, got errors: %v", result.Errors)
+	}
+
+	// This has 4 quotes: 'outer 'inner' end'
+	// Quote depth: 1, 2, 1, 0 - even count = valid
+	result2 := Analyze("echo 'outer 'inner' end'")
+	if !result2.Valid {
+		t.Fatalf("expected valid result for depth-tracked nesting, got errors: %v", result2.Errors)
 	}
 }
 

@@ -6,10 +6,13 @@
 .cache/
 
 # Build output
-/build/
+build/
 
 # Go binaries
 *.exe
 
 # Backup files
 *.bak
+
+# Claude Code local settings
+.claude/*.local.json

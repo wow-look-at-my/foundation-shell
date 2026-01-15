@@ -540,6 +540,134 @@ func TestStripEscapeMarkers(t *testing.T) {
 	}
 }
 
+func TestTokenize_CommandSubstitution(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected []TokenContext
+	}{
+		{
+			name:  "simple dollar paren",
+			input: "echo $(whoami)",
+			expected: []TokenContext{
+				{Content: "echo", WasSingleQuoted: false},
+				{Content: "$(whoami)", WasSingleQuoted: false},
+			},
+		},
+		{
+			name:  "dollar paren with spaces inside",
+			input: "echo $(which echo)",
+			expected: []TokenContext{
+				{Content: "echo", WasSingleQuoted: false},
+				{Content: "$(which echo)", WasSingleQuoted: false},
+			},
+		},
+		{
+			name:  "nested dollar paren",
+			input: "echo $(echo $(whoami))",
+			expected: []TokenContext{
+				{Content: "echo", WasSingleQuoted: false},
+				{Content: "$(echo $(whoami))", WasSingleQuoted: false},
+			},
+		},
+		{
+			name:  "simple backtick",
+			input: "echo `whoami`",
+			expected: []TokenContext{
+				{Content: "echo", WasSingleQuoted: false},
+				{Content: "`whoami`", WasSingleQuoted: false},
+			},
+		},
+		{
+			name:  "backtick with spaces inside",
+			input: "echo `which echo`",
+			expected: []TokenContext{
+				{Content: "echo", WasSingleQuoted: false},
+				{Content: "`which echo`", WasSingleQuoted: false},
+			},
+		},
+		{
+			name:  "dollar paren in middle of word",
+			input: "prefix$(cmd)suffix",
+			expected: []TokenContext{
+				{Content: "prefix$(cmd)suffix", WasSingleQuoted: false},
+			},
+		},
+		{
+			name:  "multiple substitutions",
+			input: "echo $(cmd1) $(cmd2)",
+			expected: []TokenContext{
+				{Content: "echo", WasSingleQuoted: false},
+				{Content: "$(cmd1)", WasSingleQuoted: false},
+				{Content: "$(cmd2)", WasSingleQuoted: false},
+			},
+		},
+		{
+			name:  "substitution with pipe inside",
+			input: "echo $(cat file | grep pattern)",
+			expected: []TokenContext{
+				{Content: "echo", WasSingleQuoted: false},
+				{Content: "$(cat file | grep pattern)", WasSingleQuoted: false},
+			},
+		},
+		{
+			name:  "dollar paren in double quotes",
+			input: `echo "$(whoami)"`,
+			expected: []TokenContext{
+				{Content: "echo", WasSingleQuoted: false},
+				{Content: "$(whoami)", WasSingleQuoted: false},
+			},
+		},
+		{
+			name:  "dollar paren in single quotes preserved literally",
+			input: "echo '$(whoami)'",
+			expected: []TokenContext{
+				{Content: "echo", WasSingleQuoted: false},
+				{Content: "$(whoami)", WasSingleQuoted: true},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tokens, err := Tokenize(tt.input)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			assertTokensEqual(t, tt.expected, tokens)
+		})
+	}
+}
+
+func TestTokenize_UnclosedCommandSubstitution(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+	}{
+		{
+			name:  "unclosed dollar paren",
+			input: "echo $(whoami",
+		},
+		{
+			name:  "unclosed nested dollar paren",
+			input: "echo $(echo $(whoami)",
+		},
+		{
+			name:  "unclosed backtick",
+			input: "echo `whoami",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := Tokenize(tt.input)
+			if err == nil {
+				t.Fatalf("expected error for unclosed command substitution")
+			}
+		})
+	}
+}
+
 // assertTokensEqual compares two slices of TokenContext for equality.
 func assertTokensEqual(t *testing.T, expected, actual []TokenContext) {
 	t.Helper()
