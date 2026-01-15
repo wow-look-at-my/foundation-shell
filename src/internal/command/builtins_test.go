@@ -3,6 +3,7 @@ package command
 import (
 	"bytes"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -42,7 +43,8 @@ func TestBuiltinCd(t *testing.T) {
 	defer os.Chdir(originalDir)
 
 	t.Run("change to existing directory", func(t *testing.T) {
-		tempDir := t.TempDir()
+		// Resolve symlinks because macOS has /var -> /private/var
+		tempDir, _ := filepath.EvalSymlinks(t.TempDir())
 
 		var stdout, stderr bytes.Buffer
 		err := ExecuteBuiltin("cd", []string{tempDir}, nil, &stdout, &stderr)

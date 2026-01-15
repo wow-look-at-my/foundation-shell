@@ -16,7 +16,7 @@ build: setup
 
 # Run all tests (Go unit tests + BATS integration tests)
 test: build
-    cd src && go test -v -race ./...
+    cd src && go test -v -race -cover ./...
     bats spec/tests/
 
 # Run the shell
@@ -42,8 +42,10 @@ lint:
 deps:
     go mod tidy
 
-# Install to ~/.local/bin
+# Install to ~/.local/bin (symlinks to build/)
 install: build
     @mkdir -p ~/.local/bin
-    cp build/fsh build/fsh-exec build/fsh-repl ~/.local/bin/
-    @echo "Installed to ~/.local/bin"
+    ln -sf "{{justfile_directory()}}/build/fsh" ~/.local/bin/fsh
+    ln -sf "{{justfile_directory()}}/build/fsh-exec" ~/.local/bin/fsh-exec
+    ln -sf "{{justfile_directory()}}/build/fsh-repl" ~/.local/bin/fsh-repl
+    @echo "Installed symlinks to ~/.local/bin"
