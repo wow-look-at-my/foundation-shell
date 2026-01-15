@@ -8,6 +8,8 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"os/signal"
+	"syscall"
 
 	"foundation-shell/pkg/parser"
 )
@@ -103,8 +105,17 @@ func executeExternal(ctx context.Context, name string, args []string, stdin io.R
 	cmd.Stdin = stdin
 	cmd.Stdout = stdout
 	cmd.Stderr = stderr
+	// Start child first, then ignore SIGINT in shell
+	// This way child has default signal handling, shell ignores
+	if err := cmd.Start(); err != nil {
+		return 1, err
+	}
 
-	err := cmd.Run()
+	// Now ignore SIGINT/SIGQUIT in shell while child runs
+	signal.Ignore(syscall.SIGINT, syscall.SIGQUIT)
+	defer signal.Reset(syscall.SIGINT, syscall.SIGQUIT)
+
+	err := cmd.Wait()
 	if err != nil {
 		// Check for context cancellation
 		if ctx.Err() != nil {
