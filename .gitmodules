@@ -1,0 +1,4 @@
+[submodule "spec"]
+	path = spec
+	url = https://github.com/wow-look-at-my/foundation-shell-spec.git
+	branch = master
