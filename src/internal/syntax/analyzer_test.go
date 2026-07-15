@@ -38,9 +38,9 @@ func TestAnalyze_TokenPositions(t *testing.T) {
 
 	// "echo" at 0-4, " " at 4-5, "hello" at 5-10
 	tests := []struct {
-		index       int
-		start, end  int
-		value       string
+		index      int
+		start, end int
+		value      string
 	}{
 		{0, 0, 4, "echo"},
 		{1, 4, 5, " "},
@@ -58,9 +58,9 @@ func TestAnalyze_TokenPositions(t *testing.T) {
 
 func TestAnalyze_Operators(t *testing.T) {
 	tests := []struct {
-		input    string
-		opValue  string
-		opType   SemanticType
+		input   string
+		opValue string
+		opType  SemanticType
 	}{
 		{"cmd1 | cmd2", "|", TypeOperator},
 		{"cmd1 && cmd2", "&&", TypeOperator},
@@ -220,8 +220,8 @@ func TestAnalyze_UnclosedBacktick_Error(t *testing.T) {
 
 func TestAnalyze_OddQuoteCount_Error(t *testing.T) {
 	tests := []struct {
-		input   string
-		errMsg  string
+		input  string
+		errMsg string
 	}{
 		{`echo "a`, "unclosed double quote (odd count)"},
 		{`echo "a"b"`, "unclosed double quote (odd count)"},

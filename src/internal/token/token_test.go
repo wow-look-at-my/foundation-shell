@@ -115,11 +115,11 @@ func TestTokenType_String(t *testing.T) {
 
 func TestNewValueToken(t *testing.T) {
 	tests := []struct {
-		name        string
-		typ         TokenType
-		value       string
-		wantErr     error
-		wantValue   string
+		name      string
+		typ       TokenType
+		value     string
+		wantErr   error
+		wantValue string
 	}{
 		{
 			name:      "Command with value",

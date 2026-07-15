@@ -281,4 +281,3 @@ func TestPipelineWithAnd(t *testing.T) {
 		t.Errorf("stdout = %q, want %q", stdout, "test\nfound\n")
 	}
 }
-
