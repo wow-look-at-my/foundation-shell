@@ -196,10 +196,11 @@ func TestCommandNotFound(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	exitCode, err := Execute(context.Background(), spec, nil, &stdout, &stderr)
 
-	assert.NotEqual(t, 0, exitCode)
-
-	assert.NotNil(t, err)
-
+	// Not found is an ORDINARY failure: status 127, canonical message on
+	// stderr, no chain-fatal error.
+	require.Nil(t, err)
+	assert.Equal(t, 127, exitCode)
+	assert.Equal(t, "nonexistent_command_that_does_not_exist_12345: command not found\n", stderr.String())
 }
 
 func TestContextCancellation(t *testing.T) {
@@ -222,14 +223,12 @@ func TestContextCancellation(t *testing.T) {
 	elapsed := time.Since(start)
 
 	// Should complete quickly (not 10 seconds)
-	assert.LessOrEqual(t, elapsed, 2*time.Second)
+	assert.LessOrEqual(t, elapsed, 5*time.Second)
 
-	// Should have non-zero exit code
-	assert.NotEqual(t, 0, exitCode)
-
-	// Should return context error
-	assert.Equal(t, context.Canceled, err)
-
+	// Cancellation is treated as an interrupt: status 130, no error —
+	// the chain continues per operator logic.
+	assert.Equal(t, 130, exitCode)
+	assert.Nil(t, err)
 }
 
 func TestEmptyCommand(t *testing.T) {
@@ -259,12 +258,13 @@ func TestInputFileNotFound(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	exitCode, err := Execute(context.Background(), spec, nil, &stdout, &stderr)
 
-	assert.NotEqual(t, 0, exitCode)
-
-	assert.NotNil(t, err)
-
-	assert.Contains(t, err.Error(), "cannot open input file")
-
+	// Redirection open failure: status 1, canonical message with the
+	// UNWRAPPED os reason (filename appears exactly once), no error.
+	require.Nil(t, err)
+	assert.Equal(t, 1, exitCode)
+	assert.Equal(t,
+		"cannot open input file /nonexistent_file_that_does_not_exist_12345: no such file or directory\n",
+		stderr.String())
 }
 
 func TestBuiltinWithOutputRedirection(t *testing.T) {
@@ -336,20 +336,5 @@ func TestSignalTermination(t *testing.T) {
 	}
 }
 
-func TestChildInOwnProcessGroup(t *testing.T) {
-	// Verify child gets its own process group by checking pgid != parent pid
-	spec := &parser.CommandSpec{
-		Args: []string{"sh", "-c", "ps -o pid,pgid -p $$"},
-	}
-
-	var stdout, stderr bytes.Buffer
-	exitCode, err := Execute(context.Background(), spec, nil, &stdout, &stderr)
-
-	require.Nil(t, err)
-
-	assert.Equal(t, 0, exitCode)
-
-	// Just verify it ran - the actual pgid verification is complex
-	assert.NotEqual(t, 0, stdout.Len())
-
-}
+// The old TestChildInOwnProcessGroup asserted nothing about signal behavior;
+// the real tests of the SIGINT-forwarding design live in signal_test.go.

@@ -28,7 +28,7 @@ suite (BATS) run by `just test`.
 
 - `src/` - Go source code (the Go module root)
   - `cmd/fsh/` - Main shell executable (script file, piped stdin, or interactive REPL)
-  - `cmd/fsh-exec/` - One-shot executor: joins its argv with spaces into a single command line and runs it (no `-c` flag)
+  - `cmd/fsh-exec/` - One-shot executor. Two forms: `fsh-exec echo hi` (argv joined with spaces into one command line) and `fsh-exec -c 'echo hi'` (the argument after `-c` IS the command line; `-c` without an argument is a usage error, exit 2)
   - `cmd/fsh-repl/` - REPL-only mode
   - `internal/` - Internal packages (lexer, expander, chain, command, syntax, token)
   - `pkg/` - Public packages (parser, shell)

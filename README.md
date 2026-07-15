@@ -6,8 +6,10 @@ one-shot command executor, and a REPL-only binary.
 
 ## Features
 
-- Pipelines (`cmd1 | cmd2 | cmd3`)
-- Command chaining with `&&`, `||`, and `;`
+- Pipelines (`cmd1 | cmd2 | cmd3`) that terminate when a consumer exits
+  early (`yes | head -1` prints `y` and returns immediately)
+- Command chaining with `&&`, `||`, and `;`, with full short-circuit
+  propagation (`false && a && b` runs nothing)
 - Operators work with or without surrounding whitespace (`a|b`, `cmd>file`);
   quoted or escaped operator characters (`'|'`, `\;`, `grep '>' file`) stay
   literal
@@ -17,7 +19,17 @@ one-shot command executor, and a REPL-only binary.
 - Command substitution — both `$(...)` (nestable) and backticks; bodies are
   expanded recursively and output is spliced as data, never re-executed
 - `#` comments and newlines as command separators
-- Environment variable and tilde expansion
+- Environment variable and tilde expansion, `$?`, `export`, and standalone
+  `NAME=VALUE` assignments (every variable is an environment variable)
+- Builtins: `cd`, `pwd`, `exit`, `clear`, `help`, `export`; command failures
+  never abort a chain (`nosuchcmd || echo fallback` recovers)
+- Normative exit codes: 127 not found, 126 not executable, 128+N signal
+  deaths, 130 interrupts; `exit` uses a sentinel, never `os.Exit`
+- SIGINT/SIGQUIT are forwarded to the running child for every command in
+  the session; the shell survives Ctrl+C
+- Non-interactive input (piped stdin, script files, `fsh-exec`) is read in
+  full and parsed as ONE input: quotes, substitution bodies, and operator
+  continuations may span lines, and a parse error rejects the whole input
 - Syntax highlighting, both live in the REPL and as a standalone analyzer
 - Interactive REPL with readline line editing
 
@@ -35,7 +47,7 @@ This produces three binaries in `build/`:
 | Binary | Purpose |
 |--------|---------|
 | `fsh` | The shell. Runs a script file argument, reads commands from piped stdin, or starts an interactive REPL on a TTY. |
-| `fsh-exec` | One-shot executor: joins its argv into a single command line and runs it (like `bash -c "..."` without the `-c`). |
+| `fsh-exec` | One-shot executor. Two forms: `fsh-exec echo hi` (argv joined into one command line) and `fsh-exec -c 'echo hi'` (the next argument is the command line). |
 | `fsh-repl` | REPL-only mode: always interactive, with prompt and syntax highlighting. |
 
 ## Testing

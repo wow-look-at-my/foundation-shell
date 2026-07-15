@@ -93,9 +93,12 @@ func TestRun_Pipeline(t *testing.T) {
 
 }
 
-func TestRun_ParseErrorGraceful(t *testing.T) {
-	// Input with parse error followed by valid command
-	stdin := strings.NewReader("|\necho recovered\n")
+func TestRun_ParseErrorRejectsWholeInput(t *testing.T) {
+	// Non-interactive mode parses ALL of stdin as ONE input: a parse error
+	// anywhere rejects the whole input — nothing executes, the diagnostic
+	// goes to stderr, and the status is 1 (execution.md §Non-Interactive
+	// Mode). This replaces the old line-by-line recovery semantics.
+	stdin := strings.NewReader("echo before\n| bad\necho after\n")
 	stdout := &bytes.Buffer{}
 	stderr := &bytes.Buffer{}
 
@@ -104,15 +107,14 @@ func TestRun_ParseErrorGraceful(t *testing.T) {
 
 	exitCode := sh.Run(ctx)
 
-	// Should continue after parse error
-	assert.Contains(t, stdout.String(), "recovered")
+	// NOTHING executes — not even the valid commands before/after the bad
+	// line.
+	assert.Empty(t, stdout.String())
 
-	// Should report parse error to stderr with exact diagnostic format
-	assertDiagnostic(t, stderr.String(), "|", "unexpected operator at start: |")
+	// The diagnostic identifies the offending construct.
+	assert.Contains(t, stderr.String(), "error:")
 
-	// Last command succeeded, so exit code should be 0
-	assert.Equal(t, 0, exitCode)
-
+	assert.Equal(t, 1, exitCode)
 }
 
 func TestRunCommand_SingleCommand(t *testing.T) {

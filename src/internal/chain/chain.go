@@ -4,7 +4,7 @@ package chain
 import (
 	"bytes"
 	"context"
-	"fmt"
+	"errors"
 	"io"
 	"os"
 	"sync"
@@ -24,7 +24,7 @@ type Executor struct {
 
 	// LastStatus optionally reports the shell's last exit code so $? inside
 	// substitution bodies expands to the outer shell's status. Nil means $?
-	// expands to 0. Wired up by the shell layer (batch 2c).
+	// expands to 0. Wired up by the shell layer.
 	LastStatus func() int
 }
 
@@ -39,12 +39,12 @@ func NewExecutor(ctx context.Context, stdin io.Reader, stderr io.Writer) *Execut
 
 // Execute runs a command string and returns its output.
 // This implements expander.SubshellExecutor interface.
-func (e *Executor) Execute(command string) (output string, exitCode int, err error) {
+func (e *Executor) Execute(cmd string) (output string, exitCode int, err error) {
 	// Recursive parse: the executor hands ITSELF to the parser, so nested
 	// substitutions inside the body expand through recursion -- never by
 	// re-scanning spliced output -- and quoting inside the body is handled
 	// by the body's own lexing.
-	cmdChain, err := parser.ParseWithOptions(command, parser.Options{
+	cmdChain, err := parser.ParseWithOptions(cmd, parser.Options{
 		Executor:   e,
 		LastStatus: e.LastStatus,
 	})
@@ -60,18 +60,16 @@ func (e *Executor) Execute(command string) (output string, exitCode int, err err
 	// Execute using internal chain executor (same process, no external shell)
 	exitCode, err = ExecuteWithIO(e.ctx, cmdChain, e.stdin, &stdout, e.stderr)
 	if err != nil {
-		// RUNTIME failure of the body (command not found, redirection open
-		// failure, ...): report it on stderr, keep whatever stdout was
-		// captured, and DISCARD the failure so the outer line continues --
-		// a substitution's exit code is discarded (expansion.md). This must
-		// NOT propagate as an error: that would turn a runtime failure into
-		// a parse-failing "command substitution error".
-		//
-		// TODO(batch 2c, audit issues 4/8): once the chain layer reports
-		// per-command failures to stderr itself (with real 127/126 exit
-		// codes) instead of returning them as chain-fatal errors, this
-		// interim print becomes redundant and should be removed.
-		fmt.Fprintln(e.stderr, err)
+		// Runtime failures of the body never fail the outer line: the
+		// chain layer already reported per-command failures to stderr, the
+		// captured stdout is yielded, and the status is discarded by the
+		// expansion layer (expansion.md §Failure Semantics). An ErrExit
+		// sentinel stops only the body's own sequence (execution.md
+		// §exit): the shell survives, so it too is absorbed here.
+		var exitErr command.ErrExit
+		if errors.As(err, &exitErr) {
+			return stdout.String(), exitErr.Code, nil
+		}
 		return stdout.String(), exitCode, nil
 	}
 
@@ -97,26 +95,50 @@ func Execute(ctx context.Context, chain *parser.Chain) (exitCode int, err error)
 }
 
 // ExecuteWithIO runs a command chain with custom I/O streams.
-// Returns the exit code of the last executed command.
+//
+// Segments (runs of |-connected commands) are evaluated left to right with
+// full skip propagation (operators.md §Execution Algorithm): a skipped
+// segment PRESERVES the current status, and the operator following a
+// skipped segment is evaluated against that same preserved status — so
+// `false && a && b` runs nothing and yields 1.
+//
+// The error return is reserved for the command.ErrExit sentinel (exit at
+// top level stops the chain; remaining segments do not run) and internal
+// failures. Ordinary command failures are exit statuses, already reported
+// to stderr by the command layer, and the chain continues.
 func ExecuteWithIO(ctx context.Context, chain *parser.Chain, stdin io.Reader, stdout, stderr io.Writer) (exitCode int, err error) {
 	// Handle empty chain
 	if chain == nil || len(chain.Commands) == 0 {
 		return 0, nil
 	}
 
-	// Single command: just execute it
-	if len(chain.Commands) == 1 {
-		return command.Execute(ctx, chain.Commands[0], stdin, stdout, stderr)
-	}
-
-	// Multiple commands with operators
-	// Process commands, grouping consecutive pipes into pipelines
+	exitCode = 0
 	i := 0
 	for i < len(chain.Commands) {
 		// Find the extent of the current pipeline segment
 		pipelineEnd := i
 		for pipelineEnd < len(chain.Operators) && chain.Operators[pipelineEnd] == token.Pipe {
 			pipelineEnd++
+		}
+
+		// Apply the operator PRECEDING this segment to the propagated
+		// status: skipping preserves exitCode, and the next iteration
+		// re-tests the following operator against the same status.
+		if i > 0 {
+			switch chain.Operators[i-1] {
+			case token.And:
+				if exitCode != 0 {
+					i = pipelineEnd + 1
+					continue
+				}
+			case token.Or:
+				if exitCode == 0 {
+					i = pipelineEnd + 1
+					continue
+				}
+			case token.Semicolon:
+				// Unconditional.
+			}
 		}
 
 		// Execute the pipeline (or single command if no pipes)
@@ -127,55 +149,21 @@ func ExecuteWithIO(ctx context.Context, chain *parser.Chain, stdin io.Reader, st
 			exitCode, err = executePipelineWithIO(ctx, pipelineCommands, stdin, stdout, stderr)
 		}
 
-		// If there's an error that's not just a non-zero exit, return it
+		// ErrExit from a top-level segment or an internal failure stops
+		// the chain: no further segments run.
 		if err != nil {
 			return exitCode, err
 		}
 
 		// Move past this pipeline
 		i = pipelineEnd + 1
-
-		// Check if there's a logical operator after this pipeline
-		if pipelineEnd < len(chain.Operators) {
-			op := chain.Operators[pipelineEnd]
-			switch op {
-			case token.And:
-				// AND: skip next if previous failed (non-zero exit)
-				if exitCode != 0 {
-					// Skip next command/pipeline
-					i++
-					// Skip any pipes that follow
-					for i < len(chain.Operators) && chain.Operators[i-1] == token.Pipe {
-						i++
-					}
-				}
-			case token.Or:
-				// OR: skip next if previous succeeded (zero exit)
-				if exitCode == 0 {
-					// Skip next command/pipeline
-					i++
-					// Skip any pipes that follow
-					for i < len(chain.Operators) && chain.Operators[i-1] == token.Pipe {
-						i++
-					}
-				}
-			case token.Semicolon:
-				// Semicolon: unconditionally continue to next command
-			}
-		}
 	}
 
 	return exitCode, nil
 }
 
-// executePipeline runs multiple commands connected by pipes using default I/O.
-// Returns the exit code of the last command in the pipeline.
-func executePipeline(ctx context.Context, commands []*parser.CommandSpec) (int, error) {
-	return executePipelineWithIO(ctx, commands, os.Stdin, os.Stdout, os.Stderr)
-}
-
 // executePipelineWithIO runs multiple commands connected by pipes with custom I/O.
-// Returns the exit code of the last command in the pipeline.
+// Returns the exit code of the last (rightmost) command in the pipeline.
 func executePipelineWithIO(ctx context.Context, commands []*parser.CommandSpec, defaultStdin io.Reader, defaultStdout, defaultStderr io.Writer) (int, error) {
 	if len(commands) == 0 {
 		return 0, nil
@@ -196,7 +184,7 @@ func executePipelineWithIO(ctx context.Context, commands []*parser.CommandSpec, 
 
 	var wg sync.WaitGroup
 	exitCodes := make([]int, len(commands))
-	errors := make([]error, len(commands))
+	errs := make([]error, len(commands))
 
 	// Launch all commands
 	for i, cmd := range commands {
@@ -208,6 +196,13 @@ func executePipelineWithIO(ctx context.Context, commands []*parser.CommandSpec, 
 
 		if i > 0 {
 			stdin = pipes[i-1]
+			if cmd.InputFile != "" {
+				// The command's stdin is redirected from a file, so its
+				// incoming pipe is not connected: close the read end at
+				// wiring time so the upstream producer terminates instead
+				// of blocking forever (redirection.md §7.4).
+				pipes[i-1].CloseWithError(io.ErrClosedPipe)
+			}
 		}
 		if i < len(commands)-1 {
 			stdout = pipeWriters[i]
@@ -216,18 +211,45 @@ func executePipelineWithIO(ctx context.Context, commands []*parser.CommandSpec, 
 		go func(idx int, cmd *parser.CommandSpec, stdin io.Reader, stdout io.Writer) {
 			defer wg.Done()
 
-			// Close pipe writer when done (if this command writes to a pipe)
+			// When this command finishes (or fails to start), close BOTH
+			// of its pipe ends: the write end of its stdout pipe so the
+			// downstream consumer sees EOF, AND the read end of its stdin
+			// pipe so a blocked upstream producer's write fails (the
+			// in-process equivalent of EPIPE) instead of deadlocking. The
+			// producer treats that write failure as a silent, ordinary
+			// termination (execution.md §Early Exit Terminates Producers).
 			if idx < len(pipeWriters) {
 				defer pipeWriters[idx].Close()
 			}
+			if idx > 0 {
+				defer pipes[idx-1].CloseWithError(io.ErrClosedPipe)
+			}
 
-			exitCodes[idx], errors[idx] = command.Execute(ctx, cmd, stdin, stdout, safeStderr)
+			exitCodes[idx], errs[idx] = command.Execute(ctx, cmd, stdin, stdout, safeStderr)
 		}(i, cmd, stdin, stdout)
 	}
 
 	wg.Wait()
 
+	// An exit builtin inside a multi-command pipeline sets only that
+	// command's status; the shell survives (execution.md §exit). Any other
+	// error is internal and propagates.
+	var internalErr error
+	for idx, err := range errs {
+		if err == nil {
+			continue
+		}
+		var exitErr command.ErrExit
+		if errors.As(err, &exitErr) {
+			exitCodes[idx] = exitErr.Code
+			continue
+		}
+		if internalErr == nil {
+			internalErr = err
+		}
+	}
+
 	// Return exit code of last command
 	lastIdx := len(commands) - 1
-	return exitCodes[lastIdx], errors[lastIdx]
+	return exitCodes[lastIdx], internalErr
 }

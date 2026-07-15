@@ -4,6 +4,7 @@ package parser
 import (
 	"errors"
 	"fmt"
+	"regexp"
 	"strings"
 
 	"foundation-shell/internal/expander"
@@ -42,6 +43,12 @@ type CommandSpec struct {
 	ErrorFile    string
 	AppendOutput bool
 	AppendError  bool
+	// IsAssignment marks a standalone assignment (execution.md §Standalone
+	// Assignment): the command's SOLE word (redirections do not count) was
+	// not single-quoted anywhere and its expanded value matches NAME=VALUE
+	// with a valid variable name. The executor performs the assignment
+	// (Args[0] split at the first '=') instead of running a command.
+	IsAssignment bool
 }
 
 // Chain represents a sequence of commands connected by operators.
@@ -58,7 +65,17 @@ type classifiedToken struct {
 	// (used e.g. to allow a quoted '&1' as a redirection target while
 	// rejecting the unquoted fd-duplication form).
 	wasQuoted bool
+	// wasSingleQuoted is true when any part of the original word was
+	// single-quoted (whole-token granularity, lexer.md §4.4.2). A
+	// single-quoted part anywhere disqualifies the word from standalone
+	// assignment recognition.
+	wasSingleQuoted bool
 }
+
+// assignmentPattern matches an expanded word that forms a standalone
+// assignment: a valid variable name followed by '='. Everything after the
+// first '=' is the value (possibly empty, possibly containing more '=').
+var assignmentPattern = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*=`)
 
 // parseOperator checks if a string is an operator and returns its token type.
 // Returns (tokenType, true) if it's an operator, (0, false) otherwise.
@@ -200,9 +217,10 @@ func ParseWithOptions(input string, opts Options) (*Chain, error) {
 		}
 
 		classified = append(classified, classifiedToken{
-			tokenType: tokenType,
-			value:     expandedValue,
-			wasQuoted: tc.WasQuoted,
+			tokenType:       tokenType,
+			value:           expandedValue,
+			wasQuoted:       tc.WasQuoted,
+			wasSingleQuoted: tc.WasSingleQuoted,
 		})
 	}
 
@@ -231,6 +249,20 @@ func buildChain(tokens []classifiedToken) (*Chain, error) {
 		Args: make([]string, 0),
 	}
 
+	// firstArgSingleQuoted remembers whether the current command's FIRST
+	// word had any single-quoted part; standalone assignment recognition
+	// (execution.md §Standalone Assignment) needs it at finalize time.
+	firstArgSingleQuoted := false
+
+	// finalize marks a completed command as a standalone assignment when
+	// its sole word is an unsingle-quoted NAME=... form.
+	finalize := func(cmd *CommandSpec) *CommandSpec {
+		if len(cmd.Args) == 1 && !firstArgSingleQuoted && assignmentPattern.MatchString(cmd.Args[0]) {
+			cmd.IsAssignment = true
+		}
+		return cmd
+	}
+
 	// Set when a trailing semicolon was consumed: the chain is complete and
 	// the post-loop "dangling operator" checks must not fire.
 	trailingSemicolonConsumed := false
@@ -245,7 +277,7 @@ func buildChain(tokens []classifiedToken) (*Chain, error) {
 			}
 
 			// Add current command to chain
-			chain.Commands = append(chain.Commands, currentCommand)
+			chain.Commands = append(chain.Commands, finalize(currentCommand))
 
 			// Check if there's anything after this operator. A single
 			// trailing semicolon is valid and simply consumed (the lexer
@@ -271,6 +303,7 @@ func buildChain(tokens []classifiedToken) (*Chain, error) {
 			currentCommand = &CommandSpec{
 				Args: make([]string, 0),
 			}
+			firstArgSingleQuoted = false
 			continue
 		}
 
@@ -325,6 +358,9 @@ func buildChain(tokens []classifiedToken) (*Chain, error) {
 		}
 
 		// Value token - add to current command's args
+		if len(currentCommand.Args) == 0 {
+			firstArgSingleQuoted = tok.wasSingleQuoted
+		}
 		currentCommand.Args = append(currentCommand.Args, tok.value)
 	}
 
@@ -341,7 +377,7 @@ func buildChain(tokens []classifiedToken) (*Chain, error) {
 		// same `: <op>` context every other trailing-operator error carries.
 		return nil, fmt.Errorf("%w: %s", ErrTrailingOperator, chain.Operators[len(chain.Operators)-1])
 	default:
-		chain.Commands = append(chain.Commands, currentCommand)
+		chain.Commands = append(chain.Commands, finalize(currentCommand))
 	}
 
 	// Validate invariant: operators.size() == commands.size() - 1
