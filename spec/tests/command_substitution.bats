@@ -16,7 +16,7 @@ setup() {
 # Helper to run a command through fsh-exec
 # fsh-exec takes command as arguments (not -c flag)
 run_fsh() {
-    run "$FSH" $1
+    run "$FSH" "$1"
 }
 
 @test "simple command substitution: echo \$(echo hello)" {
