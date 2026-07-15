@@ -4,6 +4,7 @@ package parser
 import (
 	"errors"
 	"fmt"
+	"strings"
 
 	"foundation-shell/internal/expander"
 	"foundation-shell/internal/lexer"
@@ -17,6 +18,14 @@ var (
 	ErrOperatorAtStart = errors.New("unexpected operator at start")
 	// ErrMissingRedirectionTarget is returned when a redirection has no target file.
 	ErrMissingRedirectionTarget = errors.New("missing redirection target")
+	// ErrEmptyRedirectionTarget is returned when a redirection target expands
+	// to an empty string (e.g. `> $UNSET`). The message is canonical: the
+	// spec pins the exact string "empty redirection target".
+	ErrEmptyRedirectionTarget = errors.New("empty redirection target")
+	// ErrFdDuplicationUnsupported is returned when an unquoted redirection
+	// target starts with & (e.g. `2>&1`, which lexes as `2>` + `&1`). The
+	// message is canonical: the spec pins the exact string.
+	ErrFdDuplicationUnsupported = errors.New("file descriptor duplication is not supported")
 	// ErrTrailingOperator is returned when the input ends with an operator.
 	ErrTrailingOperator = errors.New("unexpected operator at end")
 	// ErrConsecutiveOperators is returned when two chain operators appear consecutively.
@@ -45,6 +54,10 @@ type Chain struct {
 type classifiedToken struct {
 	tokenType token.TokenType
 	value     string
+	// wasQuoted is true when any part of the original word was quoted
+	// (used e.g. to allow a quoted '&1' as a redirection target while
+	// rejecting the unquoted fd-duplication form).
+	wasQuoted bool
 }
 
 // parseOperator checks if a string is an operator and returns its token type.
@@ -111,8 +124,16 @@ func ParseWithExecutor(input string, executor expander.SubshellExecutor) (*Chain
 	isFirstInCommand := true
 
 	for _, tc := range tokenContexts {
-		// Try to parse as operator first (operators are not expanded)
-		if opType, isOp := parseOperator(tc.Content); isOp {
+		// Operators come ONLY from the lexer's marking: a token is an
+		// operator iff tc.IsOperator. Quoted or escaped operator characters
+		// ('|', "|", \|, 'a|b') arrive as value tokens and stay literal data.
+		if tc.IsOperator {
+			opType, isOp := parseOperator(tc.Content)
+			if !isOp {
+				// Unreachable: the lexer only emits operators from the set
+				// parseOperator knows. Guard against future drift.
+				return nil, fmt.Errorf("internal error: lexer emitted unknown operator %q", tc.Content)
+			}
 			classified = append(classified, classifiedToken{
 				tokenType: opType,
 				value:     tc.Content,
@@ -127,7 +148,13 @@ func ParseWithExecutor(input string, executor expander.SubshellExecutor) (*Chain
 		// It's a value token - expand if not single-quoted
 		expandedValue := tc.Content
 		if !tc.WasSingleQuoted {
-			expandedValue = expander.ExpandTilde(expandedValue)
+			// Tilde expansion is suppressed when ANY part of the word was
+			// quoted: quoting the tilde ("~", '~', ~"/x") is deliberate.
+			// Variable and command expansion still apply to double-quoted
+			// words.
+			if !tc.WasQuoted {
+				expandedValue = expander.ExpandTilde(expandedValue)
+			}
 			expandedValue = expander.ExpandEnvironment(expandedValue)
 
 			// Expand command substitutions if executor provided
@@ -138,7 +165,9 @@ func ParseWithExecutor(input string, executor expander.SubshellExecutor) (*Chain
 				}
 			}
 		}
-		// Strip escape markers after expansion
+		// Strip escape markers UNCONDITIONALLY, single-quoted tokens
+		// included: a mixed word like 'a'\$b has WasSingleQuoted set (no
+		// expansion) but still carries a marker from the unquoted \$.
 		expandedValue = lexer.StripEscapeMarkers(expandedValue)
 
 		// Classify as Command or CommandArgument
@@ -153,6 +182,7 @@ func ParseWithExecutor(input string, executor expander.SubshellExecutor) (*Chain
 		classified = append(classified, classifiedToken{
 			tokenType: tokenType,
 			value:     expandedValue,
+			wasQuoted: tc.WasQuoted,
 		})
 	}
 
@@ -181,6 +211,10 @@ func buildChain(tokens []classifiedToken) (*Chain, error) {
 		Args: make([]string, 0),
 	}
 
+	// Set when a trailing semicolon was consumed: the chain is complete and
+	// the post-loop "dangling operator" checks must not fire.
+	trailingSemicolonConsumed := false
+
 	for i := 0; i < len(tokens); i++ {
 		tok := tokens[i]
 
@@ -192,12 +226,20 @@ func buildChain(tokens []classifiedToken) (*Chain, error) {
 
 			// Add current command to chain
 			chain.Commands = append(chain.Commands, currentCommand)
-			chain.Operators = append(chain.Operators, tok.tokenType)
 
-			// Check if there's anything after this operator
+			// Check if there's anything after this operator. A single
+			// trailing semicolon is valid and simply consumed (the lexer
+			// also emits one for a trailing newline); any other trailing
+			// operator is an error.
 			if i+1 >= len(tokens) {
+				if tok.tokenType == token.Semicolon {
+					trailingSemicolonConsumed = true
+					continue // loop ends; no operator is recorded
+				}
 				return nil, fmt.Errorf("%w: %s", ErrTrailingOperator, tok.value)
 			}
+
+			chain.Operators = append(chain.Operators, tok.tokenType)
 
 			// Check for consecutive chain operators
 			nextTok := tokens[i+1]
@@ -222,6 +264,21 @@ func buildChain(tokens []classifiedToken) (*Chain, error) {
 			// Target must be a value, not an operator
 			if nextTok.tokenType.IsOperator() {
 				return nil, fmt.Errorf("%w: %s followed by operator %s", ErrMissingRedirectionTarget, tok.value, nextTok.value)
+			}
+
+			// A syntactically present redirection must have a non-empty
+			// target after expansion: `> $UNSET` is an error, not a
+			// silently dropped redirection.
+			if nextTok.value == "" {
+				return nil, ErrEmptyRedirectionTarget
+			}
+
+			// Fd-duplication syntax (2>&1) lexes as `2>` + word `&1`.
+			// Reject unquoted &-prefixed targets loudly instead of
+			// creating a file literally named "&1". A quoted '&1'
+			// remains a legal filename.
+			if !nextTok.wasQuoted && strings.HasPrefix(nextTok.value, "&") {
+				return nil, fmt.Errorf("%w: %s", ErrFdDuplicationUnsupported, nextTok.value)
 			}
 
 			// Apply the redirection
@@ -252,16 +309,18 @@ func buildChain(tokens []classifiedToken) (*Chain, error) {
 	}
 
 	// Add the last command if it has any args
-	if len(currentCommand.Args) == 0 {
-		// This shouldn't happen with valid input, but check anyway
-		if len(chain.Commands) == 0 {
+	switch {
+	case trailingSemicolonConsumed:
+		// Chain already complete; nothing to append or validate here.
+	case len(currentCommand.Args) == 0:
+		if len(chain.Commands) == 0 || len(chain.Operators) == 0 {
 			return nil, ErrEmptyCommand
 		}
-		// Remove the trailing operator since there's no command after it
-		if len(chain.Operators) > 0 {
-			return nil, ErrTrailingOperator
-		}
-	} else {
+		// Reachable via e.g. `cmd ; > file`: an operator followed by a
+		// redirection-only command. Report the dangling operator with the
+		// same `: <op>` context every other trailing-operator error carries.
+		return nil, fmt.Errorf("%w: %s", ErrTrailingOperator, chain.Operators[len(chain.Operators)-1])
+	default:
 		chain.Commands = append(chain.Commands, currentCommand)
 	}
 
