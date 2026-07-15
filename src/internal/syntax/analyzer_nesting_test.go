@@ -98,23 +98,52 @@ func TestAnalyze_NestingUnclosedErrors(t *testing.T) {
 	}
 }
 
-// Unclosed constructs report the INNERMOST unclosed construct, matching
-// the lexer's error for the same input.
-func TestAnalyze_UnclosedInnermostConstruct(t *testing.T) {
+// Unclosed constructs are reported INNERMOST first, one error block per
+// independently unclosed construct (diagnostics.md §7.3). The FIRST error
+// is the innermost construct — the lexer's single diagnosis for the same
+// input — and the enclosing open constructs follow.
+func TestAnalyze_UnclosedInnermostFirst(t *testing.T) {
 	tests := []struct {
-		input  string
-		errMsg string
+		input    string
+		messages []string
 	}{
-		{`echo "$(a`, "unclosed command substitution $(...)"},
-		{"echo $(echo 'a", "unclosed single quote"},
-		{"echo `echo \"a", "unclosed double quote"},
-		{"echo $(`a", "unclosed backtick"},
-		{"echo `a$(b", "unclosed command substitution $(...)"},
+		{`echo "$(a`, []string{
+			"unclosed command substitution $(...)",
+			"unclosed double quote",
+		}},
+		{"echo $(echo 'a", []string{
+			"unclosed single quote",
+			"unclosed command substitution $(...)",
+		}},
+		{"echo `echo \"a", []string{
+			"unclosed double quote",
+			"unclosed backtick",
+		}},
+		{"echo $(`a", []string{
+			"unclosed backtick",
+			"unclosed command substitution $(...)",
+		}},
+		{"echo `a$(b", []string{
+			"unclosed command substitution $(...)",
+			"unclosed backtick",
+		}},
+		// The spec's normative example (diagnostics.md §7.3).
+		{`echo $(foo "bar`, []string{
+			"unclosed double quote",
+			"unclosed command substitution $(...)",
+		}},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.input, func(t *testing.T) {
-			requireOnlyError(t, tt.input, tt.errMsg)
+			result := Analyze(tt.input)
+
+			require.False(t, result.Valid, "Analyze(%q) unexpectedly valid", tt.input)
+			require.Equal(t, len(tt.messages), len(result.Errors),
+				"Analyze(%q) errors: %#v", tt.input, result.Errors)
+			for i, want := range tt.messages {
+				assert.Equal(t, want, result.Errors[i].Message, "Analyze(%q) error %d", tt.input, i)
+			}
 		})
 	}
 }

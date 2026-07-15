@@ -545,37 +545,55 @@ func (a *analyzer) parseWord() {
 	}
 	value := string(a.input[start:a.pos])
 
-	// Report the INNERMOST unclosed construct (one error per word,
-	// matching the lexer's message for the same input). With nesting an
-	// even quote count can be unclosed ('a 'b).
-	unclosedMsg := ""
-	switch {
-	case len(subStack) > 0:
-		top := subStack[len(subStack)-1]
-		switch {
-		case top.single > 0:
-			unclosedMsg = "unclosed single quote"
-		case top.double > 0:
-			unclosedMsg = "unclosed double quote"
-		case top.kind == '(':
-			unclosedMsg = "unclosed command substitution $(...)"
-		default:
-			unclosedMsg = "unclosed backtick"
+	// Report EVERY unclosed construct, INNERMOST first (diagnostics.md
+	// §7.3): an unclosed substitution containing an unclosed quote yields
+	// two error blocks — `echo $(foo "bar` reports the double quote and
+	// then the substitution. Each canonical message appears at most once
+	// per word (a doubly-nested region like 'a 'b is still ONE unclosed
+	// single quote; §5.5 tracks one counter per type), and every error
+	// spans the whole word token. The lexer reports only the innermost —
+	// which is exactly the FIRST message here, keeping the two scanners'
+	// primary diagnosis identical.
+	var unclosed []string
+	addUnclosed := func(msg string) {
+		for _, existing := range unclosed {
+			if existing == msg {
+				return
+			}
 		}
-	case singleDepth > 0:
-		unclosedMsg = "unclosed single quote"
-	case doubleDepth > 0:
-		unclosedMsg = "unclosed double quote"
+		unclosed = append(unclosed, msg)
 	}
-	if unclosedMsg != "" {
+	for k := len(subStack) - 1; k >= 0; k-- {
+		sc := subStack[k]
+		// A body quote region opened after (inside) its substitution, so it
+		// is inner to it: report it first.
+		if sc.single > 0 {
+			addUnclosed("unclosed single quote")
+		}
+		if sc.double > 0 {
+			addUnclosed("unclosed double quote")
+		}
+		if sc.kind == '(' {
+			addUnclosed("unclosed command substitution $(...)")
+		} else {
+			addUnclosed("unclosed backtick")
+		}
+	}
+	if singleDepth > 0 {
+		addUnclosed("unclosed single quote")
+	}
+	if doubleDepth > 0 {
+		addUnclosed("unclosed double quote")
+	}
+	for _, msg := range unclosed {
 		a.errors = append(a.errors, SyntaxError{
 			Start:   start,
 			End:     a.pos,
-			Message: unclosedMsg,
+			Message: msg,
 		})
 	}
 
-	semType := a.determineWordType(value, unclosedMsg != "")
+	semType := a.determineWordType(value, len(unclosed) > 0)
 
 	a.addToken(semType, start, a.pos, maxDepth)
 

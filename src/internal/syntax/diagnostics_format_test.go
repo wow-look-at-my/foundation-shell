@@ -28,20 +28,48 @@ func TestFormatDiagnostics_GoldenTwoErrorFormat(t *testing.T) {
 }
 
 // The same format promise holds for errors produced by the real analyzer:
-// an unclosed substitution inside unclosed double quotes reports the
-// INNERMOST unclosed construct (the substitution), matching the lexer.
+// two independently unclosed constructs produce two blocks, INNERMOST
+// first (diagnostics.md §7.3) — the substitution, then the enclosing
+// double quote. The first block matches the lexer's single diagnosis.
 func TestFormatDiagnostics_GoldenAnalyzerIntegration(t *testing.T) {
 	input := `echo "$(a`
 	result := Analyze(input)
 
 	require.False(t, result.Valid)
 
-	require.Equal(t, 1, len(result.Errors))
+	require.Equal(t, 2, len(result.Errors))
 
 	got := FormatDiagnostics(input, result.Errors)
 
 	want := "echo \"$(a\n" +
 		"     ^^^^\n" +
+		"error: unclosed command substitution $(...)\n" +
+		"\n" +
+		"echo \"$(a\n" +
+		"     ^^^^\n" +
+		"error: unclosed double quote\n"
+	require.Equal(t, want, got)
+}
+
+// The spec's normative two-error example (diagnostics.md §7.3): an
+// unclosed substitution CONTAINING an unclosed double quote reports the
+// quote first (it is innermost), then the substitution.
+func TestFormatDiagnostics_GoldenSpecTwoErrorExample(t *testing.T) {
+	input := `echo $(foo "bar`
+	result := Analyze(input)
+
+	require.False(t, result.Valid)
+
+	require.Equal(t, 2, len(result.Errors))
+
+	got := FormatDiagnostics(input, result.Errors)
+
+	want := "echo $(foo \"bar\n" +
+		"     ^^^^^^^^^^\n" +
+		"error: unclosed double quote\n" +
+		"\n" +
+		"echo $(foo \"bar\n" +
+		"     ^^^^^^^^^^\n" +
 		"error: unclosed command substitution $(...)\n"
 	require.Equal(t, want, got)
 }
