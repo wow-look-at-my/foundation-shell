@@ -4,6 +4,7 @@ package expander
 
 import (
 	"os"
+	"strconv"
 	"strings"
 	"unicode"
 
@@ -48,10 +49,16 @@ func ExpandTilde(token string) string {
 }
 
 // ExpandEnvironment expands environment variables in a token.
-// Supports both $VAR and ${VAR} syntax.
+// Supports both $VAR and ${VAR} syntax; $? expands to 0.
 // Escaped dollars (marked with \x01$) are converted to literal $ without expansion.
 // Non-existent variables expand to empty string.
 func ExpandEnvironment(token string) string {
+	return expandVariables(token, nil)
+}
+
+// expandVariables is ExpandEnvironment with an injectable exit-status
+// source for $?: nil means 0.
+func expandVariables(token string, lastStatus func() int) string {
 	if !strings.Contains(token, "$") {
 		return token
 	}
@@ -84,6 +91,18 @@ func ExpandEnvironment(token string) string {
 		}
 
 		next := token[i+1]
+
+		// $? expands to the exit status of the most recent command. Other
+		// special parameters ($$, $!, $1, ...) stay literal.
+		if next == '?' {
+			status := 0
+			if lastStatus != nil {
+				status = lastStatus()
+			}
+			result.WriteString(strconv.Itoa(status))
+			i += 2
+			continue
+		}
 
 		// Handle ${VAR} syntax
 		if next == '{' {
@@ -167,6 +186,9 @@ type Options struct {
 	// spans are left verbatim (no execution and no expansion of body text),
 	// matching Parse without an executor.
 	Executor SubshellExecutor
+	// LastStatus reports the exit status of the most recent command for $?
+	// expansion. When nil, $? expands to 0.
+	LastStatus func() int
 }
 
 // ExpandToken expands a value token's content in a single left-to-right
@@ -186,14 +208,14 @@ func ExpandToken(content string, opts Options) (string, error) {
 		return "", err
 	}
 	if len(spans) == 0 {
-		return ExpandEnvironment(content), nil
+		return expandVariables(content, opts.LastStatus), nil
 	}
 
 	runes := []rune(content)
 	var result strings.Builder
 	prev := 0
 	for _, span := range spans {
-		result.WriteString(ExpandEnvironment(string(runes[prev:span.Start])))
+		result.WriteString(expandVariables(string(runes[prev:span.Start]), opts.LastStatus))
 		if opts.Executor == nil {
 			// No executor: the span stays verbatim, body text untouched.
 			result.WriteString(string(runes[span.Start:span.End]))
@@ -208,6 +230,6 @@ func ExpandToken(content string, opts Options) (string, error) {
 		}
 		prev = span.End
 	}
-	result.WriteString(ExpandEnvironment(string(runes[prev:])))
+	result.WriteString(expandVariables(string(runes[prev:]), opts.LastStatus))
 	return result.String(), nil
 }

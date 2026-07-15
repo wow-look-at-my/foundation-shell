@@ -99,16 +99,35 @@ func isRedirectionOperator(t token.TokenType) bool {
 		t == token.RedirectStdErrAppend
 }
 
+// Options configures parsing.
+type Options struct {
+	// Executor expands command substitutions ($(...) and `...`). When nil,
+	// substitution spans are left verbatim.
+	Executor expander.SubshellExecutor
+	// LastStatus reports the exit status of the most recent command for $?
+	// expansion. When nil, $? expands to 0.
+	LastStatus func() int
+}
+
 // Parse parses the input string into a command chain.
 // It performs lexer tokenization, expansion, token classification, and chain building.
-// This version does not expand command substitutions ($(...) or backticks).
+// This version does not expand command substitutions ($(...) or backticks),
+// and $? expands to 0.
 func Parse(input string) (*Chain, error) {
-	return ParseWithExecutor(input, nil)
+	return ParseWithOptions(input, Options{})
 }
 
 // ParseWithExecutor parses the input string into a command chain with optional subshell expansion.
 // If executor is non-nil, command substitutions ($(...) and `...`) will be expanded.
+// $? expands to 0.
 func ParseWithExecutor(input string, executor expander.SubshellExecutor) (*Chain, error) {
+	return ParseWithOptions(input, Options{Executor: executor})
+}
+
+// ParseWithOptions parses the input string into a command chain with full
+// control over expansion: command substitution via opts.Executor and $?
+// expansion via opts.LastStatus.
+func ParseWithOptions(input string, opts Options) (*Chain, error) {
 	// Step 1: Tokenize input
 	tokenContexts, err := lexer.Tokenize(input)
 	if err != nil {
@@ -155,10 +174,13 @@ func ParseWithExecutor(input string, executor expander.SubshellExecutor) (*Chain
 			if !tc.WasQuoted {
 				expandedValue = expander.ExpandTilde(expandedValue)
 			}
-			// Single pass: variables expand in the literal text, top-level
-			// substitution spans execute recursively via the executor, and
-			// their output is spliced without re-scanning.
-			expandedValue, err = expander.ExpandToken(expandedValue, expander.Options{Executor: executor})
+			// Single pass: variables (incl. $?) expand in the literal text,
+			// top-level substitution spans execute recursively via the
+			// executor, and their output is spliced without re-scanning.
+			expandedValue, err = expander.ExpandToken(expandedValue, expander.Options{
+				Executor:   opts.Executor,
+				LastStatus: opts.LastStatus,
+			})
 			if err != nil {
 				return nil, fmt.Errorf("command substitution error: %w", err)
 			}

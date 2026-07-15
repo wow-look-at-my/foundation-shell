@@ -39,6 +39,23 @@ func TestExecutor_RecursesForNestedSubstitution(t *testing.T) {
 	assert.Equal(t, "deep\n", output)
 }
 
+// The executor threads its LastStatus source into recursive parses, so $?
+// inside substitution bodies sees the outer shell's status.
+func TestExecutor_LastStatusReachesBodies(t *testing.T) {
+	e, _ := newTestExecutor()
+	e.LastStatus = func() int { return 42 }
+
+	output, exitCode, err := e.Execute("echo $?")
+	require.NoError(t, err)
+	assert.Equal(t, 0, exitCode)
+	assert.Equal(t, "42\n", output)
+
+	// One level deeper: $? inside a nested body still sees it.
+	output, _, err = e.Execute("echo $(echo $?)")
+	require.NoError(t, err)
+	assert.Equal(t, "42\n", output)
+}
+
 // A body that fails to PARSE returns an error (the whole line fails).
 func TestExecutor_ParseErrorPropagates(t *testing.T) {
 	e, _ := newTestExecutor()

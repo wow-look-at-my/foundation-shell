@@ -21,6 +21,11 @@ type Executor struct {
 	ctx    context.Context
 	stdin  io.Reader
 	stderr io.Writer
+
+	// LastStatus optionally reports the shell's last exit code so $? inside
+	// substitution bodies expands to the outer shell's status. Nil means $?
+	// expands to 0. Wired up by the shell layer (batch 2c).
+	LastStatus func() int
 }
 
 // NewExecutor creates a new Executor for subshell execution.
@@ -39,7 +44,10 @@ func (e *Executor) Execute(command string) (output string, exitCode int, err err
 	// substitutions inside the body expand through recursion -- never by
 	// re-scanning spliced output -- and quoting inside the body is handled
 	// by the body's own lexing.
-	cmdChain, err := parser.ParseWithExecutor(command, e)
+	cmdChain, err := parser.ParseWithOptions(command, parser.Options{
+		Executor:   e,
+		LastStatus: e.LastStatus,
+	})
 	if err != nil {
 		// A body that fails to PARSE fails the whole line: the caller
 		// (parser) wraps this as "command substitution error: ...".

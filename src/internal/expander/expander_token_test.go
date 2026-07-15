@@ -219,6 +219,44 @@ func TestExpandToken_EscapeMarkersBlockSpans(t *testing.T) {
 	assert.Equal(t, []string{"echo x"}, executor2.calls)
 }
 
+// $? expands via the injectable LastStatus source (nil means 0). Body text
+// keeps its $? verbatim: the recursive parse expands it.
+func TestExpandToken_LastStatus(t *testing.T) {
+	seven := func() int { return 7 }
+
+	tests := []struct {
+		name       string
+		input      string
+		lastStatus func() int
+		expected   string
+	}{
+		{"bare", "$?", seven, "7"},
+		{"nil defaults to zero", "$?", nil, "0"},
+		{"embedded", "rc=$?.", seven, "rc=7."},
+		{"repeated", "$?$?", seven, "77"},
+		{"dollar dollar literal", "$$", seven, "$$"},
+		{"dollar bang literal", "$!", seven, "$!"},
+		{"positional literal", "$1", seven, "$1"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := ExpandToken(tt.input, Options{LastStatus: tt.lastStatus})
+			require.NoError(t, err)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+
+	// Around a span: the segment's $? expands, the body's $? is handed to
+	// the executor verbatim.
+	executor := newMockExecutor()
+	executor.outputs["echo $?"] = "body\n"
+	result, err := ExpandToken("$?-$(echo $?)", Options{Executor: executor, LastStatus: seven})
+	require.NoError(t, err)
+	assert.Equal(t, "7-body", result)
+	assert.Equal(t, []string{"echo $?"}, executor.calls)
+}
+
 // Executor errors (a body that fails to parse) propagate: the whole line
 // fails.
 func TestExpandToken_ExecutorErrorPropagates(t *testing.T) {
