@@ -62,9 +62,25 @@ just test   # Go unit tests + BATS integration tests
 ## Specification
 
 The authoritative Foundation Shell specification lives in
-[wow-look-at-my/foundation-shell-spec](https://github.com/wow-look-at-my/foundation-shell-spec).
-`tests/` in this repository is the executable conformance suite (BATS)
-run by `just test`; the spec prose itself is deliberately not vendored here.
+[wow-look-at-my/foundation-shell-spec](https://github.com/wow-look-at-my/foundation-shell-spec)
+and is mounted here as a git submodule at `spec/`, pinned to the exact spec
+commit this implementation targets (`.gitmodules` tracks branch `master`).
+`tests/` in this repository is the executable conformance suite (BATS) run by
+`just test`.
+
+The submodule is **optional** for building and testing — nothing in the build,
+`just test`, or CI reads it. To get the spec content, clone with
+`git clone --recurse-submodules`, or after a plain clone run:
+
+```bash
+git submodule update --init
+```
+
+To bump the pin to a newer spec commit:
+
+```bash
+cd spec && git fetch origin && git checkout <new-sha> && cd .. && git add spec && git commit
+```
 
 ## Project layout
 
@@ -82,4 +98,5 @@ run by `just test`; the spec prose itself is deliberately not vendored here.
 | `src/pkg/parser` | Parser (tokens -> command chains) |
 | `src/pkg/shell` | Shell orchestration and REPL |
 | `tests/` | BATS conformance tests |
+| `spec/` | The spec repo as a pinned git submodule (optional; see Specification) |
 | `build/` | Build output (`just build`) |

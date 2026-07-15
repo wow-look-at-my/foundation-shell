@@ -19,10 +19,23 @@ just test  # runs Go unit tests + BATS integration tests
 
 ## Specification
 
-The authoritative spec is the external repo
-[wow-look-at-my/foundation-shell-spec](https://github.com/wow-look-at-my/foundation-shell-spec).
-Spec prose is not vendored here; `tests/` is the executable conformance
-suite (BATS) run by `just test`.
+The authoritative spec is
+[wow-look-at-my/foundation-shell-spec](https://github.com/wow-look-at-my/foundation-shell-spec),
+mounted as a git submodule at `spec/` and pinned to the exact spec commit this
+implementation targets (`.gitmodules` tracks branch `master`). `tests/` is the
+executable conformance suite (BATS) run by `just test`.
+
+The submodule is optional for building/testing — nothing in the build or CI
+reads it. Initialize it with `git submodule update --init` (or clone with
+`git clone --recurse-submodules`). Bump the pin with:
+`cd spec && git fetch origin && git checkout <new-sha> && cd .. && git add spec && git commit`.
+
+**Warnings:**
+
+- CI does NOT fetch the submodule (`actions/checkout` default). Keep it that
+  way unless CI starts reading spec content.
+- Run `go-toolchain` from `src/` ONLY — an initialized `spec/` submodule
+  contains `generator/go.mod`, and a repo-root run would walk into it.
 
 ## Project Structure
 
@@ -33,4 +46,5 @@ suite (BATS) run by `just test`.
   - `internal/` - Internal packages (lexer, expander, chain, command, syntax, token)
   - `pkg/` - Public packages (parser, shell)
 - `tests/` - BATS conformance tests
+- `spec/` - The spec repo as a pinned git submodule (optional; see Specification)
 - `build/` - Build output (`just build`; go-toolchain builds into `src/build/`)
