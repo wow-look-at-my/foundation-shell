@@ -57,11 +57,19 @@ type subContext struct {
 //
 // A word consisting only of quotes ('' or "") produces an empty token with
 // the corresponding quoting flags set.
+//
+// Operators do not need surrounding whitespace: an unquoted, unescaped
+// operator character outside any substitution ends the current word and
+// produces an operator token (IsOperator=true) by maximal munch over
+// {||, &&, 2>>, 2>, >>, |, ;, <, >}. 2>/2>> only apply when the pending
+// word is exactly an unquoted "2" (which is consumed into the operator);
+// a single & is a literal word character.
 func Tokenize(input string) ([]TokenContext, error) {
 	var tokens []TokenContext
 	var current strings.Builder
 	wasSingleQuoted := false
 	wasQuoted := false
+	wordHadEscape := false
 	inSingleQuotes := false
 	inDoubleQuotes := false
 	var subStack []subContext
@@ -82,6 +90,11 @@ func Tokenize(input string) ([]TokenContext, error) {
 		}
 		wasSingleQuoted = false
 		wasQuoted = false
+		wordHadEscape = false
+	}
+
+	emitOperator := func(op string) {
+		tokens = append(tokens, TokenContext{Content: op, IsOperator: true})
 	}
 
 	runes := []rune(input)
@@ -111,6 +124,7 @@ func Tokenize(input string) ([]TokenContext, error) {
 				current.WriteRune('\\')
 				current.WriteRune(next)
 			} else {
+				wordHadEscape = true
 				switch next {
 				case '\\':
 					// \\ becomes \
@@ -221,6 +235,60 @@ func Tokenize(input string) ([]TokenContext, error) {
 				continue
 			}
 			// Inside single quotes: literal, falls through
+		}
+
+		// Handle operators without surrounding whitespace. An unquoted,
+		// unescaped operator character outside any substitution ends the
+		// current word and lexes an operator token by maximal munch over
+		// {||, &&, 2>>, 2>, >>, |, ;, <, >}. Quoted operator characters
+		// never get here (the quote handlers above consume them into word
+		// content); escaped ones are consumed by the escape handler.
+		if !inSingleQuotes && !inDoubleQuotes && !inSubstitution {
+			switch c {
+			case '&':
+				// Single & is NOT an operator: a&b stays one word. Only
+				// && is recognized.
+				if i+1 < len(runes) && runes[i+1] == '&' {
+					flushWord()
+					emitOperator("&&")
+					i++
+					continue
+				}
+			case '|':
+				flushWord()
+				if i+1 < len(runes) && runes[i+1] == '|' {
+					emitOperator("||")
+					i++
+				} else {
+					emitOperator("|")
+				}
+				continue
+			case ';':
+				flushWord()
+				emitOperator(";")
+				continue
+			case '<':
+				flushWord()
+				emitOperator("<")
+				continue
+			case '>':
+				op := ">"
+				if i+1 < len(runes) && runes[i+1] == '>' {
+					op = ">>"
+					i++
+				}
+				// 2> / 2>> apply only when the pending word is exactly an
+				// unquoted, unescaped "2": that 2 is consumed into the
+				// operator (echo a2>f keeps word a2 with operator >).
+				if current.Len() == 1 && current.String() == "2" && !wasQuoted && !wordHadEscape {
+					current.Reset()
+					op = "2" + op
+				} else {
+					flushWord()
+				}
+				emitOperator(op)
+				continue
+			}
 		}
 
 		// Handle whitespace as token separator (not inside any quotes or
