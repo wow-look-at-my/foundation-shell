@@ -28,22 +28,19 @@ func TestFormatDiagnostics_GoldenTwoErrorFormat(t *testing.T) {
 }
 
 // The same format promise holds for errors produced by the real analyzer:
-// an unclosed substitution inside unclosed double quotes yields two blocks.
+// an unclosed substitution inside unclosed double quotes reports the
+// INNERMOST unclosed construct (the substitution), matching the lexer.
 func TestFormatDiagnostics_GoldenAnalyzerIntegration(t *testing.T) {
 	input := `echo "$(a`
 	result := Analyze(input)
 
 	require.False(t, result.Valid)
 
-	require.Equal(t, 2, len(result.Errors))
+	require.Equal(t, 1, len(result.Errors))
 
 	got := FormatDiagnostics(input, result.Errors)
 
 	want := "echo \"$(a\n" +
-		"     ^^^^\n" +
-		"error: unclosed double quote\n" +
-		"\n" +
-		"echo \"$(a\n" +
 		"     ^^^^\n" +
 		"error: unclosed command substitution $(...)\n"
 	require.Equal(t, want, got)

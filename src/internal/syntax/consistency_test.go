@@ -14,12 +14,6 @@ import (
 // would reject, like trailing operators), so the hard invariant is
 // one-way: anything the lexer rejects, the analyzer must flag as invalid.
 // Every row additionally pins the expected outcome for both engines.
-//
-// Deliberately excluded (owned by the upcoming depth-tracked quote
-// NESTING batch, whose semantics will change): same-type nested quotes
-// ('a 'b' c'), cross-type quote adjacency ("a"'b, 'it'\''s), backticks
-// wrapped in double quotes, and single quotes inside a double-quoted
-// substitution.
 func TestLexerAnalyzerConsistency(t *testing.T) {
 	tests := []struct {
 		input      string
@@ -106,6 +100,48 @@ func TestLexerAnalyzerConsistency(t *testing.T) {
 		// Trailing semicolon is valid
 		{"echo hello ;", false, true},
 		{"echo hello ; ", false, true},
+
+		// Depth-tracked quote NESTING (the flagship rule): same-type
+		// quotes nest when preceded by whitespace and followed by a
+		// non-whitespace, non-quote character; otherwise they close
+		{"echo 'outer 'inner' end'", false, true},
+		{"echo 'a 'b' c' 'd'", false, true},
+		{"echo 'l1 'l2 'l3' l2' l1'", false, true},
+		{`echo "outer "inner" end"`, false, true},
+		{"echo `outer `inner` end`", false, true},
+		{"echo $(echo 'a 'b' c')", false, true},
+
+		// POSIX-identical quoting is unaffected by nesting
+		{"echo 'a' 'b'", false, true},
+		{"echo 'a'b", false, true},
+		{"echo 'a''b'", false, true},
+		{"echo ' '", false, true},
+		{`echo 'don'\''t'`, false, true},
+		{`echo 'it'\''s working'`, false, true},
+		{`echo "Hello, "'"'"$USER"'"'"!"`, false, true},
+		{"echo \"`date`\"", false, true},
+
+		// The cost of nesting: quotes that nest leave the region open
+		{"echo 'hello 'world", true, false},
+		{`echo "Total: "$N`, true, false},
+		{"echo ' 'x", true, false},
+		{`echo "count: "$(date)`, true, false},
+		{"echo `a `b", true, false},
+
+		// Cross-type adjacency with an unclosed second region
+		{`echo "a"'b`, true, false},
+		{"echo $(echo 'a", true, false},
+
+		// Structural: the workaround plus a trailing pipe fails for the
+		// pipe, not the quoting
+		{`echo 'it'\''s working' |`, false, false},
+
+		// Consecutive operators (including the newline implicit ;)
+		{"echo a | | b", false, false},
+		{"echo a ; | b", false, false},
+		{"echo a\n| foo", false, false},
+		{"echo a &&\n|| b", false, false},
+		{"echo > | b", false, false},
 	}
 
 	for _, tt := range tests {

@@ -638,3 +638,47 @@ func TestHighlight_EscapedCharacters(t *testing.T) {
 		})
 	}
 }
+
+// Depth-tracked nested quote regions highlight as ONE string token (the
+// whole region gets the string color), and the input survives untouched.
+func TestHighlight_NestedQuoteRegions(t *testing.T) {
+	h := NewHighlighter(DefaultTheme)
+
+	tests := []struct {
+		name  string
+		input string
+		token string
+		color string
+	}{
+		{"nested single quotes", "echo 'a 'b' c'", "'a 'b' c'", DefaultTheme[TypeSingleQuotedString]},
+		{"nested double quotes", `echo "outer "inner" end"`, `"outer "inner" end"`, DefaultTheme[TypeDoubleQuotedString]},
+		{"nested backticks", "echo `outer `inner` end`", "`outer `inner` end`", DefaultTheme[TypeBacktick]},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			output := h.Highlight(tt.input)
+
+			assert.Equal(t, tt.input, stripANSI(output))
+
+			assert.True(t, containsANSICode(output, tt.token, tt.color),
+				"expected %q colored %q in %q", tt.token, tt.color, output)
+		})
+	}
+}
+
+// A quote that nests leaves the region open: the whole word paints as an
+// error region.
+func TestHighlight_NestedQuoteUnclosed_Error(t *testing.T) {
+	h := NewHighlighter(DefaultTheme)
+
+	for _, input := range []string{"echo 'hello 'world", `echo "Total: "$N`} {
+		t.Run(input, func(t *testing.T) {
+			output := h.Highlight(input)
+
+			assert.Equal(t, input, stripANSI(output))
+
+			assert.Contains(t, output, DefaultTheme[TypeError])
+		})
+	}
+}

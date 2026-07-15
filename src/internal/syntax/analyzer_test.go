@@ -122,21 +122,22 @@ func TestAnalyze_DoubleQuotes(t *testing.T) {
 }
 
 func TestAnalyze_NestedSingleQuotes(t *testing.T) {
-	// Depth-tracked nesting with even quote count is valid
-	// 'hello' 'world' has 4 single quotes (even = valid)
+	// Two separate quoted words close normally
 	result := Analyze("echo 'hello' 'world'")
 
 	require.True(t, result.Valid)
 
-	// This has 4 quotes: 'outer 'inner' end'
-	// Quote depth: 1, 2, 1, 0 - even count = valid
+	// Depth-tracked nesting: 'outer 'inner' end' is one region whose
+	// depth runs 1 -> 2 -> 1 -> 0
 	result2 := Analyze("echo 'outer 'inner' end'")
 	require.True(t, result2.Valid)
 
 }
 
 func TestAnalyze_NestedDoubleQuotes(t *testing.T) {
-	// Depth-tracked nesting: "echo "word"" should be valid
+	// Depth-tracked nesting: "echo "word"" is valid — the quote before
+	// `word` nests (whitespace before, word character after), the quote
+	// after `word` closes it, and the final quote closes the region
 	result := Analyze(`echo "echo "word""`)
 
 	require.True(t, result.Valid)
@@ -179,7 +180,9 @@ func TestAnalyze_UnclosedBacktick_Error(t *testing.T) {
 
 }
 
-func TestAnalyze_OddQuoteCount_Error(t *testing.T) {
+// A quote character at depth 0 always OPENS a region, so a reopened
+// region at end of input is unclosed regardless of the total quote count.
+func TestAnalyze_UnclosedReopenedQuote_Error(t *testing.T) {
 	tests := []struct {
 		input  string
 		errMsg string
@@ -407,20 +410,43 @@ func TestAnalyze_ErrorPosition(t *testing.T) {
 
 }
 
+// AnalyzedToken.Depth is the maximum nesting level reached within the
+// token across quote regions and command substitutions.
 func TestAnalyze_DepthTracking(t *testing.T) {
-	// Test that depth is tracked correctly
-	result := Analyze(`echo "outer "inner" outer"`)
+	tests := []struct {
+		input     string
+		wordValue string
+		depth     int
+	}{
+		{"echo foo", "foo", 0},
+		{"echo 'a'", "'a'", 1},
+		{`echo "a"`, `"a"`, 1},
+		{"echo 'a 'b' c'", "'a 'b' c'", 2},
+		{`echo "outer "inner" end"`, `"outer "inner" end"`, 2},
+		{"echo 'l1 'l2 'l3' l2' l1'", "'l1 'l2 'l3' l2' l1'", 3},
+		{"echo a$(b$(c))", "a$(b$(c))", 2},
+		{"echo $(date)", "$(date)", 1},
+		{`echo "$(a)"`, `"$(a)"`, 2},
+		{"echo $(echo 'x')", "$(echo 'x')", 2},
+		{"echo `outer `inner` end`", "`outer `inner` end`", 2},
+	}
 
-	require.True(t, result.Valid)
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			result := Analyze(tt.input)
 
-	// Find the quoted token and check its depth
-	for _, tok := range result.Tokens {
-		if tok.Type == TypeDoubleQuotedString || tok.Type == TypeArgument {
-			if tok.Depth < 2 {
-				// Nested quotes should have depth >= 2
-				// Actually the depth here should be 2 (two pairs of quotes)
+			require.True(t, result.Valid, "errors: %#v", result.Errors)
+
+			found := false
+			for _, tok := range result.Tokens {
+				if tok.Value == tt.wordValue {
+					found = true
+					assert.Equal(t, tt.depth, tok.Depth,
+						"Depth of %q in %q", tt.wordValue, tt.input)
+				}
 			}
-		}
+			require.True(t, found, "token %q not found in %#v", tt.wordValue, result.Tokens)
+		})
 	}
 }
 
