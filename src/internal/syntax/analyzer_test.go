@@ -238,14 +238,14 @@ func TestAnalyze_Variables(t *testing.T) {
 	}
 }
 
-func TestAnalyze_Subshell(t *testing.T) {
+func TestAnalyze_CommandSubst(t *testing.T) {
 	result := Analyze("echo $(date)")
 
 	require.True(t, result.Valid)
 
 	found := false
 	for _, tok := range result.Tokens {
-		if tok.Type == TypeSubshell && tok.Value == "$(date)" {
+		if tok.Type == TypeCommandSubst && tok.Value == "$(date)" {
 			found = true
 			break
 		}
@@ -254,7 +254,7 @@ func TestAnalyze_Subshell(t *testing.T) {
 
 }
 
-func TestAnalyze_UnclosedSubshell_Error(t *testing.T) {
+func TestAnalyze_UnclosedCommandSubst_Error(t *testing.T) {
 	result := Analyze("echo $(date")
 
 	assert.False(t, result.Valid)
@@ -386,7 +386,7 @@ func TestAnalyze_EscapedQuotes(t *testing.T) {
 
 func TestAnalyze_EscapedBacktick(t *testing.T) {
 	// Escaped backticks don't count toward depth
-	result := Analyze("echo \\`not a subshell\\`")
+	result := Analyze("echo \\`not a substitution\\`")
 
 	require.True(t, result.Valid)
 

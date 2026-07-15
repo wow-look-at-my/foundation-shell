@@ -28,8 +28,8 @@ const (
 	TypeDoubleQuotedString
 	// TypeBacktick is a backtick command substitution.
 	TypeBacktick
-	// TypeSubshell is a $(...) command substitution.
-	TypeSubshell
+	// TypeCommandSubst is a $(...) command substitution.
+	TypeCommandSubst
 	// TypeVariable is a variable reference ($VAR or ${VAR}).
 	TypeVariable
 	// TypeParenGroup is a parenthesized group (...).
@@ -63,8 +63,8 @@ func (t SemanticType) String() string {
 		return "DoubleQuotedString"
 	case TypeBacktick:
 		return "Backtick"
-	case TypeSubshell:
-		return "Subshell"
+	case TypeCommandSubst:
+		return "CommandSubst"
 	case TypeVariable:
 		return "Variable"
 	case TypeParenGroup:
@@ -512,9 +512,9 @@ func (a *analyzer) determineWordType(value string, singleDepth, doubleDepth, bac
 		}
 	}
 
-	// Check for subshell
+	// Check for command substitution
 	if strings.HasPrefix(value, "$(") && strings.HasSuffix(value, ")") {
-		return TypeSubshell
+		return TypeCommandSubst
 	}
 
 	// Check for variable

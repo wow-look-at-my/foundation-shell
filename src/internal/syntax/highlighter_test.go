@@ -143,22 +143,22 @@ func TestHighlight_Variable_Braced(t *testing.T) {
 
 }
 
-func TestHighlight_Subshell(t *testing.T) {
+func TestHighlight_CommandSubst(t *testing.T) {
 	h := NewHighlighter(DefaultTheme)
 	output := h.Highlight("echo $(cmd)")
 
-	expectedColor := DefaultTheme[TypeSubshell]
+	expectedColor := DefaultTheme[TypeCommandSubst]
 	token := "$(cmd)"
 
 	assert.True(t, containsANSICode(output, token, expectedColor))
 
 }
 
-func TestHighlight_Subshell_Complex(t *testing.T) {
+func TestHighlight_CommandSubst_Complex(t *testing.T) {
 	h := NewHighlighter(DefaultTheme)
 	output := h.Highlight("echo $(date +%Y-%m-%d)")
 
-	expectedColor := DefaultTheme[TypeSubshell]
+	expectedColor := DefaultTheme[TypeCommandSubst]
 	token := "$(date +%Y-%m-%d)"
 
 	assert.True(t, containsANSICode(output, token, expectedColor))
@@ -220,7 +220,7 @@ func TestHighlight_Error_UnclosedBacktick(t *testing.T) {
 
 }
 
-func TestHighlight_Error_UnclosedSubshell(t *testing.T) {
+func TestHighlight_Error_UnclosedCommandSubst(t *testing.T) {
 	h := NewHighlighter(DefaultTheme)
 	output := h.Highlight("echo $(unclosed")
 
@@ -241,7 +241,7 @@ func TestHighlight_PreservesInput(t *testing.T) {
 		{"with_quotes", `echo "hello world"`},
 		{"with_single_quotes", "echo 'hello world'"},
 		{"with_variable", "echo $HOME"},
-		{"with_subshell", "echo $(date)"},
+		{"with_command_subst", "echo $(date)"},
 		{"with_backticks", "echo `date`"},
 		{"complex", "cat file.txt | grep 'pattern' > output.txt 2>&1"},
 		{"multiple_operators", "cmd1 && cmd2 || cmd3"},
@@ -275,7 +275,7 @@ func TestHighlightResult_ReturnsErrors(t *testing.T) {
 		{"unclosed_double_quote", `echo "hello`, true},
 		{"unclosed_single_quote", "echo 'hello", true},
 		{"unclosed_backtick", "echo `hello", true},
-		{"unclosed_subshell", "echo $(hello", true},
+		{"unclosed_command_subst", "echo $(hello", true},
 		{"trailing_pipe", "echo |", true},
 		{"trailing_and", "echo &&", true},
 		{"missing_redirect_target", "echo >", true},
@@ -306,7 +306,7 @@ func TestHighlightResult_ErrorDetails(t *testing.T) {
 		{"unclosed_double_quote", `echo "hello`, "unclosed double quote"},
 		{"unclosed_single_quote", "echo 'hello", "unclosed single quote"},
 		{"unclosed_backtick", "echo `hello", "unclosed backtick"},
-		{"unclosed_subshell", "echo $(hello", "unclosed command substitution"},
+		{"unclosed_command_subst", "echo $(hello", "unclosed command substitution"},
 	}
 
 	for _, tt := range tests {
@@ -340,7 +340,7 @@ func TestNewHighlighter_CustomTheme(t *testing.T) {
 		TypeSingleQuotedString: "\033[38;5;208m", // Orange
 		TypeDoubleQuotedString: "\033[38;5;51m",  // Cyan
 		TypeBacktick:           "\033[38;5;141m", // Purple
-		TypeSubshell:           "\033[38;5;141m", // Purple
+		TypeCommandSubst:       "\033[38;5;141m", // Purple
 		TypeVariable:           "\033[38;5;82m",  // Lime
 		TypeParenGroup:         "\033[38;5;213m", // Light pink
 		TypeError:              "\033[48;5;196m", // Red background
@@ -368,7 +368,7 @@ func TestNewHighlighter_CustomTheme_AllTokenTypes(t *testing.T) {
 		TypeSingleQuotedString: "\033[96m", // Light cyan
 		TypeDoubleQuotedString: "\033[97m", // White
 		TypeBacktick:           "\033[90m", // Dark gray
-		TypeSubshell:           "\033[90m", // Dark gray
+		TypeCommandSubst:       "\033[90m", // Dark gray
 		TypeVariable:           "\033[32m", // Green
 		TypeParenGroup:         "\033[33m", // Yellow
 		TypeError:              "\033[31m", // Red
@@ -391,7 +391,7 @@ func TestNewHighlighter_CustomTheme_AllTokenTypes(t *testing.T) {
 		{"single_quote", "echo 'test'", "'test'", TypeSingleQuotedString},
 		{"double_quote", `echo "test"`, `"test"`, TypeDoubleQuotedString},
 		{"backtick", "echo `date`", "`date`", TypeBacktick},
-		{"subshell", "echo $(pwd)", "$(pwd)", TypeSubshell},
+		{"command_subst", "echo $(pwd)", "$(pwd)", TypeCommandSubst},
 		{"variable", "echo $PATH", "$PATH", TypeVariable},
 	}
 
