@@ -518,7 +518,7 @@ func (a *analyzer) determineWordType(value string, singleDepth, doubleDepth, bac
 	}
 
 	// Check for variable
-	if strings.HasPrefix(value, "$") && len(value) > 1 {
+	if isVariableWord(value) {
 		return TypeVariable
 	}
 
@@ -527,6 +527,26 @@ func (a *analyzer) determineWordType(value string, singleDepth, doubleDepth, bac
 		return TypeCommand
 	}
 	return TypeArgument
+}
+
+// isVariableWord reports whether a word is a variable reference: $ followed
+// by a letter/underscore (greedy name characters after), ${...} with a
+// matching close brace and a non-empty name, or exactly the special
+// parameter $?. Any other $ ($$, $!, $1, $-foo, a lone $, an unclosed ${)
+// is a literal word character, so the word is not a variable.
+func isVariableWord(value string) bool {
+	if len(value) < 2 || value[0] != '$' {
+		return false
+	}
+	if value == "$?" {
+		return true
+	}
+	if value[1] == '{' {
+		closeIdx := strings.IndexByte(value[2:], '}')
+		return closeIdx > 0
+	}
+	c := value[1]
+	return c == '_' || ('a' <= c && c <= 'z') || ('A' <= c && c <= 'Z')
 }
 
 func (a *analyzer) addToken(semType SemanticType, start, end, depth int) {

@@ -302,3 +302,45 @@ func TestAnalyze_RedirectionAtStart_Valid(t *testing.T) {
 
 	assert.True(t, result.Valid, "got errors: %#v", result.Errors)
 }
+
+// Only real variable shapes classify as TypeVariable: $ followed by a
+// letter/underscore name, ${NAME}, or exactly $?. Everything else keeps
+// the $ as a literal word character.
+func TestAnalyze_VariableClassification(t *testing.T) {
+	variable := []string{"$HOME", "$_x", "$PATH/bin", "${HOME}", "${HOME}/bin", "$?"}
+	notVariable := []string{"$$", "$!", "$1", "$-foo", "${", "${unclosed", "${}", "$?x"}
+
+	for _, word := range variable {
+		t.Run("variable "+word, func(t *testing.T) {
+			result := Analyze("echo " + word)
+
+			require.True(t, result.Valid)
+
+			found := false
+			for _, tok := range result.Tokens {
+				if tok.Value == word {
+					found = true
+					assert.Equal(t, TypeVariable, tok.Type, "expected %q to be a variable", word)
+				}
+			}
+			require.True(t, found)
+		})
+	}
+
+	for _, word := range notVariable {
+		t.Run("literal "+word, func(t *testing.T) {
+			result := Analyze("echo " + word)
+
+			require.True(t, result.Valid)
+
+			found := false
+			for _, tok := range result.Tokens {
+				if tok.Value == word {
+					found = true
+					assert.Equal(t, TypeArgument, tok.Type, "expected %q to stay an argument", word)
+				}
+			}
+			require.True(t, found)
+		})
+	}
+}
