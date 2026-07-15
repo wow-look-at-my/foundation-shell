@@ -79,9 +79,8 @@ func TestFormatDiagnostics_CaretAlignment(t *testing.T) {
 		// The carets should start at position 5 (after "echo ")
 		// Count leading spaces/non-caret chars before first caret
 		firstCaret := strings.Index(caretLine, "^")
-		if firstCaret < 0 {
-			t.Errorf("no caret found in caret line: %q", caretLine)
-		} else if firstCaret != 5 {
+		assert.GreaterOrEqual(t, firstCaret, 0, "no caret found in caret line: %q", caretLine)
+		if firstCaret >= 0 && firstCaret != 5 {
 			// Allow for some flexibility in formatting (e.g., line number prefix)
 			// But the relative position should be correct
 			t.Logf("first caret at position %d (expected around 5): %q", firstCaret, caretLine)
