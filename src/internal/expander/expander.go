@@ -276,7 +276,9 @@ func findInnermostBacktick(s string) (start, end int, cmd string) {
 
 	backticks := []int{}
 	for i := 0; i < len(s); i++ {
-		if s[i] == '`' {
+		// Skip escaped backticks: the lexer marks \` with EscapeMarker so
+		// it is a literal character, not a substitution delimiter.
+		if s[i] == '`' && (i == 0 || s[i-1] != EscapeMarker[0]) {
 			backticks = append(backticks, i)
 		}
 	}

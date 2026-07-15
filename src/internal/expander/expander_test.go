@@ -420,3 +420,30 @@ func TestExpandCommandSubstitution_NilExecutor(t *testing.T) {
 	assert.NotNil(t, err)
 
 }
+
+// Escape-marked backticks (from \` in the input) are literal characters and
+// must never be executed as command substitution.
+func TestExpandCommandSubstitution_EscapedBacktickSkipped(t *testing.T) {
+	executor := newMockExecutor()
+	executor.outputs["whoami"] = "testuser\n"
+
+	// Both backticks are marked: no substitution at all.
+	input := EscapeMarker + "`whoami" + EscapeMarker + "`"
+	result, err := ExpandCommandSubstitution(input, executor)
+	require.Nil(t, err)
+
+	assert.Equal(t, input, result)
+
+	assert.Empty(t, executor.calls)
+
+	// A marked backtick next to real backticks does not pair with them.
+	executor2 := newMockExecutor()
+	executor2.outputs["echo x"] = "x\n"
+
+	result2, err := ExpandCommandSubstitution("`echo x`"+EscapeMarker+"`", executor2)
+	require.Nil(t, err)
+
+	assert.Equal(t, "x"+EscapeMarker+"`", result2)
+
+	assert.Equal(t, []string{"echo x"}, executor2.calls)
+}
