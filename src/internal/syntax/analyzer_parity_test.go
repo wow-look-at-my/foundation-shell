@@ -213,3 +213,92 @@ func TestAnalyze_StderrRedirectContext(t *testing.T) {
 		assert.Equal(t, []SemanticType{TypeCommand, TypeArgument, TypeRedirection, TypeRedirectionTarget}, types)
 	})
 }
+
+// Trailing-operator and missing-target detection skip trailing whitespace
+// and comments (they are not significant tokens).
+func TestAnalyze_TrailingOperatorWithTrailingWhitespace(t *testing.T) {
+	tests := []struct {
+		name   string
+		input  string
+		errMsg string
+	}{
+		{"trailing pipe with space", "echo hello | ", "unexpected operator at end"},
+		{"trailing and with tabs", "echo hello &&\t\t", "unexpected operator at end"},
+		{"trailing redirect with space", "echo > ", "missing redirection target"},
+		{"trailing redirect with newline", "echo >\n", "missing redirection target"},
+		{"trailing pipe before comment", "echo | # to be continued", "unexpected operator at end"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := Analyze(tt.input)
+
+			require.False(t, result.Valid, "expected invalid for %q", tt.input)
+
+			found := false
+			for _, err := range result.Errors {
+				if err.Message == tt.errMsg {
+					found = true
+					break
+				}
+			}
+			assert.True(t, found, "expected %q, got %#v", tt.errMsg, result.Errors)
+		})
+	}
+}
+
+func TestAnalyze_TrailingSemicolonWithWhitespace_Valid(t *testing.T) {
+	result := Analyze("echo hello ; ")
+
+	assert.True(t, result.Valid)
+}
+
+// Input starting with a chain operator is an error, matching the parser.
+func TestAnalyze_OperatorAtStart(t *testing.T) {
+	tests := []struct {
+		name   string
+		input  string
+		errMsg string
+	}{
+		{"pipe at start", "| foo", "unexpected operator at start: |"},
+		{"and at start with leading spaces", "  && foo", "unexpected operator at start: &&"},
+		{"or at start", "|| foo", "unexpected operator at start: ||"},
+		{"semicolon at start", "; foo", "unexpected operator at start: ;"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := Analyze(tt.input)
+
+			require.False(t, result.Valid)
+
+			found := false
+			for _, err := range result.Errors {
+				if err.Message == tt.errMsg {
+					found = true
+					break
+				}
+			}
+			assert.True(t, found, "expected %q, got %#v", tt.errMsg, result.Errors)
+		})
+	}
+}
+
+// A lone operator is reported once, as an operator-at-start error (the
+// parser reports the same input the same way).
+func TestAnalyze_LoneOperator_SingleError(t *testing.T) {
+	result := Analyze("|")
+
+	require.False(t, result.Valid)
+
+	require.Equal(t, 1, len(result.Errors))
+
+	assert.Equal(t, "unexpected operator at start: |", result.Errors[0].Message)
+}
+
+// Redirections may start a command: < in.txt cat is valid.
+func TestAnalyze_RedirectionAtStart_Valid(t *testing.T) {
+	result := Analyze("< in.txt cat")
+
+	assert.True(t, result.Valid, "got errors: %#v", result.Errors)
+}

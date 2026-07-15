@@ -174,23 +174,58 @@ func (a *analyzer) analyze() {
 		a.parseWord()
 	}
 
-	// Check for trailing operator errors
-	if len(a.tokens) > 0 {
-		last := a.tokens[len(a.tokens)-1]
-		if last.Type == TypeOperator && last.Value != ";" {
-			a.errors = append(a.errors, SyntaxError{
-				Start:   last.Start,
-				End:     last.End,
-				Message: "unexpected operator at end",
-			})
+	a.checkStructure()
+}
+
+// checkStructure reports leading-operator, trailing-operator and
+// missing-redirection-target errors. Whitespace and comment tokens are not
+// significant: `echo hello | ` and `echo | # done` are still trailing-pipe
+// errors.
+func (a *analyzer) checkStructure() {
+	firstIdx, lastIdx := -1, -1
+	for i := range a.tokens {
+		if a.tokens[i].Type == TypeWhitespace || a.tokens[i].Type == TypeComment {
+			continue
 		}
-		if last.Type == TypeRedirection {
-			a.errors = append(a.errors, SyntaxError{
-				Start:   last.Start,
-				End:     last.End,
-				Message: "missing redirection target",
-			})
+		if firstIdx == -1 {
+			firstIdx = i
 		}
+		lastIdx = i
+	}
+	if firstIdx == -1 {
+		// Only whitespace/comments: nothing to check
+		return
+	}
+
+	// A leading chain operator (|, &&, ||, ;) is an error, matching the
+	// parser. Redirections may legally start a command (< in.txt cat).
+	first := a.tokens[firstIdx]
+	if first.Type == TypeOperator {
+		a.errors = append(a.errors, SyntaxError{
+			Start:   first.Start,
+			End:     first.End,
+			Message: "unexpected operator at start: " + first.Value,
+		})
+		if lastIdx == firstIdx {
+			// A lone operator is fully described by the error above.
+			return
+		}
+	}
+
+	last := a.tokens[lastIdx]
+	if last.Type == TypeOperator && last.Value != ";" {
+		a.errors = append(a.errors, SyntaxError{
+			Start:   last.Start,
+			End:     last.End,
+			Message: "unexpected operator at end",
+		})
+	}
+	if last.Type == TypeRedirection {
+		a.errors = append(a.errors, SyntaxError{
+			Start:   last.Start,
+			End:     last.End,
+			Message: "missing redirection target",
+		})
 	}
 }
 

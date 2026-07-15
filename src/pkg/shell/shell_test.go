@@ -108,7 +108,7 @@ func TestRun_ParseErrorGraceful(t *testing.T) {
 	assert.Contains(t, stdout.String(), "recovered")
 
 	// Should report parse error to stderr with exact diagnostic format
-	assertDiagnostic(t, stderr.String(), "|", "unexpected operator at end")
+	assertDiagnostic(t, stderr.String(), "|", "unexpected operator at start: |")
 
 	// Last command succeeded, so exit code should be 0
 	assert.Equal(t, 0, exitCode)
@@ -426,7 +426,7 @@ func TestRunCommand_ParseError(t *testing.T) {
 	assert.Equal(t, 1, exitCode)
 
 	// Should report parse error to stderr with exact diagnostic format
-	assertDiagnostic(t, stderr.String(), "|", "unexpected operator at end")
+	assertDiagnostic(t, stderr.String(), "|", "unexpected operator at start: |")
 }
 
 func TestCommandSubstitution(t *testing.T) {
