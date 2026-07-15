@@ -344,3 +344,22 @@ func TestAnalyze_VariableClassification(t *testing.T) {
 		})
 	}
 }
+
+// A substitution that OPENS inside outer double quotes still closes at the
+// real ): "quoted inside the body" is judged relative to the quote state
+// at the moment the substitution opened.
+func TestAnalyze_SubstitutionInsideDoubleQuotes(t *testing.T) {
+	tests := []string{
+		`echo "$(whoami)"`,
+		`echo "$(date) now"`,
+		`echo "a $(b "c)d") e"`,
+	}
+
+	for _, input := range tests {
+		t.Run(input, func(t *testing.T) {
+			result := Analyze(input)
+
+			assert.True(t, result.Valid, "expected %q valid, got %#v", input, result.Errors)
+		})
+	}
+}

@@ -327,7 +327,13 @@ func (a *analyzer) parseWord() {
 	singleQuoteDepth := 0
 	doubleQuoteDepth := 0
 	backtickDepth := 0
-	parenDepth := 0 // For $()
+	// Open $(...) substitutions. Each entry records the quote depths at
+	// the moment the substitution opened, so "quoted inside the body" is
+	// judged RELATIVE to the opening point: a quote pair that opened
+	// before the substitution (echo "$(whoami)") must not read as an open
+	// quote inside the body.
+	type parenOpen struct{ single, double int }
+	var parenStack []parenOpen
 
 	// Track where quotes started for error reporting
 	var quoteStarts []int
@@ -403,7 +409,7 @@ func (a *analyzer) parseWord() {
 		// substitution tracking ('a'$(date) is one word containing a
 		// substitution, not a shattered token stream).
 		if c == '$' && singleQuoteDepth%2 == 0 && a.pos+1 < len(a.input) && a.input[a.pos+1] == '(' {
-			parenDepth++
+			parenStack = append(parenStack, parenOpen{single: singleQuoteDepth, double: doubleQuoteDepth})
 			builder.WriteRune(c)
 			builder.WriteRune('(')
 			a.pos += 2
@@ -411,18 +417,23 @@ func (a *analyzer) parseWord() {
 		}
 
 		// Handle closing ) for $(). A ) that is quoted inside the
-		// substitution body (odd quote parity) is body text and must not
-		// close the substitution: echo $(echo ')') is valid.
-		if c == ')' && parenDepth > 0 && singleQuoteDepth%2 == 0 && doubleQuoteDepth%2 == 0 {
-			parenDepth--
-			builder.WriteRune(c)
-			a.pos++
-			continue
+		// substitution body (quote parity changed since the substitution
+		// opened) is body text and must not close the substitution:
+		// echo $(echo ')') is valid, while echo "$(whoami)" still closes
+		// at the real ) even though the outer quote is open.
+		if c == ')' && len(parenStack) > 0 {
+			open := parenStack[len(parenStack)-1]
+			if (singleQuoteDepth-open.single)%2 == 0 && (doubleQuoteDepth-open.double)%2 == 0 {
+				parenStack = parenStack[:len(parenStack)-1]
+				builder.WriteRune(c)
+				a.pos++
+				continue
+			}
 		}
 
 		// Check for word boundaries (whitespace or operators)
 		// We're outside quotes when the count is even (0, 2, 4, ...)
-		outsideQuotes := singleQuoteDepth%2 == 0 && doubleQuoteDepth%2 == 0 && backtickDepth%2 == 0 && parenDepth == 0
+		outsideQuotes := singleQuoteDepth%2 == 0 && doubleQuoteDepth%2 == 0 && backtickDepth%2 == 0 && len(parenStack) == 0
 		if outsideQuotes {
 			if unicode.IsSpace(c) {
 				break
@@ -463,7 +474,7 @@ func (a *analyzer) parseWord() {
 			Message: "unclosed backtick",
 		})
 	}
-	if parenDepth > 0 {
+	if len(parenStack) > 0 {
 		a.errors = append(a.errors, SyntaxError{
 			Start:   start,
 			End:     a.pos,
@@ -472,10 +483,10 @@ func (a *analyzer) parseWord() {
 	}
 
 	// Determine semantic type
-	semType := a.determineWordType(value, singleQuoteDepth, doubleQuoteDepth, backtickDepth, parenDepth)
+	semType := a.determineWordType(value, singleQuoteDepth, doubleQuoteDepth, backtickDepth, len(parenStack))
 
 	// Calculate max depth for this token
-	maxDepth := max(singleQuoteDepth, doubleQuoteDepth, backtickDepth, parenDepth)
+	maxDepth := max(singleQuoteDepth, doubleQuoteDepth, backtickDepth, len(parenStack))
 
 	a.addToken(semType, start, a.pos, maxDepth)
 
