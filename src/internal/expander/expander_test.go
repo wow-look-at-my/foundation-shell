@@ -243,9 +243,11 @@ func TestIsVarChar(t *testing.T) {
 	// Test internal helper function behavior through ExpandEnvironment
 	os.Setenv("VAR_123", "test")
 	os.Setenv("_START", "underscore")
+	os.Setenv("A", "a")
 	defer func() {
 		os.Unsetenv("VAR_123")
 		os.Unsetenv("_START")
+		os.Unsetenv("A")
 	}()
 
 	tests := []struct {
@@ -255,6 +257,11 @@ func TestIsVarChar(t *testing.T) {
 	}{
 		{"var with underscore", "$VAR_123", "test"},
 		{"var starting underscore", "$_START", "underscore"},
+		// Variable names are ASCII-only: a multibyte UTF-8 sequence ends
+		// the name instead of being pulled in byte by byte.
+		{"multibyte rune ends the name", "$Aé", "aé"},
+		{"multibyte rune after braced var", "${A}é", "aé"},
+		{"cjk after var name", "$A漢", "a漢"},
 	}
 
 	for _, tt := range tests {

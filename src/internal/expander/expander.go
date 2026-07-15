@@ -6,7 +6,6 @@ import (
 	"os"
 	"strconv"
 	"strings"
-	"unicode"
 
 	"foundation-shell/internal/lexer"
 )
@@ -157,10 +156,12 @@ func isVarStartChar(c byte) bool {
 	return c == '_' || (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')
 }
 
-// isVarChar returns true if c can be part of a variable name (alphanumeric or underscore).
+// isVarChar returns true if c can be part of a variable name: ASCII
+// [A-Za-z0-9_] bytes only. Treating raw bytes with unicode.IsLetter would
+// pull UTF-8 lead/continuation bytes (>= 0x80) into the name byte by byte,
+// so a multibyte sequence like é must instead end the name.
 func isVarChar(c byte) bool {
-	r := rune(c)
-	return c == '_' || unicode.IsLetter(r) || unicode.IsDigit(r)
+	return c == '_' || (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9')
 }
 
 // Expand performs full expansion on a token.
