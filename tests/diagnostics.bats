@@ -9,8 +9,8 @@
 bats_require_minimum_version 1.5.0
 
 setup() {
-    FSH="${FSH:-$BATS_TEST_DIRNAME/../../build/fsh-exec}"
-    FSH_BIN="${FSH_BIN:-$BATS_TEST_DIRNAME/../../build/fsh}"
+    FSH="${FSH:-$BATS_TEST_DIRNAME/../build/fsh-exec}"
+    FSH_BIN="${FSH_BIN:-$BATS_TEST_DIRNAME/../build/fsh}"
 
     if [[ ! -x "$FSH" || ! -x "$FSH_BIN" ]]; then
         skip "fsh binaries not found - run 'just build' first"

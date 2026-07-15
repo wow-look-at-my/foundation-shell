@@ -5,7 +5,7 @@
 
 setup() {
     # Path to the shell executable
-    FSH="${FSH:-$BATS_TEST_DIRNAME/../../build/fsh-exec}"
+    FSH="${FSH:-$BATS_TEST_DIRNAME/../build/fsh-exec}"
 
     # Ensure the shell exists
     if [[ ! -x "$FSH" ]]; then

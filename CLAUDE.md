@@ -15,13 +15,13 @@ just test  # runs Go unit tests + BATS integration tests
 ```
 
 - Go unit tests: `src/` directory
-- BATS integration tests: `spec/tests/`
+- BATS integration tests: `tests/`
 
 ## Specification
 
 The authoritative spec is the external repo
 [wow-look-at-my/foundation-shell-spec](https://github.com/wow-look-at-my/foundation-shell-spec).
-Spec prose is not vendored here; `spec/tests/` is the executable conformance
+Spec prose is not vendored here; `tests/` is the executable conformance
 suite (BATS) run by `just test`.
 
 ## Project Structure
@@ -32,5 +32,5 @@ suite (BATS) run by `just test`.
   - `cmd/fsh-repl/` - REPL-only mode
   - `internal/` - Internal packages (lexer, expander, chain, command, syntax, token)
   - `pkg/` - Public packages (parser, shell)
-- `spec/tests/` - BATS conformance tests
+- `tests/` - BATS conformance tests
 - `build/` - Build output (`just build`; go-toolchain builds into `src/build/`)

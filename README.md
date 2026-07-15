@@ -63,7 +63,7 @@ just test   # Go unit tests + BATS integration tests
 
 The authoritative Foundation Shell specification lives in
 [wow-look-at-my/foundation-shell-spec](https://github.com/wow-look-at-my/foundation-shell-spec).
-`spec/tests/` in this repository is the executable conformance suite (BATS)
+`tests/` in this repository is the executable conformance suite (BATS)
 run by `just test`; the spec prose itself is deliberately not vendored here.
 
 ## Project layout
@@ -81,5 +81,5 @@ run by `just test`; the spec prose itself is deliberately not vendored here.
 | `src/internal/syntax` | Syntax analyzer, highlighter, diagnostics |
 | `src/pkg/parser` | Parser (tokens -> command chains) |
 | `src/pkg/shell` | Shell orchestration and REPL |
-| `spec/tests/` | BATS conformance tests |
+| `tests/` | BATS conformance tests |
 | `build/` | Build output (`just build`) |
