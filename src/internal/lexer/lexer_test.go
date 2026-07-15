@@ -631,20 +631,24 @@ func TestTokenize_CommandSubstitution(t *testing.T) {
 
 func TestTokenize_UnclosedCommandSubstitution(t *testing.T) {
 	tests := []struct {
-		name  string
-		input string
+		name        string
+		input       string
+		expectedErr string
 	}{
 		{
-			name:  "unclosed dollar paren",
-			input: "echo $(whoami",
+			name:        "unclosed dollar paren",
+			input:       "echo $(whoami",
+			expectedErr: "unclosed command substitution $(...)",
 		},
 		{
-			name:  "unclosed nested dollar paren",
-			input: "echo $(echo $(whoami)",
+			name:        "unclosed nested dollar paren",
+			input:       "echo $(echo $(whoami)",
+			expectedErr: "unclosed command substitution $(...)",
 		},
 		{
-			name:  "unclosed backtick",
-			input: "echo `whoami",
+			name:        "unclosed backtick",
+			input:       "echo `whoami",
+			expectedErr: "unclosed backtick",
 		},
 	}
 
@@ -653,6 +657,7 @@ func TestTokenize_UnclosedCommandSubstitution(t *testing.T) {
 			_, err := Tokenize(tt.input)
 			require.NotNil(t, err)
 
+			require.Equal(t, tt.expectedErr, err.Error())
 		})
 	}
 }

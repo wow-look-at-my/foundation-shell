@@ -147,7 +147,7 @@ func Tokenize(input string) ([]TokenContext, error) {
 		return nil, errors.New("unclosed double quote")
 	}
 	if dollarParenDepth > 0 {
-		return nil, errors.New("unclosed $(")
+		return nil, errors.New("unclosed command substitution $(...)")
 	}
 	if backtickDepth > 0 {
 		return nil, errors.New("unclosed backtick")

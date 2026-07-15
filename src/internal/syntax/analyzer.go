@@ -363,28 +363,28 @@ func (a *analyzer) parseWord() {
 		a.errors = append(a.errors, SyntaxError{
 			Start:   start,
 			End:     a.pos,
-			Message: "unclosed single quote (odd count)",
+			Message: "unclosed single quote",
 		})
 	}
 	if doubleQuoteDepth%2 != 0 {
 		a.errors = append(a.errors, SyntaxError{
 			Start:   start,
 			End:     a.pos,
-			Message: "unclosed double quote (odd count)",
+			Message: "unclosed double quote",
 		})
 	}
 	if backtickDepth%2 != 0 {
 		a.errors = append(a.errors, SyntaxError{
 			Start:   start,
 			End:     a.pos,
-			Message: "unclosed backtick (odd count)",
+			Message: "unclosed backtick",
 		})
 	}
 	if parenDepth > 0 {
 		a.errors = append(a.errors, SyntaxError{
 			Start:   start,
 			End:     a.pos,
-			Message: "unclosed subshell $(...)",
+			Message: "unclosed command substitution $(...)",
 		})
 	}
 

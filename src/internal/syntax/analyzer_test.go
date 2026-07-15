@@ -151,7 +151,7 @@ func TestAnalyze_UnclosedSingleQuote_Error(t *testing.T) {
 	require.NotEqual(t, 0, len(result.Errors))
 
 	err := result.Errors[0]
-	assert.Equal(t, "unclosed single quote (odd count)", err.Message)
+	assert.Equal(t, "unclosed single quote", err.Message)
 
 }
 
@@ -163,7 +163,7 @@ func TestAnalyze_UnclosedDoubleQuote_Error(t *testing.T) {
 	require.NotEqual(t, 0, len(result.Errors))
 
 	err := result.Errors[0]
-	assert.Equal(t, "unclosed double quote (odd count)", err.Message)
+	assert.Equal(t, "unclosed double quote", err.Message)
 
 }
 
@@ -175,7 +175,7 @@ func TestAnalyze_UnclosedBacktick_Error(t *testing.T) {
 	require.NotEqual(t, 0, len(result.Errors))
 
 	err := result.Errors[0]
-	assert.Equal(t, "unclosed backtick (odd count)", err.Message)
+	assert.Equal(t, "unclosed backtick", err.Message)
 
 }
 
@@ -184,10 +184,10 @@ func TestAnalyze_OddQuoteCount_Error(t *testing.T) {
 		input  string
 		errMsg string
 	}{
-		{`echo "a`, "unclosed double quote (odd count)"},
-		{`echo "a"b"`, "unclosed double quote (odd count)"},
-		{`echo 'a`, "unclosed single quote (odd count)"},
-		{"echo `a", "unclosed backtick (odd count)"},
+		{`echo "a`, "unclosed double quote"},
+		{`echo "a"b"`, "unclosed double quote"},
+		{`echo 'a`, "unclosed single quote"},
+		{"echo `a", "unclosed backtick"},
 	}
 
 	for _, tt := range tests {
@@ -261,7 +261,7 @@ func TestAnalyze_UnclosedSubshell_Error(t *testing.T) {
 
 	found := false
 	for _, err := range result.Errors {
-		if err.Message == "unclosed subshell $(...)" {
+		if err.Message == "unclosed command substitution $(...)" {
 			found = true
 			break
 		}

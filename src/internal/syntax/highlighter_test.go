@@ -306,7 +306,7 @@ func TestHighlightResult_ErrorDetails(t *testing.T) {
 		{"unclosed_double_quote", `echo "hello`, "unclosed double quote"},
 		{"unclosed_single_quote", "echo 'hello", "unclosed single quote"},
 		{"unclosed_backtick", "echo `hello", "unclosed backtick"},
-		{"unclosed_subshell", "echo $(hello", "unclosed subshell"},
+		{"unclosed_subshell", "echo $(hello", "unclosed command substitution"},
 	}
 
 	for _, tt := range tests {
