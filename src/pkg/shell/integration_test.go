@@ -103,9 +103,9 @@ func TestIntegration_CommandSubstitution(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			stdout, stderr, exitCode := runFsh(t, tt.input)
 
-			assert.Equal(t, 0, exitCode)
+			assert.Equal(t, 0, exitCode, "stderr: %s", stderr)
 
-			assert.Contains(t, stdout, tt.contains)
+			assert.Contains(t, stdout, tt.contains, "stderr: %s", stderr)
 
 		})
 	}
@@ -138,9 +138,9 @@ func TestIntegration_BasicCommands(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			stdout, stderr, exitCode := runFsh(t, tt.input)
 
-			assert.Equal(t, 0, exitCode)
+			assert.Equal(t, 0, exitCode, "stderr: %s", stderr)
 
-			assert.Contains(t, stdout, tt.contains)
+			assert.Contains(t, stdout, tt.contains, "stderr: %s", stderr)
 
 		})
 	}
