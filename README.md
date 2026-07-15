@@ -8,10 +8,14 @@ one-shot command executor, and a REPL-only binary.
 
 - Pipelines (`cmd1 | cmd2 | cmd3`)
 - Command chaining with `&&`, `||`, and `;`
-- Operators work with or without surrounding whitespace (`a|b`, `cmd>file`)
-- I/O redirection (`<`, `>`, `>>`, `2>`, `2>>`)
+- Operators work with or without surrounding whitespace (`a|b`, `cmd>file`);
+  quoted or escaped operator characters (`'|'`, `\;`, `grep '>' file`) stay
+  literal
+- I/O redirection (`<`, `>`, `>>`, `2>`, `2>>`); fd duplication (`2>&1`) is
+  rejected with a clear error rather than misread as a filename
 - Quoting (single and double) with depth-tracked nesting
-- Command substitution — both `$(...)` (nestable) and backticks
+- Command substitution — both `$(...)` (nestable) and backticks; bodies are
+  expanded recursively and output is spliced as data, never re-executed
 - `#` comments and newlines as command separators
 - Environment variable and tilde expansion
 - Syntax highlighting, both live in the REPL and as a standalone analyzer
@@ -59,7 +63,7 @@ run by `just test`; the spec prose itself is deliberately not vendored here.
 | `src/cmd/fsh-repl` | REPL-only entry point |
 | `src/internal/lexer` | Tokenizer |
 | `src/internal/token` | Token types |
-| `src/internal/expander` | Tilde and environment variable expansion |
+| `src/internal/expander` | Expansion: tilde, environment variables, `$?`, command substitution |
 | `src/internal/chain` | Chain (pipeline/operator) execution |
 | `src/internal/command` | Command execution and builtins |
 | `src/internal/syntax` | Syntax analyzer, highlighter, diagnostics |
