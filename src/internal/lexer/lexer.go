@@ -64,6 +64,12 @@ type subContext struct {
 // {||, &&, 2>>, 2>, >>, |, ;, <, >}. 2>/2>> only apply when the pending
 // word is exactly an unquoted "2" (which is consumed into the operator);
 // a single & is a literal word character.
+//
+// An unquoted # at word start begins a comment running to the next
+// unquoted newline or end of input. An unquoted newline outside
+// substitutions acts as a command separator (an implicit ;) unless the
+// previous token is already an operator, in which case it is swallowed
+// (line continuation after an operator).
 func Tokenize(input string) ([]TokenContext, error) {
 	var tokens []TokenContext
 	var current strings.Builder
@@ -235,6 +241,37 @@ func Tokenize(input string) ([]TokenContext, error) {
 				continue
 			}
 			// Inside single quotes: literal, falls through
+		}
+
+		// Handle comments: an unquoted # at word start (start of input or
+		// after unquoted whitespace/operator), outside any substitution,
+		// starts a comment running to the next unquoted newline or end of
+		// input. foo#bar stays one word. A # inside a substitution body is
+		// passed through as body text (known limitation: comment rules
+		// apply only when the body is re-parsed at execution time).
+		if c == '#' && !inSingleQuotes && !inDoubleQuotes && !inSubstitution &&
+			current.Len() == 0 && !wasQuoted {
+			for i+1 < len(runes) && runes[i+1] != '\n' {
+				i++
+			}
+			// The terminating newline (if any) is handled on the next
+			// iteration by the newline rule below.
+			continue
+		}
+
+		// Handle newline as a command separator: an unquoted newline
+		// outside substitutions emits a ; operator token IFF the most
+		// recently emitted token exists and is not itself an operator;
+		// otherwise it is swallowed. Leading newlines and blank lines are
+		// no-ops, and a newline after && || | ; or a redirection allows
+		// line continuation. Inside quotes a newline is a literal word
+		// character; inside substitution bodies it is body text.
+		if c == '\n' && !inSingleQuotes && !inDoubleQuotes && !inSubstitution {
+			flushWord()
+			if len(tokens) > 0 && !tokens[len(tokens)-1].IsOperator {
+				emitOperator(";")
+			}
+			continue
 		}
 
 		// Handle operators without surrounding whitespace. An unquoted,

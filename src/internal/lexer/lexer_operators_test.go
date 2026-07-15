@@ -219,3 +219,168 @@ func TestTokenize_QuotedOperatorsAreLiteral(t *testing.T) {
 		})
 	}
 }
+
+// An unquoted # at word start begins a comment running to the next
+// unquoted newline or end of input.
+func TestTokenize_Comments(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected []TokenContext
+	}{
+		{
+			name:     "comment after arguments",
+			input:    "echo a # rest",
+			expected: []TokenContext{word("echo"), word("a")},
+		},
+		{
+			name:     "comment without space after hash",
+			input:    "echo a #rest of line",
+			expected: []TokenContext{word("echo"), word("a")},
+		},
+		{
+			name:     "whole-line comment",
+			input:    "# just a comment",
+			expected: nil,
+		},
+		{
+			name:     "shebang line",
+			input:    "#!/usr/bin/env fsh",
+			expected: nil,
+		},
+		{
+			name:     "hash inside a word is literal",
+			input:    "foo#bar",
+			expected: []TokenContext{word("foo#bar")},
+		},
+		{
+			name:  "quoted hash is literal",
+			input: "echo '#' x",
+			expected: []TokenContext{
+				word("echo"),
+				{Content: "#", WasSingleQuoted: true, WasQuoted: true},
+				word("x"),
+			},
+		},
+		{
+			name:  "hash inside double quotes is literal",
+			input: `echo "a#b"`,
+			expected: []TokenContext{
+				word("echo"),
+				{Content: "a#b", WasQuoted: true},
+			},
+		},
+		{
+			name:  "hash right after empty quotes is part of the word",
+			input: "''#foo",
+			expected: []TokenContext{
+				{Content: "#foo", WasSingleQuoted: true, WasQuoted: true},
+			},
+		},
+		{
+			name:     "comment directly after an operator",
+			input:    "echo|#comment",
+			expected: []TokenContext{word("echo"), op("|")},
+		},
+		{
+			name:     "comment swallows unclosed quote",
+			input:    "echo ok # it's fine",
+			expected: []TokenContext{word("echo"), word("ok")},
+		},
+		{
+			name:     "hash inside substitution body is body text",
+			input:    "echo $(a # b)",
+			expected: []TokenContext{word("echo"), word("$(a # b)")},
+		},
+		{
+			name:     "comment ends at newline",
+			input:    "echo a # c\necho b",
+			expected: []TokenContext{word("echo"), word("a"), op(";"), word("echo"), word("b")},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := Tokenize(tt.input)
+			require.Nil(t, err)
+
+			assertTokensEqual(t, tt.expected, result)
+		})
+	}
+}
+
+// An unquoted newline outside substitutions separates commands (implicit
+// ;) unless the previous token is already an operator.
+func TestTokenize_NewlineSeparator(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected []TokenContext
+	}{
+		{
+			name:     "newline separates commands",
+			input:    "echo a\necho b",
+			expected: []TokenContext{word("echo"), word("a"), op(";"), word("echo"), word("b")},
+		},
+		{
+			name:     "blank lines emit no extra separators",
+			input:    "echo a\n\n\necho b",
+			expected: []TokenContext{word("echo"), word("a"), op(";"), word("echo"), word("b")},
+		},
+		{
+			name:     "leading newlines are swallowed",
+			input:    "\n\necho a",
+			expected: []TokenContext{word("echo"), word("a")},
+		},
+		{
+			name:     "trailing newline emits a separator",
+			input:    "echo a\n",
+			expected: []TokenContext{word("echo"), word("a"), op(";")},
+		},
+		{
+			name:     "newline after && is line continuation",
+			input:    "echo a &&\necho b",
+			expected: []TokenContext{word("echo"), word("a"), op("&&"), word("echo"), word("b")},
+		},
+		{
+			name:     "newline after pipe is line continuation",
+			input:    "echo a |\ncat",
+			expected: []TokenContext{word("echo"), word("a"), op("|"), word("cat")},
+		},
+		{
+			name:     "newline after semicolon is swallowed",
+			input:    "echo a;\necho b",
+			expected: []TokenContext{word("echo"), word("a"), op(";"), word("echo"), word("b")},
+		},
+		{
+			name:  "newline inside single quotes is literal",
+			input: "echo 'a\nb'",
+			expected: []TokenContext{
+				word("echo"),
+				{Content: "a\nb", WasSingleQuoted: true, WasQuoted: true},
+			},
+		},
+		{
+			name:  "newline inside double quotes is literal",
+			input: "echo \"a\nb\"",
+			expected: []TokenContext{
+				word("echo"),
+				{Content: "a\nb", WasQuoted: true},
+			},
+		},
+		{
+			name:     "newline inside substitution body is body text",
+			input:    "echo $(a\nb)",
+			expected: []TokenContext{word("echo"), word("$(a\nb)")},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := Tokenize(tt.input)
+			require.Nil(t, err)
+
+			assertTokensEqual(t, tt.expected, result)
+		})
+	}
+}
