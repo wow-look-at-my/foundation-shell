@@ -8,9 +8,11 @@ one-shot command executor, and a REPL-only binary.
 
 - Pipelines (`cmd1 | cmd2 | cmd3`)
 - Command chaining with `&&`, `||`, and `;`
+- Operators work with or without surrounding whitespace (`a|b`, `cmd>file`)
 - I/O redirection (`<`, `>`, `>>`, `2>`, `2>>`)
 - Quoting (single and double) with depth-tracked nesting
 - Command substitution — both `$(...)` (nestable) and backticks
+- `#` comments and newlines as command separators
 - Environment variable and tilde expansion
 - Syntax highlighting, both live in the REPL and as a standalone analyzer
 - Interactive REPL with readline line editing
