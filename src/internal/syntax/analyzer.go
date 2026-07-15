@@ -214,26 +214,34 @@ func (a *analyzer) checkStructure() {
 	}
 
 	// Consecutive operators, matching the parser. A newline between
-	// commands is an implicit ; (the lexer emits one unless the previous
-	// token is an operator, which continues the line), so a chain
-	// operator that starts a new line after a word is "consecutive" with
-	// that implicit ;. A redirection followed by any operator has no
-	// target, again matching the parser.
+	// commands is an implicit ; (the lexer materializes one unless the
+	// previous token is a CHAIN operator, which continues the line), so a
+	// chain operator that starts a new line after a word is "consecutive"
+	// with that implicit ;. A redirection followed by any operator — or by
+	// a newline, which the lexer turns into a ; (redirections do NOT
+	// continue across lines) — has no target, again matching the parser.
 	for k := 1; k < len(sig); k++ {
 		prev, cur := a.tokens[sig[k-1]], a.tokens[sig[k]]
 		msg := ""
+		at := cur
 		switch {
+		case prev.Type == TypeRedirection && a.newlineBetween(sig[k-1], sig[k]):
+			// `echo hi ><newline>out.txt`: the lexer emits > ; out.txt, so the
+			// parser sees the separator as the redirection target. The
+			// caret points at the dangling redirection operator.
+			msg = "missing redirection target: " + prev.Value + " followed by operator ;"
+			at = prev
 		case cur.Type == TypeOperator && prev.Type == TypeOperator:
 			msg = fmt.Sprintf("consecutive operators: %s followed by %s", prev.Value, cur.Value)
-		case cur.Type == TypeOperator && prev.Type != TypeRedirection && a.newlineBetween(sig[k-1], sig[k]):
+		case cur.Type == TypeOperator && a.newlineBetween(sig[k-1], sig[k]):
 			msg = "consecutive operators: ; followed by " + cur.Value
 		case prev.Type == TypeRedirection && (cur.Type == TypeOperator || cur.Type == TypeRedirection):
 			msg = fmt.Sprintf("missing redirection target: %s followed by operator %s", prev.Value, cur.Value)
 		}
 		if msg != "" {
 			a.errors = append(a.errors, SyntaxError{
-				Start:   cur.Start,
-				End:     cur.End,
+				Start:   at.Start,
+				End:     at.End,
 				Message: msg,
 			})
 		}

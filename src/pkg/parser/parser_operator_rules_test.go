@@ -176,3 +176,56 @@ func TestParse_QuotedAmpersandTargetIsAFilename(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "&1", chain.Commands[0].ErrorFile)
 }
+
+// redirection.md §9.5: the fd-duplication guard inspects the target token
+// AS WRITTEN (pre-expansion). A target that becomes `&1` only through
+// expansion is a legitimate filename; a literal unquoted `&`-prefixed word
+// is rejected even when expansion would change it.
+func TestParse_FdDuplicationGuardIsPreExpansion(t *testing.T) {
+	t.Setenv("FD_GUARD_TEST_VAR", "&1")
+
+	// Expansion-produced &1: legal — the redirection targets a file
+	// literally named &1.
+	chain, err := Parse("echo hi > $FD_GUARD_TEST_VAR")
+	require.NoError(t, err)
+	require.Len(t, chain.Commands, 1)
+	assert.Equal(t, "&1", chain.Commands[0].OutputFile)
+
+	// Literal &-prefixed word: rejected on the WRITTEN form, with the
+	// written word in the message, regardless of what expansion would do.
+	t.Setenv("FD_GUARD_SUFFIX", "name")
+	_, err = Parse("echo hi > &$FD_GUARD_SUFFIX")
+	require.Error(t, err)
+	assert.ErrorIs(t, err, ErrFdDuplicationUnsupported)
+	assert.Equal(t, "file descriptor duplication is not supported: &$FD_GUARD_SUFFIX", err.Error())
+}
+
+// lexer.md §3.4: a newline right after a redirection operator is NOT line
+// continuation — the lexer materializes the separator and the parser
+// reports the dangling redirection. Chain operators DO continue.
+func TestParse_NewlineAfterRedirectionIsError(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   string
+		wantMsg string
+	}{
+		{"stdout redirect", "echo hi >\nout.txt", "missing redirection target: > followed by operator ;"},
+		{"stdin redirect", "cat <\nin.txt", "missing redirection target: < followed by operator ;"},
+		{"stderr append", "cmd 2>>\nerr.log", "missing redirection target: 2>> followed by operator ;"},
+		{"redirect at EOF after newline", "echo hi >\n", "missing redirection target: >"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := Parse(tt.input)
+			require.Error(t, err)
+			assert.ErrorIs(t, err, ErrMissingRedirectionTarget)
+			assert.Equal(t, tt.wantMsg, err.Error())
+		})
+	}
+
+	// Chain operators still continue across the newline.
+	chain, err := Parse("echo a &&\necho b")
+	require.NoError(t, err)
+	require.Len(t, chain.Commands, 2)
+}

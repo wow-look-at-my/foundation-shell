@@ -61,6 +61,12 @@ type Chain struct {
 type classifiedToken struct {
 	tokenType token.TokenType
 	value     string
+	// rawValue is the token content AS WRITTEN (the lexer's pre-expansion
+	// Content). The fd-duplication guard inspects it: `2>&1` is rejected on
+	// the literal `&1`, while a target that becomes `&1` only through
+	// expansion (`> $X` with X='&1') is a legal filename
+	// (redirection.md §9.5).
+	rawValue string
 	// wasQuoted is true when any part of the original word was quoted
 	// (used e.g. to allow a quoted '&1' as a redirection target while
 	// rejecting the unquoted fd-duplication form).
@@ -219,6 +225,7 @@ func ParseWithOptions(input string, opts Options) (*Chain, error) {
 		classified = append(classified, classifiedToken{
 			tokenType:       tokenType,
 			value:           expandedValue,
+			rawValue:        tc.Content,
 			wasQuoted:       tc.WasQuoted,
 			wasSingleQuoted: tc.WasSingleQuoted,
 		})
@@ -328,10 +335,13 @@ func buildChain(tokens []classifiedToken) (*Chain, error) {
 
 			// Fd-duplication syntax (2>&1) lexes as `2>` + word `&1`.
 			// Reject unquoted &-prefixed targets loudly instead of
-			// creating a file literally named "&1". A quoted '&1'
-			// remains a legal filename.
-			if !nextTok.wasQuoted && strings.HasPrefix(nextTok.value, "&") {
-				return nil, fmt.Errorf("%w: %s", ErrFdDuplicationUnsupported, nextTok.value)
+			// creating a file literally named "&1". The guard inspects the
+			// PRE-expansion token content (redirection.md §9.5): a quoted
+			// '&1' is a legal filename, and so is a target that becomes
+			// `&1` only through expansion (`> $X` with X='&1').
+			if !nextTok.wasQuoted && strings.HasPrefix(nextTok.rawValue, "&") {
+				word := lexer.StripEscapeMarkers(nextTok.rawValue)
+				return nil, fmt.Errorf("%w: %s", ErrFdDuplicationUnsupported, word)
 			}
 
 			// Apply the redirection

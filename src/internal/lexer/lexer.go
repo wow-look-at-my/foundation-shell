@@ -43,6 +43,22 @@ type subContext struct {
 	double int
 }
 
+// isChainOperatorToken reports whether a token is one of the CHAIN
+// operators (|, &&, ||, ;). Only chain operators suppress the newline
+// separator (line continuation, lexer.md §3.4); redirection operators do
+// not — a dangling redirection must not silently take the next line's
+// first word as its target.
+func isChainOperatorToken(t TokenContext) bool {
+	if !t.IsOperator {
+		return false
+	}
+	switch t.Content {
+	case "|", "&&", "||", ";":
+		return true
+	}
+	return false
+}
+
 // QuoteNestsDeeper implements the depth-tracked quote nesting rule shared
 // by the lexer and the syntax analyzer. It reports whether an unescaped
 // quote character at runes[i], read while a region of the SAME type is
@@ -107,9 +123,15 @@ func QuoteNestsDeeper(runes []rune, i int) bool {
 //
 // An unquoted # at word start begins a comment running to the next
 // unquoted newline or end of input. An unquoted newline outside
-// substitutions acts as a command separator (an implicit ;) unless the
-// previous token is already an operator, in which case it is swallowed
-// (line continuation after an operator).
+// substitutions is a SOFT command separator (lexer.md §3.4): it sets a
+// pending flag, and a ; operator token materializes just before the next
+// emitted token — unless no token has been emitted yet or the most recently
+// emitted token is a CHAIN operator (|, &&, ||, ;), which makes the newline
+// a line continuation. Redirection operators (<, >, >>, 2>, 2>>) do NOT
+// suppress the separator: a redirection cannot be continued across a
+// newline, so `cmd ><newline>file` lexes as cmd > ; file and the parser
+// rejects it.
+// Leading blank lines and a trailing newline produce nothing.
 //
 // An input left unclosed at end of input reports the INNERMOST unclosed
 // construct: "unclosed single quote", "unclosed double quote", "unclosed
@@ -126,6 +148,24 @@ func Tokenize(input string) ([]TokenContext, error) {
 	singleDepth := 0
 	doubleDepth := 0
 	var subStack []subContext
+	// pendingNewline records a depth-0 newline; the separator it stands for
+	// materializes just before the NEXT emitted token (lexer.md §3.4). A
+	// flag still set at end of input is discarded (trailing newline).
+	pendingNewline := false
+
+	// emit appends a token, first materializing a pending newline separator
+	// unless nothing has been emitted yet or the previous token is a chain
+	// operator (line continuation). Redirection operators do NOT suppress
+	// the separator.
+	emit := func(tok TokenContext) {
+		if pendingNewline {
+			pendingNewline = false
+			if len(tokens) > 0 && !isChainOperatorToken(tokens[len(tokens)-1]) {
+				tokens = append(tokens, TokenContext{Content: ";", IsOperator: true})
+			}
+		}
+		tokens = append(tokens, tok)
+	}
 
 	// flushWord ends the current word: it emits a token when the word has
 	// content or consisted only of quotes (empty argument), and ALWAYS
@@ -134,7 +174,7 @@ func Tokenize(input string) ([]TokenContext, error) {
 	// word (e.g. `echo '' $HOME` must still expand $HOME).
 	flushWord := func() {
 		if current.Len() > 0 || wasQuoted {
-			tokens = append(tokens, TokenContext{
+			emit(TokenContext{
 				Content:         current.String(),
 				WasSingleQuoted: wasSingleQuoted,
 				WasQuoted:       wasQuoted,
@@ -147,7 +187,7 @@ func Tokenize(input string) ([]TokenContext, error) {
 	}
 
 	emitOperator := func(op string) {
-		tokens = append(tokens, TokenContext{Content: op, IsOperator: true})
+		emit(TokenContext{Content: op, IsOperator: true})
 	}
 
 	runes := []rune(input)
@@ -356,18 +396,17 @@ func Tokenize(input string) ([]TokenContext, error) {
 			continue
 		}
 
-		// Handle newline as a command separator: an unquoted newline
-		// outside substitutions emits a ; operator token IFF the most
-		// recently emitted token exists and is not itself an operator;
-		// otherwise it is swallowed. Leading newlines and blank lines are
-		// no-ops, and a newline after && || | ; or a redirection allows
-		// line continuation. Inside quotes a newline is a literal word
-		// character; inside substitution bodies it is body text.
+		// Handle newline as a SOFT command separator: an unquoted newline
+		// outside substitutions flushes the word and sets the pending flag;
+		// emit materializes the ; before the next token unless the previous
+		// token is a chain operator (continuation). A run of newlines —
+		// with or without comments between — collapses into one separator,
+		// and a trailing newline produces nothing. Inside quotes a newline
+		// is a literal word character; inside substitution bodies it is
+		// body text.
 		if c == '\n' && singleDepth == 0 && doubleDepth == 0 && !inSubstitution {
 			flushWord()
-			if len(tokens) > 0 && !tokens[len(tokens)-1].IsOperator {
-				emitOperator(";")
-			}
+			pendingNewline = true
 			continue
 		}
 

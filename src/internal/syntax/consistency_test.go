@@ -142,6 +142,14 @@ func TestLexerAnalyzerConsistency(t *testing.T) {
 		{"echo a\n| foo", false, false},
 		{"echo a &&\n|| b", false, false},
 		{"echo > | b", false, false},
+
+		// A newline right after a redirection is NOT continuation
+		// (lexer.md §3.4): the lexer tokenizes fine but materializes the
+		// separator, the parser rejects, and the analyzer must agree.
+		{"echo hi >\nout.txt", false, false},
+		{"cat <\nin.txt", false, false},
+		{"cmd 2>>\nerr.log", false, false},
+		{"echo hi >\n", false, false},
 	}
 
 	for _, tt := range tests {

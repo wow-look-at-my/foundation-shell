@@ -111,11 +111,12 @@ func Execute(ctx context.Context, spec *parser.CommandSpec, stdin io.Reader, std
 		actualStdout = outputFile
 	}
 
-	// Error redirection
+	// Error redirection. The canonical message says "output" for every
+	// write-side operator — `2>`/`2>>` included (redirection.md §9.1).
 	if spec.ErrorFile != "" {
 		errorFile, err := openOutputFile(spec.ErrorFile, spec.AppendError)
 		if err != nil {
-			fmt.Fprintf(stderr, "cannot open error file %s: %s\n", spec.ErrorFile, OSReason(err))
+			fmt.Fprintf(stderr, "cannot open output file %s: %s\n", spec.ErrorFile, OSReason(err))
 			return 1, nil
 		}
 		filesToClose = append(filesToClose, errorFile)

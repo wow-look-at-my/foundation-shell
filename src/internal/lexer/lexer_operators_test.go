@@ -333,9 +333,16 @@ func TestTokenize_NewlineSeparator(t *testing.T) {
 			expected: []TokenContext{word("echo"), word("a")},
 		},
 		{
-			name:     "trailing newline emits a separator",
+			// lexer.md §3.4: the separator is pending and materializes only
+			// before a following token — a trailing newline produces nothing.
+			name:     "trailing newline produces nothing",
 			input:    "echo a\n",
-			expected: []TokenContext{word("echo"), word("a"), op(";")},
+			expected: []TokenContext{word("echo"), word("a")},
+		},
+		{
+			name:     "trailing newline run produces nothing",
+			input:    "echo a\n\n  \n",
+			expected: []TokenContext{word("echo"), word("a")},
 		},
 		{
 			name:     "newline after && is line continuation",
@@ -351,6 +358,32 @@ func TestTokenize_NewlineSeparator(t *testing.T) {
 			name:     "newline after semicolon is swallowed",
 			input:    "echo a;\necho b",
 			expected: []TokenContext{word("echo"), word("a"), op(";"), word("echo"), word("b")},
+		},
+		{
+			// lexer.md §3.4: after a REDIRECTION operator the separator is
+			// NOT suppressed — a redirection cannot be continued across a
+			// newline. The parser rejects the resulting `> ;` sequence.
+			name:     "newline after > is NOT line continuation",
+			input:    "echo hi >\nout.txt",
+			expected: []TokenContext{word("echo"), word("hi"), op(">"), op(";"), word("out.txt")},
+		},
+		{
+			name:     "newline after 2>> is NOT line continuation",
+			input:    "cmd 2>>\nerr.log",
+			expected: []TokenContext{word("cmd"), op("2>>"), op(";"), word("err.log")},
+		},
+		{
+			name:     "newline after < is NOT line continuation",
+			input:    "cat <\nin.txt",
+			expected: []TokenContext{word("cat"), op("<"), op(";"), word("in.txt")},
+		},
+		{
+			// The separator materializes once even across blank lines, and a
+			// dangling redirection at EOF (after a trailing newline) simply
+			// ends the token stream at the operator.
+			name:     "dangling redirection before trailing newline",
+			input:    "echo hi >\n",
+			expected: []TokenContext{word("echo"), word("hi"), op(">")},
 		},
 		{
 			name:  "newline inside single quotes is literal",

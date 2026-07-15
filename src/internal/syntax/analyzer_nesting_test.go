@@ -154,6 +154,11 @@ func TestAnalyze_ConsecutiveOperators(t *testing.T) {
 		{"operator after continuation line operator", "echo a &&\n|| b", "consecutive operators: && followed by ||"},
 		{"redirection followed by operator", "echo > | b", "missing redirection target: > followed by operator |"},
 		{"redirection followed by redirection", "echo > > f", "missing redirection target: > followed by operator >"},
+		// lexer.md §3.4: a newline after a redirection is NOT continuation;
+		// the lexer materializes the implicit ; between > and the next word.
+		{"redirection then newline then word", "echo hi >\nout.txt", "missing redirection target: > followed by operator ;"},
+		{"stderr append then newline then word", "cmd 2>>\nerr.log", "missing redirection target: 2>> followed by operator ;"},
+		{"input redirect then newline then word", "cat <\nin.txt", "missing redirection target: < followed by operator ;"},
 	}
 
 	for _, tt := range tests {
