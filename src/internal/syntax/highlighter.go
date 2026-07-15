@@ -26,6 +26,7 @@ var DefaultTheme = Theme{
 	TypeParenGroup:         "\033[35m",   // Magenta
 	TypeError:              "\033[4;31m", // Underline red
 	TypeWhitespace:         "\033[0m",    // Reset
+	TypeComment:            "\033[90m",   // Dark gray
 	TypeUnknown:            "\033[0m",    // Reset
 }
 

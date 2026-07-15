@@ -38,6 +38,8 @@ const (
 	TypeError
 	// TypeWhitespace is whitespace between tokens.
 	TypeWhitespace
+	// TypeComment is a comment (# to end of line).
+	TypeComment
 )
 
 // String returns the string name of the semantic type.
@@ -71,6 +73,8 @@ func (t SemanticType) String() string {
 		return "Error"
 	case TypeWhitespace:
 		return "Whitespace"
+	case TypeComment:
+		return "Comment"
 	default:
 		return "Unknown"
 	}
@@ -141,8 +145,18 @@ func (a *analyzer) analyze() {
 			continue
 		}
 
+		// A # at word start (here: any fresh position after whitespace,
+		// an operator, or start of input) begins a comment running to the
+		// next newline or end of input, matching the lexer. A # inside a
+		// word or a substitution body stays literal (parseWord consumes
+		// it).
+		if a.input[a.pos] == '#' {
+			a.consumeComment()
+			continue
+		}
+
 		// Check for operators first
-		if op, length := a.matchOperator(); length > 0 {
+		if op, length := a.matchOperator(true); length > 0 {
 			a.addToken(op, a.pos, a.pos+length, 0)
 			a.pos += length
 
@@ -182,57 +196,84 @@ func (a *analyzer) analyze() {
 
 func (a *analyzer) consumeWhitespace() {
 	start := a.pos
+	sawNewline := false
 	for a.pos < len(a.input) && unicode.IsSpace(a.input[a.pos]) {
+		if a.input[a.pos] == '\n' {
+			sawNewline = true
+		}
 		a.pos++
 	}
 	a.addToken(TypeWhitespace, start, a.pos, 0)
+
+	// A newline separates commands (the lexer emits an implicit ;), so
+	// the next word starts a new command.
+	if sawNewline {
+		a.isFirstInCommand = true
+		a.afterRedirection = false
+	}
 }
 
-// matchOperator checks if current position starts with an operator.
-// Returns the semantic type and length of the operator, or 0 length if not an operator.
-func (a *analyzer) matchOperator() (SemanticType, int) {
+// consumeComment consumes a comment from # to the next newline (exclusive)
+// or end of input.
+func (a *analyzer) consumeComment() {
+	start := a.pos
+	for a.pos < len(a.input) && a.input[a.pos] != '\n' {
+		a.pos++
+	}
+	a.addToken(TypeComment, start, a.pos, 0)
+}
+
+// peek returns the rune at offset from the current position, or 0 when out
+// of bounds.
+func (a *analyzer) peek(offset int) rune {
+	if a.pos+offset < len(a.input) {
+		return a.input[a.pos+offset]
+	}
+	return 0
+}
+
+// matchOperator checks if the current position starts with an operator.
+// Returns the semantic type and length of the operator, or 0 length if not
+// an operator. It compares runes in place: no per-call allocation (this
+// runs for every character on every keystroke).
+//
+// fresh indicates a word-start position (start of input, after whitespace
+// or after an operator). The 2>/2>> forms only match there: mid-word the 2
+// belongs to the pending word (echo a2>f is word a2 + operator >),
+// matching the lexer's rule that 2>/2>> apply only when the pending word
+// is exactly "2".
+func (a *analyzer) matchOperator(fresh bool) (SemanticType, int) {
 	if a.pos >= len(a.input) {
 		return TypeUnknown, 0
 	}
 
-	// Check multi-character operators first
-	remaining := string(a.input[a.pos:])
-
-	// Chain operators (3 chars)
-	// None currently
-
-	// Chain operators (2 chars)
-	if strings.HasPrefix(remaining, "&&") {
-		return TypeOperator, 2
-	}
-	if strings.HasPrefix(remaining, "||") {
-		return TypeOperator, 2
-	}
-
-	// Redirection operators (3 chars)
-	if strings.HasPrefix(remaining, "2>>") {
-		return TypeRedirection, 3
-	}
-
-	// Redirection operators (2 chars)
-	if strings.HasPrefix(remaining, ">>") {
-		return TypeRedirection, 2
-	}
-	if strings.HasPrefix(remaining, "2>") {
-		return TypeRedirection, 2
-	}
-
-	// Single character operators
-	c := a.input[a.pos]
-	switch c {
+	switch a.input[a.pos] {
+	case '&':
+		if a.peek(1) == '&' {
+			return TypeOperator, 2
+		}
+		// A single & is a literal word character, not an operator.
 	case '|':
+		if a.peek(1) == '|' {
+			return TypeOperator, 2
+		}
 		return TypeOperator, 1
 	case ';':
 		return TypeOperator, 1
 	case '>':
+		if a.peek(1) == '>' {
+			return TypeRedirection, 2
+		}
 		return TypeRedirection, 1
 	case '<':
 		return TypeRedirection, 1
+	case '2':
+		if fresh && a.peek(1) == '>' {
+			if a.peek(2) == '>' {
+				return TypeRedirection, 3
+			}
+			return TypeRedirection, 2
+		}
 	case '(':
 		return TypeParenGroup, 1
 	case ')':
@@ -303,8 +344,10 @@ func (a *analyzer) parseWord() {
 			continue
 		}
 
-		// Handle backticks with depth tracking
-		if c == '`' && singleQuoteDepth == 0 {
+		// Handle backticks with depth tracking. Parity check: a closed
+		// single-quote pair earlier in the word must not disable backtick
+		// tracking ('a'`date` still contains a substitution).
+		if c == '`' && singleQuoteDepth%2 == 0 {
 			if backtickDepth%2 == 0 {
 				// Opening backtick
 				quoteStarts = append(quoteStarts, a.pos)
@@ -320,8 +363,11 @@ func (a *analyzer) parseWord() {
 			continue
 		}
 
-		// Handle $() subshell
-		if c == '$' && singleQuoteDepth == 0 && a.pos+1 < len(a.input) && a.input[a.pos+1] == '(' {
+		// Handle $() command substitution. Parity check: a closed
+		// single-quote pair earlier in the word must not disable
+		// substitution tracking ('a'$(date) is one word containing a
+		// substitution, not a shattered token stream).
+		if c == '$' && singleQuoteDepth%2 == 0 && a.pos+1 < len(a.input) && a.input[a.pos+1] == '(' {
 			parenDepth++
 			builder.WriteRune(c)
 			builder.WriteRune('(')
@@ -329,8 +375,10 @@ func (a *analyzer) parseWord() {
 			continue
 		}
 
-		// Handle closing ) for $()
-		if c == ')' && parenDepth > 0 && singleQuoteDepth == 0 {
+		// Handle closing ) for $(). A ) that is quoted inside the
+		// substitution body (odd quote parity) is body text and must not
+		// close the substitution: echo $(echo ')') is valid.
+		if c == ')' && parenDepth > 0 && singleQuoteDepth%2 == 0 && doubleQuoteDepth%2 == 0 {
 			parenDepth--
 			builder.WriteRune(c)
 			a.pos++
@@ -344,7 +392,7 @@ func (a *analyzer) parseWord() {
 			if unicode.IsSpace(c) {
 				break
 			}
-			if _, length := a.matchOperator(); length > 0 {
+			if _, length := a.matchOperator(false); length > 0 {
 				break
 			}
 		}
