@@ -651,4 +651,3 @@ func (a *analyzer) addToken(semType SemanticType, start, end, depth int) {
 		Depth: depth,
 	})
 }
-
