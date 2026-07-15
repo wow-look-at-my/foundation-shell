@@ -11,6 +11,9 @@ build/
 # Go binaries
 *.exe
 
+# Core dumps
+core
+
 # Backup files
 *.bak
 
