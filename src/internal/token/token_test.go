@@ -2,6 +2,8 @@ package token
 
 import (
 	"errors"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"testing"
 )
 
@@ -27,9 +29,9 @@ func TestTokenType_IsValue(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := tt.typ.IsValue(); got != tt.expected {
-				t.Errorf("TokenType(%d).IsValue() = %v, want %v", tt.typ, got, tt.expected)
-			}
+			got := tt.typ.IsValue()
+			assert.Equal(t, tt.expected, got)
+
 		})
 	}
 }
@@ -56,9 +58,9 @@ func TestTokenType_IsOperator(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := tt.typ.IsOperator(); got != tt.expected {
-				t.Errorf("TokenType(%d).IsOperator() = %v, want %v", tt.typ, got, tt.expected)
-			}
+			got := tt.typ.IsOperator()
+			assert.Equal(t, tt.expected, got)
+
 		})
 	}
 }
@@ -76,12 +78,10 @@ func TestTokenType_MutuallyExclusive(t *testing.T) {
 		isValue := typ.IsValue()
 		isOperator := typ.IsOperator()
 
-		if isValue && isOperator {
-			t.Errorf("TokenType %s is both value and operator", typ)
-		}
-		if !isValue && !isOperator {
-			t.Errorf("TokenType %s is neither value nor operator", typ)
-		}
+		assert.False(t, isValue && isOperator)
+
+		assert.False(t, !isValue && !isOperator)
+
 	}
 }
 
@@ -106,9 +106,9 @@ func TestTokenType_String(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.expected, func(t *testing.T) {
-			if got := tt.typ.String(); got != tt.expected {
-				t.Errorf("TokenType(%d).String() = %q, want %q", tt.typ, got, tt.expected)
-			}
+			got := tt.typ.String()
+			assert.Equal(t, tt.expected, got)
+
 		})
 	}
 }
@@ -179,25 +179,19 @@ func TestNewValueToken(t *testing.T) {
 			tok, err := NewValueToken(tt.typ, tt.value)
 
 			if tt.wantErr != nil {
-				if err == nil {
-					t.Fatalf("NewValueToken(%v, %q) expected error containing %v, got nil", tt.typ, tt.value, tt.wantErr)
-				}
-				if !errors.Is(err, tt.wantErr) {
-					t.Errorf("NewValueToken(%v, %q) error = %v, want error containing %v", tt.typ, tt.value, err, tt.wantErr)
-				}
+				require.NotNil(t, err)
+
+				assert.True(t, errors.Is(err, tt.wantErr))
+
 				return
 			}
 
-			if err != nil {
-				t.Fatalf("NewValueToken(%v, %q) unexpected error: %v", tt.typ, tt.value, err)
-			}
+			require.Nil(t, err)
 
-			if tok.Type != tt.typ {
-				t.Errorf("Token.Type = %v, want %v", tok.Type, tt.typ)
-			}
-			if tok.Value != tt.wantValue {
-				t.Errorf("Token.Value = %q, want %q", tok.Value, tt.wantValue)
-			}
+			assert.Equal(t, tt.typ, tok.Type)
+
+			assert.Equal(t, tt.wantValue, tok.Value)
+
 		})
 	}
 }
@@ -227,25 +221,19 @@ func TestNewOperatorToken(t *testing.T) {
 			tok, err := NewOperatorToken(tt.typ)
 
 			if tt.wantErr != nil {
-				if err == nil {
-					t.Fatalf("NewOperatorToken(%v) expected error containing %v, got nil", tt.typ, tt.wantErr)
-				}
-				if !errors.Is(err, tt.wantErr) {
-					t.Errorf("NewOperatorToken(%v) error = %v, want error containing %v", tt.typ, err, tt.wantErr)
-				}
+				require.NotNil(t, err)
+
+				assert.True(t, errors.Is(err, tt.wantErr))
+
 				return
 			}
 
-			if err != nil {
-				t.Fatalf("NewOperatorToken(%v) unexpected error: %v", tt.typ, err)
-			}
+			require.Nil(t, err)
 
-			if tok.Type != tt.typ {
-				t.Errorf("Token.Type = %v, want %v", tok.Type, tt.typ)
-			}
-			if tok.Value != "" {
-				t.Errorf("Token.Value = %q, want empty string", tok.Value)
-			}
+			assert.Equal(t, tt.typ, tok.Type)
+
+			assert.Equal(t, "", tok.Value)
+
 		})
 	}
 }
@@ -315,9 +303,9 @@ func TestToken_String(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := tt.token.String(); got != tt.expected {
-				t.Errorf("Token.String() = %q, want %q", got, tt.expected)
-			}
+			got := tt.token.String()
+			assert.Equal(t, tt.expected, got)
+
 		})
 	}
 }
@@ -328,73 +316,62 @@ func TestTokenCreation_Integration(t *testing.T) {
 
 	// ls
 	tok, err := NewValueToken(Command, "ls")
-	if err != nil {
-		t.Fatalf("Failed to create Command token: %v", err)
-	}
+	require.Nil(t, err)
+
 	tokens = append(tokens, tok)
 
 	// -la
 	tok, err = NewValueToken(CommandArgument, "-la")
-	if err != nil {
-		t.Fatalf("Failed to create CommandArgument token: %v", err)
-	}
+	require.Nil(t, err)
+
 	tokens = append(tokens, tok)
 
 	// |
 	tok, err = NewOperatorToken(Pipe)
-	if err != nil {
-		t.Fatalf("Failed to create Pipe token: %v", err)
-	}
+	require.Nil(t, err)
+
 	tokens = append(tokens, tok)
 
 	// grep
 	tok, err = NewValueToken(Command, "grep")
-	if err != nil {
-		t.Fatalf("Failed to create Command token: %v", err)
-	}
+	require.Nil(t, err)
+
 	tokens = append(tokens, tok)
 
 	// foo
 	tok, err = NewValueToken(CommandArgument, "foo")
-	if err != nil {
-		t.Fatalf("Failed to create CommandArgument token: %v", err)
-	}
+	require.Nil(t, err)
+
 	tokens = append(tokens, tok)
 
 	// >
 	tok, err = NewOperatorToken(RedirectStdOut)
-	if err != nil {
-		t.Fatalf("Failed to create RedirectStdOut token: %v", err)
-	}
+	require.Nil(t, err)
+
 	tokens = append(tokens, tok)
 
 	// output.txt
 	tok, err = NewValueToken(CommandArgument, "output.txt")
-	if err != nil {
-		t.Fatalf("Failed to create CommandArgument token: %v", err)
-	}
+	require.Nil(t, err)
+
 	tokens = append(tokens, tok)
 
 	// Verify token count
-	if len(tokens) != 7 {
-		t.Errorf("Expected 7 tokens, got %d", len(tokens))
-	}
+	assert.Equal(t, 7, len(tokens))
 
 	// Verify types
 	expectedTypes := []TokenType{
 		Command, CommandArgument, Pipe, Command, CommandArgument, RedirectStdOut, CommandArgument,
 	}
 	for i, expected := range expectedTypes {
-		if tokens[i].Type != expected {
-			t.Errorf("Token %d: expected type %v, got %v", i, expected, tokens[i].Type)
-		}
+		assert.Equal(t, expected, tokens[i].Type)
+
 	}
 
 	// Verify values
 	expectedValues := []string{"ls", "-la", "", "grep", "foo", "", "output.txt"}
 	for i, expected := range expectedValues {
-		if tokens[i].Value != expected {
-			t.Errorf("Token %d: expected value %q, got %q", i, expected, tokens[i].Value)
-		}
+		assert.Equal(t, expected, tokens[i].Value)
+
 	}
 }

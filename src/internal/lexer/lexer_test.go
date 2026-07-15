@@ -1,6 +1,8 @@
 package lexer
 
 import (
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"testing"
 )
 
@@ -55,9 +57,8 @@ func TestTokenize_BasicWhitespaceSplitting(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result, err := Tokenize(tt.input)
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
+			require.Nil(t, err)
+
 			assertTokensEqual(t, tt.expected, result)
 		})
 	}
@@ -113,9 +114,8 @@ func TestTokenize_DoubleQuotes(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result, err := Tokenize(tt.input)
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
+			require.Nil(t, err)
+
 			assertTokensEqual(t, tt.expected, result)
 		})
 	}
@@ -164,9 +164,8 @@ func TestTokenize_SingleQuotes(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result, err := Tokenize(tt.input)
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
+			require.Nil(t, err)
+
 			assertTokensEqual(t, tt.expected, result)
 		})
 	}
@@ -239,9 +238,8 @@ func TestTokenize_Escapes(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result, err := Tokenize(tt.input)
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
+			require.Nil(t, err)
+
 			assertTokensEqual(t, tt.expected, result)
 		})
 	}
@@ -299,9 +297,8 @@ func TestTokenize_MixedQuotes(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result, err := Tokenize(tt.input)
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
+			require.Nil(t, err)
+
 			assertTokensEqual(t, tt.expected, result)
 		})
 	}
@@ -343,9 +340,8 @@ func TestTokenize_EmptyAndEdgeCases(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result, err := Tokenize(tt.input)
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
+			require.Nil(t, err)
+
 			assertTokensEqual(t, tt.expected, result)
 		})
 	}
@@ -382,12 +378,10 @@ func TestTokenize_UnclosedQuotes(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			_, err := Tokenize(tt.input)
-			if err == nil {
-				t.Fatalf("expected error, got nil")
-			}
-			if err.Error() != tt.expectedErr {
-				t.Fatalf("expected error %q, got %q", tt.expectedErr, err.Error())
-			}
+			require.NotNil(t, err)
+
+			require.Equal(t, tt.expectedErr, err.Error())
+
 		})
 	}
 }
@@ -427,9 +421,8 @@ func TestTokenize_EscapesInsideDoubleQuotes(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result, err := Tokenize(tt.input)
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
+			require.Nil(t, err)
+
 			assertTokensEqual(t, tt.expected, result)
 		})
 	}
@@ -494,9 +487,8 @@ func TestTokenize_RealWorldCommands(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result, err := Tokenize(tt.input)
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
+			require.Nil(t, err)
+
 			assertTokensEqual(t, tt.expected, result)
 		})
 	}
@@ -533,9 +525,8 @@ func TestStripEscapeMarkers(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result := StripEscapeMarkers(tt.input)
-			if result != tt.expected {
-				t.Fatalf("expected %q, got %q", tt.expected, result)
-			}
+			require.Equal(t, tt.expected, result)
+
 		})
 	}
 }
@@ -631,9 +622,8 @@ func TestTokenize_CommandSubstitution(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			tokens, err := Tokenize(tt.input)
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
+			require.Nil(t, err)
+
 			assertTokensEqual(t, tt.expected, tokens)
 		})
 	}
@@ -661,9 +651,8 @@ func TestTokenize_UnclosedCommandSubstitution(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			_, err := Tokenize(tt.input)
-			if err == nil {
-				t.Fatalf("expected error for unclosed command substitution")
-			}
+			require.NotNil(t, err)
+
 		})
 	}
 }
@@ -672,19 +661,12 @@ func TestTokenize_UnclosedCommandSubstitution(t *testing.T) {
 func assertTokensEqual(t *testing.T, expected, actual []TokenContext) {
 	t.Helper()
 
-	if len(expected) != len(actual) {
-		t.Fatalf("token count mismatch: expected %d, got %d\nexpected: %+v\nactual: %+v",
-			len(expected), len(actual), expected, actual)
-	}
+	require.Equal(t, len(actual), len(expected))
 
 	for i := range expected {
-		if expected[i].Content != actual[i].Content {
-			t.Errorf("token[%d] content mismatch: expected %q, got %q",
-				i, expected[i].Content, actual[i].Content)
-		}
-		if expected[i].WasSingleQuoted != actual[i].WasSingleQuoted {
-			t.Errorf("token[%d] WasSingleQuoted mismatch: expected %v, got %v",
-				i, expected[i].WasSingleQuoted, actual[i].WasSingleQuoted)
-		}
+		assert.Equal(t, actual[i].Content, expected[i].Content)
+
+		assert.Equal(t, actual[i].WasSingleQuoted, expected[i].WasSingleQuoted)
+
 	}
 }

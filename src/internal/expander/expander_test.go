@@ -1,6 +1,8 @@
 package expander
 
 import (
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"os"
 	"testing"
 )
@@ -32,9 +34,8 @@ func TestExpandTilde(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result := ExpandTilde(tt.input)
-			if result != tt.expected {
-				t.Errorf("ExpandTilde(%q) = %q, want %q", tt.input, result, tt.expected)
-			}
+			assert.Equal(t, tt.expected, result)
+
 		})
 	}
 }
@@ -58,9 +59,8 @@ func TestExpandTildeNoHome(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result := ExpandTilde(tt.input)
-			if result != tt.expected {
-				t.Errorf("ExpandTilde(%q) = %q, want %q", tt.input, result, tt.expected)
-			}
+			assert.Equal(t, tt.expected, result)
+
 		})
 	}
 }
@@ -115,9 +115,8 @@ func TestExpandEnvironment(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result := ExpandEnvironment(tt.input)
-			if result != tt.expected {
-				t.Errorf("ExpandEnvironment(%q) = %q, want %q", tt.input, result, tt.expected)
-			}
+			assert.Equal(t, tt.expected, result)
+
 		})
 	}
 }
@@ -145,9 +144,8 @@ func TestExpandEnvironmentEscaped(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result := ExpandEnvironment(tt.input)
-			if result != tt.expected {
-				t.Errorf("ExpandEnvironment(%q) = %q, want %q", tt.input, result, tt.expected)
-			}
+			assert.Equal(t, tt.expected, result)
+
 		})
 	}
 }
@@ -187,9 +185,8 @@ func TestExpand(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result := Expand(tt.input, tt.wasSingleQuoted)
-			if result != tt.expected {
-				t.Errorf("Expand(%q, %v) = %q, want %q", tt.input, tt.wasSingleQuoted, result, tt.expected)
-			}
+			assert.Equal(t, tt.expected, result)
+
 		})
 	}
 }
@@ -202,15 +199,12 @@ func TestExpandWithRealHome(t *testing.T) {
 	}
 
 	result := ExpandTilde("~")
-	if result != home {
-		t.Errorf("ExpandTilde(\"~\") = %q, want %q", result, home)
-	}
+	assert.Equal(t, home, result)
 
 	result = ExpandTilde("~/test")
 	expected := home + "/test"
-	if result != expected {
-		t.Errorf("ExpandTilde(\"~/test\") = %q, want %q", result, expected)
-	}
+	assert.Equal(t, expected, result)
+
 }
 
 func TestExpandEnvironmentSpecialCases(t *testing.T) {
@@ -239,9 +233,8 @@ func TestExpandEnvironmentSpecialCases(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result := ExpandEnvironment(tt.input)
-			if result != tt.expected {
-				t.Errorf("ExpandEnvironment(%q) = %q, want %q", tt.input, result, tt.expected)
-			}
+			assert.Equal(t, tt.expected, result)
+
 		})
 	}
 }
@@ -267,9 +260,8 @@ func TestIsVarChar(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result := ExpandEnvironment(tt.input)
-			if result != tt.expected {
-				t.Errorf("ExpandEnvironment(%q) = %q, want %q", tt.input, result, tt.expected)
-			}
+			assert.Equal(t, tt.expected, result)
+
 		})
 	}
 }
@@ -415,19 +407,16 @@ func TestExpandCommandSubstitution(t *testing.T) {
 			executor.outputs = tt.outputs
 
 			result, err := ExpandCommandSubstitution(tt.input, executor)
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
-			if result != tt.expected {
-				t.Errorf("ExpandCommandSubstitution(%q) = %q, want %q", tt.input, result, tt.expected)
-			}
+			require.Nil(t, err)
+
+			assert.Equal(t, tt.expected, result)
+
 		})
 	}
 }
 
 func TestExpandCommandSubstitution_NilExecutor(t *testing.T) {
 	_, err := ExpandCommandSubstitution("$(cmd)", nil)
-	if err == nil {
-		t.Error("expected error for nil executor, got nil")
-	}
+	assert.NotNil(t, err)
+
 }
