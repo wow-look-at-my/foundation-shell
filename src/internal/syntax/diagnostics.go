@@ -6,31 +6,42 @@ import (
 )
 
 // FormatDiagnostics formats syntax errors for display.
-// It takes the original input and a list of errors, and returns a formatted
-// string showing each error with its location in the input.
+//
+// Positions in SyntaxError are RUNE indices (the analyzer scans []rune),
+// so all offset math here is rune-based end-to-end: multi-byte characters
+// before the error must not shift the reported line or caret column.
+//
+// Output format: one block per error, consisting of the offending line, a
+// caret line, and "error: <message>". Blocks are separated by exactly one
+// blank line, and the entire output ends with exactly one trailing
+// newline.
 func FormatDiagnostics(input string, errors []SyntaxError) string {
 	if len(errors) == 0 {
 		return ""
 	}
 
 	var result strings.Builder
+	runes := []rune(input)
 	lines := strings.Split(input, "\n")
 
 	for i, err := range errors {
 		if i > 0 {
+			// Each block already ends with a newline; one more produces
+			// the single blank line between blocks.
 			result.WriteString("\n")
 		}
 
-		// Find which line contains this error
-		lineNum, lineStart := findLineForPosition(input, err.Start)
+		// Find which line contains this error (rune-based)
+		lineNum, lineStart := findLineForPosition(runes, err.Start)
 
 		// Get the line content
 		var line string
 		if lineNum < len(lines) {
 			line = lines[lineNum]
 		}
+		lineLen := len([]rune(line))
 
-		// Calculate positions relative to the line start
+		// Calculate positions relative to the line start (in runes)
 		startInLine := err.Start - lineStart
 		endInLine := err.End - lineStart
 
@@ -38,8 +49,8 @@ func FormatDiagnostics(input string, errors []SyntaxError) string {
 		if startInLine < 0 {
 			startInLine = 0
 		}
-		if endInLine > len(line) {
-			endInLine = len(line)
+		if endInLine > lineLen {
+			endInLine = lineLen
 		}
 		if endInLine < startInLine {
 			endInLine = startInLine + 1
@@ -48,13 +59,14 @@ func FormatDiagnostics(input string, errors []SyntaxError) string {
 		// Build the caret line
 		caretLine := buildCaretLine(startInLine, endInLine)
 
-		// Write the formatted error
+		// Write the formatted error block
 		result.WriteString(line)
 		result.WriteString("\n")
 		result.WriteString(caretLine)
 		result.WriteString("\n")
 		result.WriteString("error: ")
 		result.WriteString(err.Message)
+		result.WriteString("\n")
 	}
 
 	return result.String()
@@ -72,17 +84,11 @@ func FormatDiagnosticsFromResult(result *AnalysisResult) string {
 	return FormatDiagnostics(input, result.Errors)
 }
 
-// findLineForPosition finds the line number and starting position of the line
-// that contains the given position in the input.
-func findLineForPosition(input string, pos int) (lineNum int, lineStart int) {
-	lineNum = 0
-	lineStart = 0
-
-	for i, c := range input {
-		if i >= pos {
-			break
-		}
-		if c == '\n' {
+// findLineForPosition finds the line number and starting rune index of the
+// line that contains the given rune position.
+func findLineForPosition(input []rune, pos int) (lineNum int, lineStart int) {
+	for i := 0; i < len(input) && i < pos; i++ {
+		if input[i] == '\n' {
 			lineNum++
 			lineStart = i + 1
 		}
