@@ -1,47 +1,67 @@
-# Base Shell
+# Foundation Shell
 
-A simple stateless shell implemented in C++. This shell is designed to be stateless, meaning it doesn't preserve variables between commands, though it still handles environment variables.
+A from-scratch shell implemented in Go, built against a rigorous external
+specification. It ships an interactive shell with live syntax highlighting, a
+one-shot command executor, and a REPL-only binary.
 
 ## Features
 
-- Basic command execution
-- Environment variable access
-- Built-in `cd` command
-- Built-in `exit` command
-- Clean, minimal implementation
+- Pipelines (`cmd1 | cmd2 | cmd3`)
+- Command chaining with `&&`, `||`, and `;`
+- I/O redirection (`<`, `>`, `>>`, `2>`, `2>>`)
+- Quoting (single and double) with depth-tracked nesting
+- Command substitution — both `$(...)` (nestable) and backticks
+- Environment variable and tilde expansion
+- Syntax highlighting, both live in the REPL and as a standalone analyzer
+- Interactive REPL with readline line editing
 
 ## Building
 
-This project uses CMake. To build:
+Requires [just](https://github.com/casey/just) >= 1.38 and Go (the correct Go
+toolchain is downloaded automatically per `src/go.mod`).
 
 ```bash
-mkdir build
-cd build
-cmake ..
-make
+just build
 ```
 
-## Usage
+This produces three binaries in `build/`:
 
-After building, run the shell:
+| Binary | Purpose |
+|--------|---------|
+| `fsh` | The shell. Runs a script file argument, reads commands from piped stdin, or starts an interactive REPL on a TTY. |
+| `fsh-exec` | One-shot executor: joins its argv into a single command line and runs it (like `bash -c "..."` without the `-c`). |
+| `fsh-repl` | REPL-only mode: always interactive, with prompt and syntax highlighting. |
+
+## Testing
+
+Requires [bats](https://github.com/bats-core/bats-core) in addition to the
+build prerequisites.
 
 ```bash
-./foundation_shell
+just test   # Go unit tests + BATS integration tests
 ```
 
-Enter commands at the prompt:
+## Specification
 
-```
-base-shell$ ls -la
-base-shell$ echo $HOME
-base-shell$ cd /tmp
-base-shell$ pwd
-base-shell$ exit
-```
+The authoritative Foundation Shell specification lives in
+[wow-look-at-my/foundation-shell-spec](https://github.com/wow-look-at-my/foundation-shell-spec).
+`spec/tests/` in this repository is the executable conformance suite (BATS)
+run by `just test`; the spec prose itself is deliberately not vendored here.
 
-## Limitations
+## Project layout
 
-- This is a stateless shell, so variables are not preserved between commands
-- No command history or line editing
-- No command completion
-- Limited built-in commands
+| Path | Contents |
+|------|----------|
+| `src/cmd/fsh` | Interactive shell entry point |
+| `src/cmd/fsh-exec` | One-shot command executor |
+| `src/cmd/fsh-repl` | REPL-only entry point |
+| `src/internal/lexer` | Tokenizer |
+| `src/internal/token` | Token types |
+| `src/internal/expander` | Tilde and environment variable expansion |
+| `src/internal/chain` | Chain (pipeline/operator) execution |
+| `src/internal/command` | Command execution and builtins |
+| `src/internal/syntax` | Syntax analyzer, highlighter, diagnostics |
+| `src/pkg/parser` | Parser (tokens -> command chains) |
+| `src/pkg/shell` | Shell orchestration and REPL |
+| `spec/tests/` | BATS conformance tests |
+| `build/` | Build output (`just build`) |
