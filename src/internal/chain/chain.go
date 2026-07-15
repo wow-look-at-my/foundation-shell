@@ -4,6 +4,7 @@ package chain
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"io"
 	"os"
 	"sync"
@@ -34,9 +35,14 @@ func NewExecutor(ctx context.Context, stdin io.Reader, stderr io.Writer) *Execut
 // Execute runs a command string and returns its output.
 // This implements expander.SubshellExecutor interface.
 func (e *Executor) Execute(command string) (output string, exitCode int, err error) {
-	// Parse the command using internal parser
-	chain, err := parser.Parse(command)
+	// Recursive parse: the executor hands ITSELF to the parser, so nested
+	// substitutions inside the body expand through recursion -- never by
+	// re-scanning spliced output -- and quoting inside the body is handled
+	// by the body's own lexing.
+	cmdChain, err := parser.ParseWithExecutor(command, e)
 	if err != nil {
+		// A body that fails to PARSE fails the whole line: the caller
+		// (parser) wraps this as "command substitution error: ...".
 		return "", 1, err
 	}
 
@@ -44,9 +50,21 @@ func (e *Executor) Execute(command string) (output string, exitCode int, err err
 	var stdout bytes.Buffer
 
 	// Execute using internal chain executor (same process, no external shell)
-	exitCode, err = ExecuteWithIO(e.ctx, chain, e.stdin, &stdout, e.stderr)
+	exitCode, err = ExecuteWithIO(e.ctx, cmdChain, e.stdin, &stdout, e.stderr)
 	if err != nil {
-		return "", exitCode, err
+		// RUNTIME failure of the body (command not found, redirection open
+		// failure, ...): report it on stderr, keep whatever stdout was
+		// captured, and DISCARD the failure so the outer line continues --
+		// a substitution's exit code is discarded (expansion.md). This must
+		// NOT propagate as an error: that would turn a runtime failure into
+		// a parse-failing "command substitution error".
+		//
+		// TODO(batch 2c, audit issues 4/8): once the chain layer reports
+		// per-command failures to stderr itself (with real 127/126 exit
+		// codes) instead of returning them as chain-fatal errors, this
+		// interim print becomes redundant and should be removed.
+		fmt.Fprintln(e.stderr, err)
+		return stdout.String(), exitCode, nil
 	}
 
 	return stdout.String(), exitCode, nil

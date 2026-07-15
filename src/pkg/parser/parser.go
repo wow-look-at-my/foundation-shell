@@ -155,14 +155,12 @@ func ParseWithExecutor(input string, executor expander.SubshellExecutor) (*Chain
 			if !tc.WasQuoted {
 				expandedValue = expander.ExpandTilde(expandedValue)
 			}
-			expandedValue = expander.ExpandEnvironment(expandedValue)
-
-			// Expand command substitutions if executor provided
-			if executor != nil {
-				expandedValue, err = expander.ExpandCommandSubstitution(expandedValue, executor)
-				if err != nil {
-					return nil, fmt.Errorf("command substitution error: %w", err)
-				}
+			// Single pass: variables expand in the literal text, top-level
+			// substitution spans execute recursively via the executor, and
+			// their output is spliced without re-scanning.
+			expandedValue, err = expander.ExpandToken(expandedValue, expander.Options{Executor: executor})
+			if err != nil {
+				return nil, fmt.Errorf("command substitution error: %w", err)
 			}
 		}
 		// Strip escape markers UNCONDITIONALLY, single-quoted tokens
