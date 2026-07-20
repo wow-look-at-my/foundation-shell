@@ -1,6 +1,8 @@
 package syntax
 
 import (
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"regexp"
 	"strings"
 	"testing"
@@ -38,16 +40,12 @@ func TestHighlight_BasicCommand(t *testing.T) {
 
 	// Verify "echo" is colored as Command (Bold cyan: \033[1;36m)
 	expectedColor := DefaultTheme[TypeCommand]
-	if !containsANSICode(output, "echo", expectedColor) {
-		actualColor := getTokenColor(output, "echo")
-		t.Errorf("expected 'echo' to have Command color %q, got %q", expectedColor, actualColor)
-	}
+	assert.True(t, containsANSICode(output, "echo", expectedColor))
 
 	// Verify the output contains both tokens
 	stripped := stripANSI(output)
-	if stripped != "echo hello" {
-		t.Errorf("expected stripped output 'echo hello', got %q", stripped)
-	}
+	assert.Equal(t, "echo hello", stripped)
+
 }
 
 func TestHighlight_Operators(t *testing.T) {
@@ -69,11 +67,8 @@ func TestHighlight_Operators(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			output := h.Highlight(tt.input)
 
-			if !containsANSICode(output, tt.operator, expectedColor) {
-				actualColor := getTokenColor(output, tt.operator)
-				t.Errorf("expected operator %q to have color %q, got %q",
-					tt.operator, expectedColor, actualColor)
-			}
+			assert.True(t, containsANSICode(output, tt.operator, expectedColor))
+
 		})
 	}
 }
@@ -98,11 +93,8 @@ func TestHighlight_Redirections(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			output := h.Highlight(tt.input)
 
-			if !containsANSICode(output, tt.redirection, expectedColor) {
-				actualColor := getTokenColor(output, tt.redirection)
-				t.Errorf("expected redirection %q to have color %q, got %q",
-					tt.redirection, expectedColor, actualColor)
-			}
+			assert.True(t, containsANSICode(output, tt.redirection, expectedColor))
+
 		})
 	}
 }
@@ -114,11 +106,8 @@ func TestHighlight_SingleQuotedString(t *testing.T) {
 	expectedColor := DefaultTheme[TypeSingleQuotedString]
 	token := "'hello'"
 
-	if !containsANSICode(output, token, expectedColor) {
-		actualColor := getTokenColor(output, token)
-		t.Errorf("expected single-quoted string %q to have color %q, got %q",
-			token, expectedColor, actualColor)
-	}
+	assert.True(t, containsANSICode(output, token, expectedColor))
+
 }
 
 func TestHighlight_DoubleQuotedString(t *testing.T) {
@@ -128,11 +117,8 @@ func TestHighlight_DoubleQuotedString(t *testing.T) {
 	expectedColor := DefaultTheme[TypeDoubleQuotedString]
 	token := `"hello"`
 
-	if !containsANSICode(output, token, expectedColor) {
-		actualColor := getTokenColor(output, token)
-		t.Errorf("expected double-quoted string %q to have color %q, got %q",
-			token, expectedColor, actualColor)
-	}
+	assert.True(t, containsANSICode(output, token, expectedColor))
+
 }
 
 func TestHighlight_Variable(t *testing.T) {
@@ -142,11 +128,8 @@ func TestHighlight_Variable(t *testing.T) {
 	expectedColor := DefaultTheme[TypeVariable]
 	token := "$HOME"
 
-	if !containsANSICode(output, token, expectedColor) {
-		actualColor := getTokenColor(output, token)
-		t.Errorf("expected variable %q to have color %q, got %q",
-			token, expectedColor, actualColor)
-	}
+	assert.True(t, containsANSICode(output, token, expectedColor))
+
 }
 
 func TestHighlight_Variable_Braced(t *testing.T) {
@@ -156,39 +139,30 @@ func TestHighlight_Variable_Braced(t *testing.T) {
 	expectedColor := DefaultTheme[TypeVariable]
 	token := "${HOME}"
 
-	if !containsANSICode(output, token, expectedColor) {
-		actualColor := getTokenColor(output, token)
-		t.Errorf("expected braced variable %q to have color %q, got %q",
-			token, expectedColor, actualColor)
-	}
+	assert.True(t, containsANSICode(output, token, expectedColor))
+
 }
 
-func TestHighlight_Subshell(t *testing.T) {
+func TestHighlight_CommandSubst(t *testing.T) {
 	h := NewHighlighter(DefaultTheme)
 	output := h.Highlight("echo $(cmd)")
 
-	expectedColor := DefaultTheme[TypeSubshell]
+	expectedColor := DefaultTheme[TypeCommandSubst]
 	token := "$(cmd)"
 
-	if !containsANSICode(output, token, expectedColor) {
-		actualColor := getTokenColor(output, token)
-		t.Errorf("expected subshell %q to have color %q, got %q",
-			token, expectedColor, actualColor)
-	}
+	assert.True(t, containsANSICode(output, token, expectedColor))
+
 }
 
-func TestHighlight_Subshell_Complex(t *testing.T) {
+func TestHighlight_CommandSubst_Complex(t *testing.T) {
 	h := NewHighlighter(DefaultTheme)
 	output := h.Highlight("echo $(date +%Y-%m-%d)")
 
-	expectedColor := DefaultTheme[TypeSubshell]
+	expectedColor := DefaultTheme[TypeCommandSubst]
 	token := "$(date +%Y-%m-%d)"
 
-	if !containsANSICode(output, token, expectedColor) {
-		actualColor := getTokenColor(output, token)
-		t.Errorf("expected subshell %q to have color %q, got %q",
-			token, expectedColor, actualColor)
-	}
+	assert.True(t, containsANSICode(output, token, expectedColor))
+
 }
 
 func TestHighlight_Backtick(t *testing.T) {
@@ -198,11 +172,8 @@ func TestHighlight_Backtick(t *testing.T) {
 	expectedColor := DefaultTheme[TypeBacktick]
 	token := "`cmd`"
 
-	if !containsANSICode(output, token, expectedColor) {
-		actualColor := getTokenColor(output, token)
-		t.Errorf("expected backtick %q to have color %q, got %q",
-			token, expectedColor, actualColor)
-	}
+	assert.True(t, containsANSICode(output, token, expectedColor))
+
 }
 
 func TestHighlight_Backtick_WithDate(t *testing.T) {
@@ -212,11 +183,8 @@ func TestHighlight_Backtick_WithDate(t *testing.T) {
 	expectedColor := DefaultTheme[TypeBacktick]
 	token := "`date`"
 
-	if !containsANSICode(output, token, expectedColor) {
-		actualColor := getTokenColor(output, token)
-		t.Errorf("expected backtick %q to have color %q, got %q",
-			token, expectedColor, actualColor)
-	}
+	assert.True(t, containsANSICode(output, token, expectedColor))
+
 }
 
 func TestHighlight_Error_UnclosedQuote(t *testing.T) {
@@ -228,9 +196,8 @@ func TestHighlight_Error_UnclosedQuote(t *testing.T) {
 
 	// The token value is the unclosed string
 	// Check that Error color is applied somewhere in the output
-	if !strings.Contains(output, expectedColor) {
-		t.Errorf("expected error color %q to be present in output for unclosed quote", expectedColor)
-	}
+	assert.Contains(t, output, expectedColor)
+
 }
 
 func TestHighlight_Error_UnclosedSingleQuote(t *testing.T) {
@@ -239,9 +206,8 @@ func TestHighlight_Error_UnclosedSingleQuote(t *testing.T) {
 
 	expectedColor := DefaultTheme[TypeError]
 
-	if !strings.Contains(output, expectedColor) {
-		t.Errorf("expected error color %q to be present in output for unclosed single quote", expectedColor)
-	}
+	assert.Contains(t, output, expectedColor)
+
 }
 
 func TestHighlight_Error_UnclosedBacktick(t *testing.T) {
@@ -250,20 +216,18 @@ func TestHighlight_Error_UnclosedBacktick(t *testing.T) {
 
 	expectedColor := DefaultTheme[TypeError]
 
-	if !strings.Contains(output, expectedColor) {
-		t.Errorf("expected error color %q to be present in output for unclosed backtick", expectedColor)
-	}
+	assert.Contains(t, output, expectedColor)
+
 }
 
-func TestHighlight_Error_UnclosedSubshell(t *testing.T) {
+func TestHighlight_Error_UnclosedCommandSubst(t *testing.T) {
 	h := NewHighlighter(DefaultTheme)
 	output := h.Highlight("echo $(unclosed")
 
 	expectedColor := DefaultTheme[TypeError]
 
-	if !strings.Contains(output, expectedColor) {
-		t.Errorf("expected error color %q to be present in output for unclosed subshell", expectedColor)
-	}
+	assert.Contains(t, output, expectedColor)
+
 }
 
 func TestHighlight_PreservesInput(t *testing.T) {
@@ -277,7 +241,7 @@ func TestHighlight_PreservesInput(t *testing.T) {
 		{"with_quotes", `echo "hello world"`},
 		{"with_single_quotes", "echo 'hello world'"},
 		{"with_variable", "echo $HOME"},
-		{"with_subshell", "echo $(date)"},
+		{"with_command_subst", "echo $(date)"},
 		{"with_backticks", "echo `date`"},
 		{"complex", "cat file.txt | grep 'pattern' > output.txt 2>&1"},
 		{"multiple_operators", "cmd1 && cmd2 || cmd3"},
@@ -293,9 +257,8 @@ func TestHighlight_PreservesInput(t *testing.T) {
 			output := h.Highlight(tt.input)
 			stripped := stripANSI(output)
 
-			if stripped != tt.input {
-				t.Errorf("expected stripped output %q to equal input %q", stripped, tt.input)
-			}
+			assert.Equal(t, tt.input, stripped)
+
 		})
 	}
 }
@@ -312,7 +275,7 @@ func TestHighlightResult_ReturnsErrors(t *testing.T) {
 		{"unclosed_double_quote", `echo "hello`, true},
 		{"unclosed_single_quote", "echo 'hello", true},
 		{"unclosed_backtick", "echo `hello", true},
-		{"unclosed_subshell", "echo $(hello", true},
+		{"unclosed_command_subst", "echo $(hello", true},
 		{"trailing_pipe", "echo |", true},
 		{"trailing_and", "echo &&", true},
 		{"missing_redirect_target", "echo >", true},
@@ -323,14 +286,11 @@ func TestHighlightResult_ReturnsErrors(t *testing.T) {
 			output, errors := h.HighlightResult(tt.input)
 
 			hasErrors := len(errors) > 0
-			if hasErrors != tt.expectErrors {
-				t.Errorf("expected hasErrors=%v, got %v (errors: %v)", tt.expectErrors, hasErrors, errors)
-			}
+			assert.Equal(t, tt.expectErrors, hasErrors)
 
 			// Verify output is still returned even with errors
-			if output == "" && tt.input != "" {
-				t.Errorf("expected non-empty output for non-empty input %q", tt.input)
-			}
+			assert.False(t, output == "" && tt.input != "")
+
 		})
 	}
 }
@@ -346,16 +306,14 @@ func TestHighlightResult_ErrorDetails(t *testing.T) {
 		{"unclosed_double_quote", `echo "hello`, "unclosed double quote"},
 		{"unclosed_single_quote", "echo 'hello", "unclosed single quote"},
 		{"unclosed_backtick", "echo `hello", "unclosed backtick"},
-		{"unclosed_subshell", "echo $(hello", "unclosed subshell"},
+		{"unclosed_command_subst", "echo $(hello", "unclosed command substitution"},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			_, errors := h.HighlightResult(tt.input)
 
-			if len(errors) == 0 {
-				t.Fatalf("expected at least one error for %q", tt.input)
-			}
+			require.NotEqual(t, 0, len(errors))
 
 			found := false
 			for _, err := range errors {
@@ -365,9 +323,8 @@ func TestHighlightResult_ErrorDetails(t *testing.T) {
 				}
 			}
 
-			if !found {
-				t.Errorf("expected error containing %q, got: %v", tt.expectedErrMsg, errors)
-			}
+			assert.True(t, found)
+
 		})
 	}
 }
@@ -383,7 +340,7 @@ func TestNewHighlighter_CustomTheme(t *testing.T) {
 		TypeSingleQuotedString: "\033[38;5;208m", // Orange
 		TypeDoubleQuotedString: "\033[38;5;51m",  // Cyan
 		TypeBacktick:           "\033[38;5;141m", // Purple
-		TypeSubshell:           "\033[38;5;141m", // Purple
+		TypeCommandSubst:       "\033[38;5;141m", // Purple
 		TypeVariable:           "\033[38;5;82m",  // Lime
 		TypeParenGroup:         "\033[38;5;213m", // Light pink
 		TypeError:              "\033[48;5;196m", // Red background
@@ -396,10 +353,8 @@ func TestNewHighlighter_CustomTheme(t *testing.T) {
 
 	// Verify custom Command color is used
 	expectedColor := customTheme[TypeCommand]
-	if !containsANSICode(output, "echo", expectedColor) {
-		actualColor := getTokenColor(output, "echo")
-		t.Errorf("expected custom Command color %q, got %q", expectedColor, actualColor)
-	}
+	assert.True(t, containsANSICode(output, "echo", expectedColor))
+
 }
 
 func TestNewHighlighter_CustomTheme_AllTokenTypes(t *testing.T) {
@@ -413,7 +368,7 @@ func TestNewHighlighter_CustomTheme_AllTokenTypes(t *testing.T) {
 		TypeSingleQuotedString: "\033[96m", // Light cyan
 		TypeDoubleQuotedString: "\033[97m", // White
 		TypeBacktick:           "\033[90m", // Dark gray
-		TypeSubshell:           "\033[90m", // Dark gray
+		TypeCommandSubst:       "\033[90m", // Dark gray
 		TypeVariable:           "\033[32m", // Green
 		TypeParenGroup:         "\033[33m", // Yellow
 		TypeError:              "\033[31m", // Red
@@ -436,7 +391,7 @@ func TestNewHighlighter_CustomTheme_AllTokenTypes(t *testing.T) {
 		{"single_quote", "echo 'test'", "'test'", TypeSingleQuotedString},
 		{"double_quote", `echo "test"`, `"test"`, TypeDoubleQuotedString},
 		{"backtick", "echo `date`", "`date`", TypeBacktick},
-		{"subshell", "echo $(pwd)", "$(pwd)", TypeSubshell},
+		{"command_subst", "echo $(pwd)", "$(pwd)", TypeCommandSubst},
 		{"variable", "echo $PATH", "$PATH", TypeVariable},
 	}
 
@@ -445,11 +400,8 @@ func TestNewHighlighter_CustomTheme_AllTokenTypes(t *testing.T) {
 			output := h.Highlight(tt.input)
 			expectedColor := customTheme[tt.tokenType]
 
-			if !containsANSICode(output, tt.token, expectedColor) {
-				actualColor := getTokenColor(output, tt.token)
-				t.Errorf("expected %s %q to have custom color %q, got %q",
-					tt.tokenType, tt.token, expectedColor, actualColor)
-			}
+			assert.True(t, containsANSICode(output, tt.token, expectedColor))
+
 		})
 	}
 }
@@ -465,12 +417,10 @@ func TestNewHighlighter_PartialTheme(t *testing.T) {
 	output := h.Highlight("echo | cat")
 
 	// Check that defined colors are used
-	if !containsANSICode(output, "echo", partialTheme[TypeCommand]) {
-		t.Errorf("expected Command to use custom color")
-	}
-	if !containsANSICode(output, "|", partialTheme[TypeOperator]) {
-		t.Errorf("expected Operator to use custom color")
-	}
+	assert.True(t, containsANSICode(output, "echo", partialTheme[TypeCommand]))
+
+	assert.True(t, containsANSICode(output, "|", partialTheme[TypeOperator]))
+
 }
 
 func TestHighlight_ComplexPipeline(t *testing.T) {
@@ -480,9 +430,7 @@ func TestHighlight_ComplexPipeline(t *testing.T) {
 
 	// Verify input is preserved
 	stripped := stripANSI(output)
-	if stripped != input {
-		t.Errorf("expected stripped output to equal input")
-	}
+	assert.Equal(t, input, stripped)
 
 	// Verify specific colorings
 	tests := []struct {
@@ -500,11 +448,8 @@ func TestHighlight_ComplexPipeline(t *testing.T) {
 
 	for _, tt := range tests {
 		expectedColor := DefaultTheme[tt.tokenType]
-		if !containsANSICode(output, tt.token, expectedColor) {
-			actualColor := getTokenColor(output, tt.token)
-			t.Errorf("expected %q to have color %q (%s), got %q",
-				tt.token, expectedColor, tt.tokenType, actualColor)
-		}
+		assert.True(t, containsANSICode(output, tt.token, expectedColor))
+
 	}
 }
 
@@ -518,11 +463,8 @@ func TestHighlight_ChainedOperators(t *testing.T) {
 	expectedCmdColor := DefaultTheme[TypeCommand]
 
 	for _, cmd := range commands {
-		if !containsANSICode(output, cmd, expectedCmdColor) {
-			actualColor := getTokenColor(output, cmd)
-			t.Errorf("expected %q to have Command color %q, got %q",
-				cmd, expectedCmdColor, actualColor)
-		}
+		assert.True(t, containsANSICode(output, cmd, expectedCmdColor))
+
 	}
 
 	// All operators should be highlighted as Operator
@@ -530,11 +472,8 @@ func TestHighlight_ChainedOperators(t *testing.T) {
 	expectedOpColor := DefaultTheme[TypeOperator]
 
 	for _, op := range operators {
-		if !containsANSICode(output, op, expectedOpColor) {
-			actualColor := getTokenColor(output, op)
-			t.Errorf("expected %q to have Operator color %q, got %q",
-				op, expectedOpColor, actualColor)
-		}
+		assert.True(t, containsANSICode(output, op, expectedOpColor))
+
 	}
 }
 
@@ -545,20 +484,15 @@ func TestHighlight_MultipleRedirections(t *testing.T) {
 
 	// Verify input is preserved
 	stripped := stripANSI(output)
-	if stripped != input {
-		t.Errorf("expected stripped output to equal input")
-	}
+	assert.Equal(t, input, stripped)
 
 	// Verify redirections are colored
 	redirections := []string{"<", ">", "2>>"}
 	expectedColor := DefaultTheme[TypeRedirection]
 
 	for _, redir := range redirections {
-		if !containsANSICode(output, redir, expectedColor) {
-			actualColor := getTokenColor(output, redir)
-			t.Errorf("expected %q to have Redirection color %q, got %q",
-				redir, expectedColor, actualColor)
-		}
+		assert.True(t, containsANSICode(output, redir, expectedColor))
+
 	}
 }
 
@@ -566,9 +500,8 @@ func TestHighlight_EmptyInput(t *testing.T) {
 	h := NewHighlighter(DefaultTheme)
 	output := h.Highlight("")
 
-	if output != "" {
-		t.Errorf("expected empty output for empty input, got %q", output)
-	}
+	assert.Equal(t, "", output)
+
 }
 
 func TestHighlight_WhitespaceOnly(t *testing.T) {
@@ -577,9 +510,8 @@ func TestHighlight_WhitespaceOnly(t *testing.T) {
 	output := h.Highlight(input)
 
 	stripped := stripANSI(output)
-	if stripped != input {
-		t.Errorf("expected whitespace to be preserved, got %q", stripped)
-	}
+	assert.Equal(t, input, stripped)
+
 }
 
 func TestHighlight_Arguments(t *testing.T) {
@@ -588,16 +520,12 @@ func TestHighlight_Arguments(t *testing.T) {
 
 	// Command should be highlighted
 	cmdColor := DefaultTheme[TypeCommand]
-	if !containsANSICode(output, "ls", cmdColor) {
-		t.Errorf("expected 'ls' to have Command color")
-	}
+	assert.True(t, containsANSICode(output, "ls", cmdColor))
 
 	// Arguments should have Argument color (which is reset/default in DefaultTheme)
 	argColor := DefaultTheme[TypeArgument]
-	if !containsANSICode(output, "-la", argColor) {
-		actualColor := getTokenColor(output, "-la")
-		t.Errorf("expected '-la' to have Argument color %q, got %q", argColor, actualColor)
-	}
+	assert.True(t, containsANSICode(output, "-la", argColor))
+
 }
 
 func TestHighlight_RedirectionTarget(t *testing.T) {
@@ -605,11 +533,8 @@ func TestHighlight_RedirectionTarget(t *testing.T) {
 	output := h.Highlight("echo hello > output.txt")
 
 	targetColor := DefaultTheme[TypeRedirectionTarget]
-	if !containsANSICode(output, "output.txt", targetColor) {
-		actualColor := getTokenColor(output, "output.txt")
-		t.Errorf("expected 'output.txt' to have RedirectionTarget color %q, got %q",
-			targetColor, actualColor)
-	}
+	assert.True(t, containsANSICode(output, "output.txt", targetColor))
+
 }
 
 func TestHighlight_VariableInPath(t *testing.T) {
@@ -618,9 +543,8 @@ func TestHighlight_VariableInPath(t *testing.T) {
 
 	varColor := DefaultTheme[TypeVariable]
 	// The entire $HOME/projects is a single token starting with $
-	if !strings.Contains(output, varColor) {
-		t.Errorf("expected Variable color %q in output", varColor)
-	}
+	assert.Contains(t, output, varColor)
+
 }
 
 func TestHighlight_MixedQuotes(t *testing.T) {
@@ -631,20 +555,16 @@ func TestHighlight_MixedQuotes(t *testing.T) {
 	output := h.Highlight(input)
 
 	stripped := stripANSI(output)
-	if stripped != input {
-		t.Errorf("expected input to be preserved, got %q", stripped)
-	}
+	assert.Equal(t, input, stripped)
 
 	// Verify both quote types are colored
 	singleColor := DefaultTheme[TypeSingleQuotedString]
 	doubleColor := DefaultTheme[TypeDoubleQuotedString]
 
-	if !containsANSICode(output, "'single'", singleColor) {
-		t.Errorf("expected single-quoted string to be colored")
-	}
-	if !containsANSICode(output, `"double"`, doubleColor) {
-		t.Errorf("expected double-quoted string to be colored")
-	}
+	assert.True(t, containsANSICode(output, "'single'", singleColor))
+
+	assert.True(t, containsANSICode(output, `"double"`, doubleColor))
+
 }
 
 func TestHighlight_ANSIResetAfterEachToken(t *testing.T) {
@@ -657,9 +577,8 @@ func TestHighlight_ANSIResetAfterEachToken(t *testing.T) {
 
 	// We have at least 3 tokens: "echo", " ", "hello"
 	// Each should be followed by a reset
-	if resetCount < 3 {
-		t.Errorf("expected at least 3 ANSI reset codes, got %d", resetCount)
-	}
+	assert.GreaterOrEqual(t, resetCount, 3)
+
 }
 
 func TestHighlightResult_OutputMatchesHighlight(t *testing.T) {
@@ -669,9 +588,8 @@ func TestHighlightResult_OutputMatchesHighlight(t *testing.T) {
 	output1 := h.Highlight(input)
 	output2, _ := h.HighlightResult(input)
 
-	if output1 != output2 {
-		t.Errorf("Highlight and HighlightResult should return same output")
-	}
+	assert.Equal(t, output2, output1)
+
 }
 
 func TestHighlight_SpecialCharactersInStrings(t *testing.T) {
@@ -693,9 +611,8 @@ func TestHighlight_SpecialCharactersInStrings(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			output := h.Highlight(tt.input)
 			stripped := stripANSI(output)
-			if stripped != tt.input {
-				t.Errorf("expected input to be preserved, got %q", stripped)
-			}
+			assert.Equal(t, tt.input, stripped)
+
 		})
 	}
 }
@@ -716,9 +633,52 @@ func TestHighlight_EscapedCharacters(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			output := h.Highlight(tt.input)
 			stripped := stripANSI(output)
-			if stripped != tt.input {
-				t.Errorf("expected input to be preserved, got %q", stripped)
-			}
+			assert.Equal(t, tt.input, stripped)
+
+		})
+	}
+}
+
+// Depth-tracked nested quote regions highlight as ONE string token (the
+// whole region gets the string color), and the input survives untouched.
+func TestHighlight_NestedQuoteRegions(t *testing.T) {
+	h := NewHighlighter(DefaultTheme)
+
+	tests := []struct {
+		name  string
+		input string
+		token string
+		color string
+	}{
+		{"nested single quotes", "echo 'a 'b' c'", "'a 'b' c'", DefaultTheme[TypeSingleQuotedString]},
+		{"nested double quotes", `echo "outer "inner" end"`, `"outer "inner" end"`, DefaultTheme[TypeDoubleQuotedString]},
+		{"nested backticks", "echo `outer `inner` end`", "`outer `inner` end`", DefaultTheme[TypeBacktick]},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			output := h.Highlight(tt.input)
+
+			assert.Equal(t, tt.input, stripANSI(output))
+
+			assert.True(t, containsANSICode(output, tt.token, tt.color),
+				"expected %q colored %q in %q", tt.token, tt.color, output)
+		})
+	}
+}
+
+// A quote that nests leaves the region open: the whole word paints as an
+// error region.
+func TestHighlight_NestedQuoteUnclosed_Error(t *testing.T) {
+	h := NewHighlighter(DefaultTheme)
+
+	for _, input := range []string{"echo 'hello 'world", `echo "Total: "$N`} {
+		t.Run(input, func(t *testing.T) {
+			output := h.Highlight(input)
+
+			assert.Equal(t, input, stripANSI(output))
+
+			assert.Contains(t, output, DefaultTheme[TypeError])
 		})
 	}
 }

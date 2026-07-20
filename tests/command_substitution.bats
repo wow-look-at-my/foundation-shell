@@ -5,7 +5,7 @@
 
 setup() {
     # Path to the shell executable
-    FSH="${FSH:-$BATS_TEST_DIRNAME/../../build/fsh-exec}"
+    FSH="${FSH:-$BATS_TEST_DIRNAME/../build/fsh-exec}"
 
     # Ensure the shell exists
     if [[ ! -x "$FSH" ]]; then
@@ -16,7 +16,7 @@ setup() {
 # Helper to run a command through fsh-exec
 # fsh-exec takes command as arguments (not -c flag)
 run_fsh() {
-    run "$FSH" $1
+    run "$FSH" "$1"
 }
 
 @test "simple command substitution: echo \$(echo hello)" {

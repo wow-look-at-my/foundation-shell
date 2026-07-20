@@ -21,11 +21,12 @@ var DefaultTheme = Theme{
 	TypeSingleQuotedString: "\033[32m",   // Green
 	TypeDoubleQuotedString: "\033[33m",   // Yellow
 	TypeBacktick:           "\033[36m",   // Cyan
-	TypeSubshell:           "\033[36m",   // Cyan
+	TypeCommandSubst:       "\033[36m",   // Cyan
 	TypeVariable:           "\033[34m",   // Blue
 	TypeParenGroup:         "\033[35m",   // Magenta
 	TypeError:              "\033[4;31m", // Underline red
 	TypeWhitespace:         "\033[0m",    // Reset
+	TypeComment:            "\033[90m",   // Dark gray
 	TypeUnknown:            "\033[0m",    // Reset
 }
 

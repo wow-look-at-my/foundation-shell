@@ -3,6 +3,8 @@ package expander
 import (
 	"os"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestExpandTilde(t *testing.T) {
@@ -32,9 +34,8 @@ func TestExpandTilde(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result := ExpandTilde(tt.input)
-			if result != tt.expected {
-				t.Errorf("ExpandTilde(%q) = %q, want %q", tt.input, result, tt.expected)
-			}
+			assert.Equal(t, tt.expected, result)
+
 		})
 	}
 }
@@ -58,9 +59,8 @@ func TestExpandTildeNoHome(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result := ExpandTilde(tt.input)
-			if result != tt.expected {
-				t.Errorf("ExpandTilde(%q) = %q, want %q", tt.input, result, tt.expected)
-			}
+			assert.Equal(t, tt.expected, result)
+
 		})
 	}
 }
@@ -115,9 +115,8 @@ func TestExpandEnvironment(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result := ExpandEnvironment(tt.input)
-			if result != tt.expected {
-				t.Errorf("ExpandEnvironment(%q) = %q, want %q", tt.input, result, tt.expected)
-			}
+			assert.Equal(t, tt.expected, result)
+
 		})
 	}
 }
@@ -145,9 +144,8 @@ func TestExpandEnvironmentEscaped(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result := ExpandEnvironment(tt.input)
-			if result != tt.expected {
-				t.Errorf("ExpandEnvironment(%q) = %q, want %q", tt.input, result, tt.expected)
-			}
+			assert.Equal(t, tt.expected, result)
+
 		})
 	}
 }
@@ -187,9 +185,8 @@ func TestExpand(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result := Expand(tt.input, tt.wasSingleQuoted)
-			if result != tt.expected {
-				t.Errorf("Expand(%q, %v) = %q, want %q", tt.input, tt.wasSingleQuoted, result, tt.expected)
-			}
+			assert.Equal(t, tt.expected, result)
+
 		})
 	}
 }
@@ -202,15 +199,12 @@ func TestExpandWithRealHome(t *testing.T) {
 	}
 
 	result := ExpandTilde("~")
-	if result != home {
-		t.Errorf("ExpandTilde(\"~\") = %q, want %q", result, home)
-	}
+	assert.Equal(t, home, result)
 
 	result = ExpandTilde("~/test")
 	expected := home + "/test"
-	if result != expected {
-		t.Errorf("ExpandTilde(\"~/test\") = %q, want %q", result, expected)
-	}
+	assert.Equal(t, expected, result)
+
 }
 
 func TestExpandEnvironmentSpecialCases(t *testing.T) {
@@ -239,9 +233,8 @@ func TestExpandEnvironmentSpecialCases(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result := ExpandEnvironment(tt.input)
-			if result != tt.expected {
-				t.Errorf("ExpandEnvironment(%q) = %q, want %q", tt.input, result, tt.expected)
-			}
+			assert.Equal(t, tt.expected, result)
+
 		})
 	}
 }
@@ -250,9 +243,11 @@ func TestIsVarChar(t *testing.T) {
 	// Test internal helper function behavior through ExpandEnvironment
 	os.Setenv("VAR_123", "test")
 	os.Setenv("_START", "underscore")
+	os.Setenv("A", "a")
 	defer func() {
 		os.Unsetenv("VAR_123")
 		os.Unsetenv("_START")
+		os.Unsetenv("A")
 	}()
 
 	tests := []struct {
@@ -262,172 +257,21 @@ func TestIsVarChar(t *testing.T) {
 	}{
 		{"var with underscore", "$VAR_123", "test"},
 		{"var starting underscore", "$_START", "underscore"},
+		// Variable names are ASCII-only: a multibyte UTF-8 sequence ends
+		// the name instead of being pulled in byte by byte.
+		{"multibyte rune ends the name", "$Aé", "aé"},
+		{"multibyte rune after braced var", "${A}é", "aé"},
+		{"cjk after var name", "$A漢", "a漢"},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result := ExpandEnvironment(tt.input)
-			if result != tt.expected {
-				t.Errorf("ExpandEnvironment(%q) = %q, want %q", tt.input, result, tt.expected)
-			}
+			assert.Equal(t, tt.expected, result)
+
 		})
 	}
 }
 
-// mockExecutor implements SubshellExecutor for testing.
-type mockExecutor struct {
-	outputs map[string]string
-	calls   []string
-}
-
-func newMockExecutor() *mockExecutor {
-	return &mockExecutor{
-		outputs: make(map[string]string),
-		calls:   make([]string, 0),
-	}
-}
-
-func (m *mockExecutor) Execute(command string) (string, int, error) {
-	m.calls = append(m.calls, command)
-	if output, ok := m.outputs[command]; ok {
-		return output, 0, nil
-	}
-	return "", 0, nil
-}
-
-func TestExpandCommandSubstitution(t *testing.T) {
-	tests := []struct {
-		name     string
-		input    string
-		outputs  map[string]string
-		expected string
-	}{
-		{
-			name:     "no substitution",
-			input:    "hello world",
-			outputs:  map[string]string{},
-			expected: "hello world",
-		},
-		{
-			name:  "simple dollar paren",
-			input: "$(whoami)",
-			outputs: map[string]string{
-				"whoami": "testuser\n",
-			},
-			expected: "testuser",
-		},
-		{
-			name:  "dollar paren with surrounding text",
-			input: "hello $(whoami) there",
-			outputs: map[string]string{
-				"whoami": "testuser\n",
-			},
-			expected: "hello testuser there",
-		},
-		{
-			name:  "simple backtick",
-			input: "`whoami`",
-			outputs: map[string]string{
-				"whoami": "testuser\n",
-			},
-			expected: "testuser",
-		},
-		{
-			name:  "backtick with surrounding text",
-			input: "hello `whoami` there",
-			outputs: map[string]string{
-				"whoami": "testuser\n",
-			},
-			expected: "hello testuser there",
-		},
-		{
-			name:  "multiple substitutions",
-			input: "$(cmd1) and $(cmd2)",
-			outputs: map[string]string{
-				"cmd1": "one\n",
-				"cmd2": "two\n",
-			},
-			expected: "one and two",
-		},
-		{
-			name:  "nested dollar paren",
-			input: "$(echo $(whoami))",
-			outputs: map[string]string{
-				"whoami":        "testuser\n",
-				"echo testuser": "testuser\n",
-			},
-			expected: "testuser",
-		},
-		{
-			name:  "command with arguments",
-			input: "$(echo hello world)",
-			outputs: map[string]string{
-				"echo hello world": "hello world\n",
-			},
-			expected: "hello world",
-		},
-		{
-			name:  "echo which echo pattern",
-			input: "$(which echo)",
-			outputs: map[string]string{
-				"which echo": "/bin/echo\n",
-			},
-			expected: "/bin/echo",
-		},
-		{
-			name:  "trailing newlines stripped",
-			input: "$(cmd)",
-			outputs: map[string]string{
-				"cmd": "output\n\n\n",
-			},
-			expected: "output",
-		},
-		{
-			name:  "no trailing newline",
-			input: "$(cmd)",
-			outputs: map[string]string{
-				"cmd": "output",
-			},
-			expected: "output",
-		},
-		{
-			name:  "empty output",
-			input: "$(cmd)",
-			outputs: map[string]string{
-				"cmd": "",
-			},
-			expected: "",
-		},
-		{
-			name:  "mixed dollar and backtick",
-			input: "$(cmd1) and `cmd2`",
-			outputs: map[string]string{
-				"cmd1": "one\n",
-				"cmd2": "two\n",
-			},
-			expected: "one and two",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			executor := newMockExecutor()
-			executor.outputs = tt.outputs
-
-			result, err := ExpandCommandSubstitution(tt.input, executor)
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
-			if result != tt.expected {
-				t.Errorf("ExpandCommandSubstitution(%q) = %q, want %q", tt.input, result, tt.expected)
-			}
-		})
-	}
-}
-
-func TestExpandCommandSubstitution_NilExecutor(t *testing.T) {
-	_, err := ExpandCommandSubstitution("$(cmd)", nil)
-	if err == nil {
-		t.Error("expected error for nil executor, got nil")
-	}
-}
+// Command-substitution expansion (ExpandToken) is tested in
+// expander_token_test.go.

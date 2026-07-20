@@ -2,8 +2,11 @@
 package syntax
 
 import (
+	"fmt"
 	"strings"
 	"unicode"
+
+	"foundation-shell/internal/lexer"
 )
 
 // SemanticType represents the semantic meaning of a token for highlighting purposes.
@@ -28,8 +31,8 @@ const (
 	TypeDoubleQuotedString
 	// TypeBacktick is a backtick command substitution.
 	TypeBacktick
-	// TypeSubshell is a $(...) command substitution.
-	TypeSubshell
+	// TypeCommandSubst is a $(...) command substitution.
+	TypeCommandSubst
 	// TypeVariable is a variable reference ($VAR or ${VAR}).
 	TypeVariable
 	// TypeParenGroup is a parenthesized group (...).
@@ -38,6 +41,8 @@ const (
 	TypeError
 	// TypeWhitespace is whitespace between tokens.
 	TypeWhitespace
+	// TypeComment is a comment (# to end of line).
+	TypeComment
 )
 
 // String returns the string name of the semantic type.
@@ -61,8 +66,8 @@ func (t SemanticType) String() string {
 		return "DoubleQuotedString"
 	case TypeBacktick:
 		return "Backtick"
-	case TypeSubshell:
-		return "Subshell"
+	case TypeCommandSubst:
+		return "CommandSubst"
 	case TypeVariable:
 		return "Variable"
 	case TypeParenGroup:
@@ -71,6 +76,8 @@ func (t SemanticType) String() string {
 		return "Error"
 	case TypeWhitespace:
 		return "Whitespace"
+	case TypeComment:
+		return "Comment"
 	default:
 		return "Unknown"
 	}
@@ -141,8 +148,18 @@ func (a *analyzer) analyze() {
 			continue
 		}
 
+		// A # at word start (here: any fresh position after whitespace,
+		// an operator, or start of input) begins a comment running to the
+		// next newline or end of input, matching the lexer. A # inside a
+		// word or a substitution body stays literal (parseWord consumes
+		// it).
+		if a.input[a.pos] == '#' {
+			a.consumeComment()
+			continue
+		}
+
 		// Check for operators first
-		if op, length := a.matchOperator(); length > 0 {
+		if op, length := a.matchOperator(true); length > 0 {
 			a.addToken(op, a.pos, a.pos+length, 0)
 			a.pos += length
 
@@ -160,79 +177,184 @@ func (a *analyzer) analyze() {
 		a.parseWord()
 	}
 
-	// Check for trailing operator errors
-	if len(a.tokens) > 0 {
-		last := a.tokens[len(a.tokens)-1]
-		if last.Type == TypeOperator && last.Value != ";" {
-			a.errors = append(a.errors, SyntaxError{
-				Start:   last.Start,
-				End:     last.End,
-				Message: "unexpected operator at end",
-			})
+	a.checkStructure()
+}
+
+// checkStructure reports leading-operator, consecutive-operator,
+// missing-redirection-target and trailing-operator errors, matching the
+// parser's messages. Whitespace and comment tokens are not significant:
+// `echo hello | ` and `echo | # done` are still trailing-pipe errors.
+func (a *analyzer) checkStructure() {
+	// Indexes of the significant (non-whitespace, non-comment) tokens.
+	var sig []int
+	for i := range a.tokens {
+		if a.tokens[i].Type == TypeWhitespace || a.tokens[i].Type == TypeComment {
+			continue
 		}
-		if last.Type == TypeRedirection {
+		sig = append(sig, i)
+	}
+	if len(sig) == 0 {
+		// Only whitespace/comments: nothing to check
+		return
+	}
+
+	// A leading chain operator (|, &&, ||, ;) is an error, matching the
+	// parser. Redirections may legally start a command (< in.txt cat).
+	first := a.tokens[sig[0]]
+	if first.Type == TypeOperator {
+		a.errors = append(a.errors, SyntaxError{
+			Start:   first.Start,
+			End:     first.End,
+			Message: "unexpected operator at start: " + first.Value,
+		})
+		if len(sig) == 1 {
+			// A lone operator is fully described by the error above.
+			return
+		}
+	}
+
+	// Consecutive operators, matching the parser. A newline between
+	// commands is an implicit ; (the lexer materializes one unless the
+	// previous token is a CHAIN operator, which continues the line), so a
+	// chain operator that starts a new line after a word is "consecutive"
+	// with that implicit ;. A redirection followed by any operator — or by
+	// a newline, which the lexer turns into a ; (redirections do NOT
+	// continue across lines) — has no target, again matching the parser.
+	for k := 1; k < len(sig); k++ {
+		prev, cur := a.tokens[sig[k-1]], a.tokens[sig[k]]
+		msg := ""
+		at := cur
+		switch {
+		case prev.Type == TypeRedirection && a.newlineBetween(sig[k-1], sig[k]):
+			// `echo hi ><newline>out.txt`: the lexer emits > ; out.txt, so the
+			// parser sees the separator as the redirection target. The
+			// caret points at the dangling redirection operator.
+			msg = "missing redirection target: " + prev.Value + " followed by operator ;"
+			at = prev
+		case cur.Type == TypeOperator && prev.Type == TypeOperator:
+			msg = fmt.Sprintf("consecutive operators: %s followed by %s", prev.Value, cur.Value)
+		case cur.Type == TypeOperator && a.newlineBetween(sig[k-1], sig[k]):
+			msg = "consecutive operators: ; followed by " + cur.Value
+		case prev.Type == TypeRedirection && (cur.Type == TypeOperator || cur.Type == TypeRedirection):
+			msg = fmt.Sprintf("missing redirection target: %s followed by operator %s", prev.Value, cur.Value)
+		}
+		if msg != "" {
 			a.errors = append(a.errors, SyntaxError{
-				Start:   last.Start,
-				End:     last.End,
-				Message: "missing redirection target",
+				Start:   at.Start,
+				End:     at.End,
+				Message: msg,
 			})
 		}
 	}
+
+	last := a.tokens[sig[len(sig)-1]]
+	if last.Type == TypeOperator && last.Value != ";" {
+		a.errors = append(a.errors, SyntaxError{
+			Start:   last.Start,
+			End:     last.End,
+			Message: "unexpected operator at end",
+		})
+	}
+	if last.Type == TypeRedirection {
+		a.errors = append(a.errors, SyntaxError{
+			Start:   last.Start,
+			End:     last.End,
+			Message: "missing redirection target",
+		})
+	}
+}
+
+// newlineBetween reports whether any whitespace token strictly between
+// token indexes i and j contains a newline.
+func (a *analyzer) newlineBetween(i, j int) bool {
+	for k := i + 1; k < j; k++ {
+		if a.tokens[k].Type == TypeWhitespace && strings.ContainsRune(a.tokens[k].Value, '\n') {
+			return true
+		}
+	}
+	return false
 }
 
 func (a *analyzer) consumeWhitespace() {
 	start := a.pos
+	sawNewline := false
 	for a.pos < len(a.input) && unicode.IsSpace(a.input[a.pos]) {
+		if a.input[a.pos] == '\n' {
+			sawNewline = true
+		}
 		a.pos++
 	}
 	a.addToken(TypeWhitespace, start, a.pos, 0)
+
+	// A newline separates commands (the lexer emits an implicit ;), so
+	// the next word starts a new command.
+	if sawNewline {
+		a.isFirstInCommand = true
+		a.afterRedirection = false
+	}
 }
 
-// matchOperator checks if current position starts with an operator.
-// Returns the semantic type and length of the operator, or 0 length if not an operator.
-func (a *analyzer) matchOperator() (SemanticType, int) {
+// consumeComment consumes a comment from # to the next newline (exclusive)
+// or end of input.
+func (a *analyzer) consumeComment() {
+	start := a.pos
+	for a.pos < len(a.input) && a.input[a.pos] != '\n' {
+		a.pos++
+	}
+	a.addToken(TypeComment, start, a.pos, 0)
+}
+
+// peek returns the rune at offset from the current position, or 0 when out
+// of bounds.
+func (a *analyzer) peek(offset int) rune {
+	if a.pos+offset < len(a.input) {
+		return a.input[a.pos+offset]
+	}
+	return 0
+}
+
+// matchOperator checks if the current position starts with an operator.
+// Returns the semantic type and length of the operator, or 0 length if not
+// an operator. It compares runes in place: no per-call allocation (this
+// runs for every character on every keystroke).
+//
+// fresh indicates a word-start position (start of input, after whitespace
+// or after an operator). The 2>/2>> forms only match there: mid-word the 2
+// belongs to the pending word (echo a2>f is word a2 + operator >),
+// matching the lexer's rule that 2>/2>> apply only when the pending word
+// is exactly "2".
+func (a *analyzer) matchOperator(fresh bool) (SemanticType, int) {
 	if a.pos >= len(a.input) {
 		return TypeUnknown, 0
 	}
 
-	// Check multi-character operators first
-	remaining := string(a.input[a.pos:])
-
-	// Chain operators (3 chars)
-	// None currently
-
-	// Chain operators (2 chars)
-	if strings.HasPrefix(remaining, "&&") {
-		return TypeOperator, 2
-	}
-	if strings.HasPrefix(remaining, "||") {
-		return TypeOperator, 2
-	}
-
-	// Redirection operators (3 chars)
-	if strings.HasPrefix(remaining, "2>>") {
-		return TypeRedirection, 3
-	}
-
-	// Redirection operators (2 chars)
-	if strings.HasPrefix(remaining, ">>") {
-		return TypeRedirection, 2
-	}
-	if strings.HasPrefix(remaining, "2>") {
-		return TypeRedirection, 2
-	}
-
-	// Single character operators
-	c := a.input[a.pos]
-	switch c {
+	switch a.input[a.pos] {
+	case '&':
+		if a.peek(1) == '&' {
+			return TypeOperator, 2
+		}
+		// A single & is a literal word character, not an operator.
 	case '|':
+		if a.peek(1) == '|' {
+			return TypeOperator, 2
+		}
 		return TypeOperator, 1
 	case ';':
 		return TypeOperator, 1
 	case '>':
+		if a.peek(1) == '>' {
+			return TypeRedirection, 2
+		}
 		return TypeRedirection, 1
 	case '<':
 		return TypeRedirection, 1
+	case '2':
+		if fresh && a.peek(1) == '>' {
+			if a.peek(2) == '>' {
+				return TypeRedirection, 3
+			}
+			return TypeRedirection, 2
+		}
 	case '(':
 		return TypeParenGroup, 1
 	case ')':
@@ -242,157 +364,236 @@ func (a *analyzer) matchOperator() (SemanticType, int) {
 	return TypeUnknown, 0
 }
 
-// parseWord parses a word token, handling quotes, backticks, and variables.
+// subContext tracks one open command substitution ($(...) or `...`)
+// inside a word, mirroring the lexer's model: kind is '(' or '`', depth is
+// the same-type nesting level of a backtick region (always 1 for $(...)),
+// and single/double are the nesting depths of quote regions open inside
+// the body (guarding the closing delimiter).
+type subContext struct {
+	kind   rune
+	depth  int
+	single int
+	double int
+}
+
+// parseWord parses a word token, handling quotes, backticks, and
+// substitutions with the same depth-tracked nesting rule as the lexer
+// (lexer.QuoteNestsDeeper): inside an open region, a same-type quote
+// character nests one level deeper iff the previous character is
+// whitespace and the next character exists, is not whitespace, and is not
+// a quote character; otherwise it closes one level.
 func (a *analyzer) parseWord() {
 	start := a.pos
-	var builder strings.Builder
 
-	// Track quote depths
-	singleQuoteDepth := 0
-	doubleQuoteDepth := 0
-	backtickDepth := 0
-	parenDepth := 0 // For $()
+	// Outer quote regions. At most one is nonzero: inside one type, the
+	// other type's characters are literal content.
+	singleDepth := 0
+	doubleDepth := 0
+	// Open command substitutions, innermost last.
+	var subStack []subContext
 
-	// Track where quotes started for error reporting
-	var quoteStarts []int
+	// Depth bookkeeping for AnalyzedToken.Depth: curDepth is the number
+	// of currently open constructs (quote nesting levels, substitutions,
+	// and in-body quote levels); maxDepth is the token's high-water mark.
+	curDepth, maxDepth := 0, 0
+	openLevel := func() {
+		curDepth++
+		if curDepth > maxDepth {
+			maxDepth = curDepth
+		}
+	}
+	closeLevel := func() { curDepth-- }
+
+	// nestOrClose applies the nesting rule to a quote/backtick depth
+	// counter that is already >= 1 and returns the new depth.
+	nestOrClose := func(depth int) int {
+		if lexer.QuoteNestsDeeper(a.input, a.pos) {
+			openLevel()
+			return depth + 1
+		}
+		closeLevel()
+		return depth - 1
+	}
 
 	for a.pos < len(a.input) {
 		c := a.input[a.pos]
 
-		// Handle escape sequences (outside single quotes)
-		if c == '\\' && singleQuoteDepth == 0 && a.pos+1 < len(a.input) {
-			next := a.input[a.pos+1]
-			// Escaped characters don't count toward quote depth
-			builder.WriteRune(c)
-			builder.WriteRune(next)
+		inSubstitution := len(subStack) > 0
+		var top *subContext
+		if inSubstitution {
+			top = &subStack[len(subStack)-1]
+		}
+		effSingle := singleDepth > 0
+		if inSubstitution {
+			effSingle = top.single > 0
+		}
+
+		// Handle escape sequences (outside single-quote context): the
+		// escaped character never participates in depth tracking.
+		if c == '\\' && !effSingle && a.pos+1 < len(a.input) {
 			a.pos += 2
 			continue
 		}
 
-		// Handle single quotes with depth tracking
-		if c == '\'' && doubleQuoteDepth == 0 && backtickDepth == 0 {
-			if singleQuoteDepth%2 == 0 {
-				// Opening quote
-				quoteStarts = append(quoteStarts, a.pos)
-			} else {
-				// Closing quote
-				if len(quoteStarts) > 0 {
-					quoteStarts = quoteStarts[:len(quoteStarts)-1]
-				}
-			}
-			singleQuoteDepth++
-			builder.WriteRune(c)
-			a.pos++
-			continue
-		}
-
-		// Handle double quotes with depth tracking
-		if c == '"' && singleQuoteDepth == 0 && backtickDepth == 0 {
-			if doubleQuoteDepth%2 == 0 {
-				// Opening quote
-				quoteStarts = append(quoteStarts, a.pos)
-			} else {
-				// Closing quote
-				if len(quoteStarts) > 0 {
-					quoteStarts = quoteStarts[:len(quoteStarts)-1]
-				}
-			}
-			doubleQuoteDepth++
-			builder.WriteRune(c)
-			a.pos++
-			continue
-		}
-
-		// Handle backticks with depth tracking
-		if c == '`' && singleQuoteDepth == 0 {
-			if backtickDepth%2 == 0 {
-				// Opening backtick
-				quoteStarts = append(quoteStarts, a.pos)
-			} else {
-				// Closing backtick
-				if len(quoteStarts) > 0 {
-					quoteStarts = quoteStarts[:len(quoteStarts)-1]
-				}
-			}
-			backtickDepth++
-			builder.WriteRune(c)
-			a.pos++
-			continue
-		}
-
-		// Handle $() subshell
-		if c == '$' && singleQuoteDepth == 0 && a.pos+1 < len(a.input) && a.input[a.pos+1] == '(' {
-			parenDepth++
-			builder.WriteRune(c)
-			builder.WriteRune('(')
+		// $( opens a command substitution (suppressed in single quotes,
+		// active inside double quotes).
+		if c == '$' && !effSingle && a.pos+1 < len(a.input) && a.input[a.pos+1] == '(' {
+			subStack = append(subStack, subContext{kind: '(', depth: 1})
+			openLevel()
 			a.pos += 2
 			continue
 		}
 
-		// Handle closing ) for $()
-		if c == ')' && parenDepth > 0 && singleQuoteDepth == 0 {
-			parenDepth--
-			builder.WriteRune(c)
+		// ) closes the innermost $(...) unless it is quoted inside the
+		// substitution body: echo $(echo ')') is valid, while
+		// echo "$(whoami)" still closes at the real ) because the outer
+		// quote belongs to the outer context, not the body's.
+		if c == ')' && inSubstitution && top.kind == '(' && top.single == 0 && top.double == 0 {
+			subStack = subStack[:len(subStack)-1]
+			closeLevel()
 			a.pos++
 			continue
 		}
 
-		// Check for word boundaries (whitespace or operators)
-		// We're outside quotes when the count is even (0, 2, 4, ...)
-		outsideQuotes := singleQuoteDepth%2 == 0 && doubleQuoteDepth%2 == 0 && backtickDepth%2 == 0 && parenDepth == 0
-		if outsideQuotes {
+		// Backticks: suppressed in single quotes and inside in-body
+		// double quotes; active inside outer double quotes. A backtick
+		// inside a backtick region nests or closes by the shared rule.
+		if c == '`' && !effSingle && !(inSubstitution && top.double > 0) {
+			if inSubstitution && top.kind == '`' {
+				top.depth = nestOrClose(top.depth)
+				if top.depth == 0 {
+					subStack = subStack[:len(subStack)-1]
+				}
+			} else {
+				subStack = append(subStack, subContext{kind: '`', depth: 1})
+				openLevel()
+			}
+			a.pos++
+			continue
+		}
+
+		// Single quotes, depth-tracked (literal inside double quotes).
+		if c == '\'' {
+			if inSubstitution {
+				if top.double == 0 {
+					if top.single == 0 {
+						top.single = 1
+						openLevel()
+					} else {
+						top.single = nestOrClose(top.single)
+					}
+				}
+				a.pos++
+				continue
+			}
+			if doubleDepth == 0 {
+				if singleDepth == 0 {
+					singleDepth = 1
+					openLevel()
+				} else {
+					singleDepth = nestOrClose(singleDepth)
+				}
+				a.pos++
+				continue
+			}
+			// Inside double quotes: literal content, falls through
+		}
+
+		// Double quotes, depth-tracked (literal inside single quotes).
+		if c == '"' {
+			if inSubstitution {
+				if top.single == 0 {
+					if top.double == 0 {
+						top.double = 1
+						openLevel()
+					} else {
+						top.double = nestOrClose(top.double)
+					}
+				}
+				a.pos++
+				continue
+			}
+			if singleDepth == 0 {
+				if doubleDepth == 0 {
+					doubleDepth = 1
+					openLevel()
+				} else {
+					doubleDepth = nestOrClose(doubleDepth)
+				}
+				a.pos++
+				continue
+			}
+			// Inside single quotes: literal content, falls through
+		}
+
+		// Word boundaries (whitespace or operators) apply at total
+		// depth 0 only.
+		if singleDepth == 0 && doubleDepth == 0 && len(subStack) == 0 {
 			if unicode.IsSpace(c) {
 				break
 			}
-			if _, length := a.matchOperator(); length > 0 {
+			if _, length := a.matchOperator(false); length > 0 {
 				break
 			}
 		}
 
-		builder.WriteRune(c)
 		a.pos++
 	}
 
-	value := builder.String()
-	if len(value) == 0 {
+	if a.pos == start {
 		return
 	}
+	value := string(a.input[start:a.pos])
 
-	// Check for unclosed quotes (odd count)
-	if singleQuoteDepth%2 != 0 {
-		a.errors = append(a.errors, SyntaxError{
-			Start:   start,
-			End:     a.pos,
-			Message: "unclosed single quote (odd count)",
-		})
+	// Report EVERY unclosed construct, INNERMOST first (diagnostics.md
+	// §7.3): an unclosed substitution containing an unclosed quote yields
+	// two error blocks — `echo $(foo "bar` reports the double quote and
+	// then the substitution. Each canonical message appears at most once
+	// per word (a doubly-nested region like 'a 'b is still ONE unclosed
+	// single quote; §5.5 tracks one counter per type), and every error
+	// spans the whole word token. The lexer reports only the innermost —
+	// which is exactly the FIRST message here, keeping the two scanners'
+	// primary diagnosis identical.
+	var unclosed []string
+	addUnclosed := func(msg string) {
+		for _, existing := range unclosed {
+			if existing == msg {
+				return
+			}
+		}
+		unclosed = append(unclosed, msg)
 	}
-	if doubleQuoteDepth%2 != 0 {
-		a.errors = append(a.errors, SyntaxError{
-			Start:   start,
-			End:     a.pos,
-			Message: "unclosed double quote (odd count)",
-		})
+	for k := len(subStack) - 1; k >= 0; k-- {
+		sc := subStack[k]
+		// A body quote region opened after (inside) its substitution, so it
+		// is inner to it: report it first.
+		if sc.single > 0 {
+			addUnclosed("unclosed single quote")
+		}
+		if sc.double > 0 {
+			addUnclosed("unclosed double quote")
+		}
+		if sc.kind == '(' {
+			addUnclosed("unclosed command substitution $(...)")
+		} else {
+			addUnclosed("unclosed backtick")
+		}
 	}
-	if backtickDepth%2 != 0 {
-		a.errors = append(a.errors, SyntaxError{
-			Start:   start,
-			End:     a.pos,
-			Message: "unclosed backtick (odd count)",
-		})
+	if singleDepth > 0 {
+		addUnclosed("unclosed single quote")
 	}
-	if parenDepth > 0 {
+	if doubleDepth > 0 {
+		addUnclosed("unclosed double quote")
+	}
+	for _, msg := range unclosed {
 		a.errors = append(a.errors, SyntaxError{
 			Start:   start,
 			End:     a.pos,
-			Message: "unclosed subshell $(...)",
+			Message: msg,
 		})
 	}
 
-	// Determine semantic type
-	semType := a.determineWordType(value, singleQuoteDepth, doubleQuoteDepth, backtickDepth, parenDepth)
-
-	// Calculate max depth for this token
-	maxDepth := max(singleQuoteDepth, doubleQuoteDepth, backtickDepth, parenDepth)
+	semType := a.determineWordType(value, len(unclosed) > 0)
 
 	a.addToken(semType, start, a.pos, maxDepth)
 
@@ -405,9 +606,9 @@ func (a *analyzer) parseWord() {
 }
 
 // determineWordType determines the semantic type of a word token.
-func (a *analyzer) determineWordType(value string, singleDepth, doubleDepth, backtickDepth, parenDepth int) SemanticType {
+func (a *analyzer) determineWordType(value string, unclosed bool) SemanticType {
 	// Check for errors first
-	if singleDepth%2 != 0 || doubleDepth%2 != 0 || backtickDepth%2 != 0 || parenDepth > 0 {
+	if unclosed {
 		return TypeError
 	}
 
@@ -429,13 +630,13 @@ func (a *analyzer) determineWordType(value string, singleDepth, doubleDepth, bac
 		}
 	}
 
-	// Check for subshell
+	// Check for command substitution
 	if strings.HasPrefix(value, "$(") && strings.HasSuffix(value, ")") {
-		return TypeSubshell
+		return TypeCommandSubst
 	}
 
 	// Check for variable
-	if strings.HasPrefix(value, "$") && len(value) > 1 {
+	if isVariableWord(value) {
 		return TypeVariable
 	}
 
@@ -444,6 +645,26 @@ func (a *analyzer) determineWordType(value string, singleDepth, doubleDepth, bac
 		return TypeCommand
 	}
 	return TypeArgument
+}
+
+// isVariableWord reports whether a word is a variable reference: $ followed
+// by a letter/underscore (greedy name characters after), ${...} with a
+// matching close brace and a non-empty name, or exactly the special
+// parameter $?. Any other $ ($$, $!, $1, $-foo, a lone $, an unclosed ${)
+// is a literal word character, so the word is not a variable.
+func isVariableWord(value string) bool {
+	if len(value) < 2 || value[0] != '$' {
+		return false
+	}
+	if value == "$?" {
+		return true
+	}
+	if value[1] == '{' {
+		closeIdx := strings.IndexByte(value[2:], '}')
+		return closeIdx > 0
+	}
+	c := value[1]
+	return c == '_' || ('a' <= c && c <= 'z') || ('A' <= c && c <= 'Z')
 }
 
 func (a *analyzer) addToken(semType SemanticType, start, end, depth int) {
@@ -455,17 +676,4 @@ func (a *analyzer) addToken(semType SemanticType, start, end, depth int) {
 		End:   end,
 		Depth: depth,
 	})
-}
-
-func max(values ...int) int {
-	if len(values) == 0 {
-		return 0
-	}
-	m := values[0]
-	for _, v := range values[1:] {
-		if v > m {
-			m = v
-		}
-	}
-	return m
 }

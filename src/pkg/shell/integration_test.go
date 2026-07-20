@@ -2,6 +2,7 @@ package shell_test
 
 import (
 	"bytes"
+	"github.com/stretchr/testify/assert"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -102,13 +103,10 @@ func TestIntegration_CommandSubstitution(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			stdout, stderr, exitCode := runFsh(t, tt.input)
 
-			if exitCode != 0 {
-				t.Errorf("expected exit code 0, got %d\nstderr: %s", exitCode, stderr)
-			}
+			assert.Equal(t, 0, exitCode, "stderr: %s", stderr)
 
-			if !strings.Contains(stdout, tt.contains) {
-				t.Errorf("expected stdout to contain %q\ngot: %q\nstderr: %s", tt.contains, stdout, stderr)
-			}
+			assert.Contains(t, stdout, tt.contains, "stderr: %s", stderr)
+
 		})
 	}
 }
@@ -140,13 +138,10 @@ func TestIntegration_BasicCommands(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			stdout, stderr, exitCode := runFsh(t, tt.input)
 
-			if exitCode != 0 {
-				t.Errorf("expected exit code 0, got %d\nstderr: %s", exitCode, stderr)
-			}
+			assert.Equal(t, 0, exitCode, "stderr: %s", stderr)
 
-			if !strings.Contains(stdout, tt.contains) {
-				t.Errorf("expected stdout to contain %q\ngot: %q", tt.contains, stdout)
-			}
+			assert.Contains(t, stdout, tt.contains, "stderr: %s", stderr)
+
 		})
 	}
 }
