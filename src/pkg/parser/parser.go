@@ -4,6 +4,8 @@ package parser
 import (
 	"errors"
 	"fmt"
+	"regexp"
+	"strings"
 
 	"foundation-shell/internal/expander"
 	"foundation-shell/internal/lexer"
@@ -17,6 +19,14 @@ var (
 	ErrOperatorAtStart = errors.New("unexpected operator at start")
 	// ErrMissingRedirectionTarget is returned when a redirection has no target file.
 	ErrMissingRedirectionTarget = errors.New("missing redirection target")
+	// ErrEmptyRedirectionTarget is returned when a redirection target expands
+	// to an empty string (e.g. `> $UNSET`). The message is canonical: the
+	// spec pins the exact string "empty redirection target".
+	ErrEmptyRedirectionTarget = errors.New("empty redirection target")
+	// ErrFdDuplicationUnsupported is returned when an unquoted redirection
+	// target starts with & (e.g. `2>&1`, which lexes as `2>` + `&1`). The
+	// message is canonical: the spec pins the exact string.
+	ErrFdDuplicationUnsupported = errors.New("file descriptor duplication is not supported")
 	// ErrTrailingOperator is returned when the input ends with an operator.
 	ErrTrailingOperator = errors.New("unexpected operator at end")
 	// ErrConsecutiveOperators is returned when two chain operators appear consecutively.
@@ -33,6 +43,12 @@ type CommandSpec struct {
 	ErrorFile    string
 	AppendOutput bool
 	AppendError  bool
+	// IsAssignment marks a standalone assignment (execution.md §Standalone
+	// Assignment): the command's SOLE word (redirections do not count) was
+	// not single-quoted anywhere and its expanded value matches NAME=VALUE
+	// with a valid variable name. The executor performs the assignment
+	// (Args[0] split at the first '=') instead of running a command.
+	IsAssignment bool
 }
 
 // Chain represents a sequence of commands connected by operators.
@@ -45,7 +61,27 @@ type Chain struct {
 type classifiedToken struct {
 	tokenType token.TokenType
 	value     string
+	// rawValue is the token content AS WRITTEN (the lexer's pre-expansion
+	// Content). The fd-duplication guard inspects it: `2>&1` is rejected on
+	// the literal `&1`, while a target that becomes `&1` only through
+	// expansion (`> $X` with X='&1') is a legal filename
+	// (redirection.md §9.5).
+	rawValue string
+	// wasQuoted is true when any part of the original word was quoted
+	// (used e.g. to allow a quoted '&1' as a redirection target while
+	// rejecting the unquoted fd-duplication form).
+	wasQuoted bool
+	// wasSingleQuoted is true when any part of the original word was
+	// single-quoted (whole-token granularity, lexer.md §4.4.2). A
+	// single-quoted part anywhere disqualifies the word from standalone
+	// assignment recognition.
+	wasSingleQuoted bool
 }
+
+// assignmentPattern matches an expanded word that forms a standalone
+// assignment: a valid variable name followed by '='. Everything after the
+// first '=' is the value (possibly empty, possibly containing more '=').
+var assignmentPattern = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*=`)
 
 // parseOperator checks if a string is an operator and returns its token type.
 // Returns (tokenType, true) if it's an operator, (0, false) otherwise.
@@ -86,16 +122,35 @@ func isRedirectionOperator(t token.TokenType) bool {
 		t == token.RedirectStdErrAppend
 }
 
+// Options configures parsing.
+type Options struct {
+	// Executor expands command substitutions ($(...) and `...`). When nil,
+	// substitution spans are left verbatim.
+	Executor expander.SubshellExecutor
+	// LastStatus reports the exit status of the most recent command for $?
+	// expansion. When nil, $? expands to 0.
+	LastStatus func() int
+}
+
 // Parse parses the input string into a command chain.
 // It performs lexer tokenization, expansion, token classification, and chain building.
-// This version does not expand command substitutions ($(...) or backticks).
+// This version does not expand command substitutions ($(...) or backticks),
+// and $? expands to 0.
 func Parse(input string) (*Chain, error) {
-	return ParseWithExecutor(input, nil)
+	return ParseWithOptions(input, Options{})
 }
 
 // ParseWithExecutor parses the input string into a command chain with optional subshell expansion.
 // If executor is non-nil, command substitutions ($(...) and `...`) will be expanded.
+// $? expands to 0.
 func ParseWithExecutor(input string, executor expander.SubshellExecutor) (*Chain, error) {
+	return ParseWithOptions(input, Options{Executor: executor})
+}
+
+// ParseWithOptions parses the input string into a command chain with full
+// control over expansion: command substitution via opts.Executor and $?
+// expansion via opts.LastStatus.
+func ParseWithOptions(input string, opts Options) (*Chain, error) {
 	// Step 1: Tokenize input
 	tokenContexts, err := lexer.Tokenize(input)
 	if err != nil {
@@ -111,8 +166,16 @@ func ParseWithExecutor(input string, executor expander.SubshellExecutor) (*Chain
 	isFirstInCommand := true
 
 	for _, tc := range tokenContexts {
-		// Try to parse as operator first (operators are not expanded)
-		if opType, isOp := parseOperator(tc.Content); isOp {
+		// Operators come ONLY from the lexer's marking: a token is an
+		// operator iff tc.IsOperator. Quoted or escaped operator characters
+		// ('|', "|", \|, 'a|b') arrive as value tokens and stay literal data.
+		if tc.IsOperator {
+			opType, isOp := parseOperator(tc.Content)
+			if !isOp {
+				// Unreachable: the lexer only emits operators from the set
+				// parseOperator knows. Guard against future drift.
+				return nil, fmt.Errorf("internal error: lexer emitted unknown operator %q", tc.Content)
+			}
 			classified = append(classified, classifiedToken{
 				tokenType: opType,
 				value:     tc.Content,
@@ -127,18 +190,27 @@ func ParseWithExecutor(input string, executor expander.SubshellExecutor) (*Chain
 		// It's a value token - expand if not single-quoted
 		expandedValue := tc.Content
 		if !tc.WasSingleQuoted {
-			expandedValue = expander.ExpandTilde(expandedValue)
-			expandedValue = expander.ExpandEnvironment(expandedValue)
-
-			// Expand command substitutions if executor provided
-			if executor != nil {
-				expandedValue, err = expander.ExpandCommandSubstitution(expandedValue, executor)
-				if err != nil {
-					return nil, fmt.Errorf("command substitution error: %w", err)
-				}
+			// Tilde expansion is suppressed when ANY part of the word was
+			// quoted: quoting the tilde ("~", '~', ~"/x") is deliberate.
+			// Variable and command expansion still apply to double-quoted
+			// words.
+			if !tc.WasQuoted {
+				expandedValue = expander.ExpandTilde(expandedValue)
+			}
+			// Single pass: variables (incl. $?) expand in the literal text,
+			// top-level substitution spans execute recursively via the
+			// executor, and their output is spliced without re-scanning.
+			expandedValue, err = expander.ExpandToken(expandedValue, expander.Options{
+				Executor:   opts.Executor,
+				LastStatus: opts.LastStatus,
+			})
+			if err != nil {
+				return nil, fmt.Errorf("command substitution error: %w", err)
 			}
 		}
-		// Strip escape markers after expansion
+		// Strip escape markers UNCONDITIONALLY, single-quoted tokens
+		// included: a mixed word like 'a'\$b has WasSingleQuoted set (no
+		// expansion) but still carries a marker from the unquoted \$.
 		expandedValue = lexer.StripEscapeMarkers(expandedValue)
 
 		// Classify as Command or CommandArgument
@@ -151,8 +223,11 @@ func ParseWithExecutor(input string, executor expander.SubshellExecutor) (*Chain
 		}
 
 		classified = append(classified, classifiedToken{
-			tokenType: tokenType,
-			value:     expandedValue,
+			tokenType:       tokenType,
+			value:           expandedValue,
+			rawValue:        tc.Content,
+			wasQuoted:       tc.WasQuoted,
+			wasSingleQuoted: tc.WasSingleQuoted,
 		})
 	}
 
@@ -181,6 +256,24 @@ func buildChain(tokens []classifiedToken) (*Chain, error) {
 		Args: make([]string, 0),
 	}
 
+	// firstArgSingleQuoted remembers whether the current command's FIRST
+	// word had any single-quoted part; standalone assignment recognition
+	// (execution.md §Standalone Assignment) needs it at finalize time.
+	firstArgSingleQuoted := false
+
+	// finalize marks a completed command as a standalone assignment when
+	// its sole word is an unsingle-quoted NAME=... form.
+	finalize := func(cmd *CommandSpec) *CommandSpec {
+		if len(cmd.Args) == 1 && !firstArgSingleQuoted && assignmentPattern.MatchString(cmd.Args[0]) {
+			cmd.IsAssignment = true
+		}
+		return cmd
+	}
+
+	// Set when a trailing semicolon was consumed: the chain is complete and
+	// the post-loop "dangling operator" checks must not fire.
+	trailingSemicolonConsumed := false
+
 	for i := 0; i < len(tokens); i++ {
 		tok := tokens[i]
 
@@ -191,13 +284,21 @@ func buildChain(tokens []classifiedToken) (*Chain, error) {
 			}
 
 			// Add current command to chain
-			chain.Commands = append(chain.Commands, currentCommand)
-			chain.Operators = append(chain.Operators, tok.tokenType)
+			chain.Commands = append(chain.Commands, finalize(currentCommand))
 
-			// Check if there's anything after this operator
+			// Check if there's anything after this operator. A single
+			// trailing semicolon is valid and simply consumed (the lexer
+			// also emits one for a trailing newline); any other trailing
+			// operator is an error.
 			if i+1 >= len(tokens) {
+				if tok.tokenType == token.Semicolon {
+					trailingSemicolonConsumed = true
+					continue // loop ends; no operator is recorded
+				}
 				return nil, fmt.Errorf("%w: %s", ErrTrailingOperator, tok.value)
 			}
+
+			chain.Operators = append(chain.Operators, tok.tokenType)
 
 			// Check for consecutive chain operators
 			nextTok := tokens[i+1]
@@ -209,6 +310,7 @@ func buildChain(tokens []classifiedToken) (*Chain, error) {
 			currentCommand = &CommandSpec{
 				Args: make([]string, 0),
 			}
+			firstArgSingleQuoted = false
 			continue
 		}
 
@@ -222,6 +324,24 @@ func buildChain(tokens []classifiedToken) (*Chain, error) {
 			// Target must be a value, not an operator
 			if nextTok.tokenType.IsOperator() {
 				return nil, fmt.Errorf("%w: %s followed by operator %s", ErrMissingRedirectionTarget, tok.value, nextTok.value)
+			}
+
+			// A syntactically present redirection must have a non-empty
+			// target after expansion: `> $UNSET` is an error, not a
+			// silently dropped redirection.
+			if nextTok.value == "" {
+				return nil, ErrEmptyRedirectionTarget
+			}
+
+			// Fd-duplication syntax (2>&1) lexes as `2>` + word `&1`.
+			// Reject unquoted &-prefixed targets loudly instead of
+			// creating a file literally named "&1". The guard inspects the
+			// PRE-expansion token content (redirection.md §9.5): a quoted
+			// '&1' is a legal filename, and so is a target that becomes
+			// `&1` only through expansion (`> $X` with X='&1').
+			if !nextTok.wasQuoted && strings.HasPrefix(nextTok.rawValue, "&") {
+				word := lexer.StripEscapeMarkers(nextTok.rawValue)
+				return nil, fmt.Errorf("%w: %s", ErrFdDuplicationUnsupported, word)
 			}
 
 			// Apply the redirection
@@ -248,21 +368,26 @@ func buildChain(tokens []classifiedToken) (*Chain, error) {
 		}
 
 		// Value token - add to current command's args
+		if len(currentCommand.Args) == 0 {
+			firstArgSingleQuoted = tok.wasSingleQuoted
+		}
 		currentCommand.Args = append(currentCommand.Args, tok.value)
 	}
 
 	// Add the last command if it has any args
-	if len(currentCommand.Args) == 0 {
-		// This shouldn't happen with valid input, but check anyway
-		if len(chain.Commands) == 0 {
+	switch {
+	case trailingSemicolonConsumed:
+		// Chain already complete; nothing to append or validate here.
+	case len(currentCommand.Args) == 0:
+		if len(chain.Commands) == 0 || len(chain.Operators) == 0 {
 			return nil, ErrEmptyCommand
 		}
-		// Remove the trailing operator since there's no command after it
-		if len(chain.Operators) > 0 {
-			return nil, ErrTrailingOperator
-		}
-	} else {
-		chain.Commands = append(chain.Commands, currentCommand)
+		// Reachable via e.g. `cmd ; > file`: an operator followed by a
+		// redirection-only command. Report the dangling operator with the
+		// same `: <op>` context every other trailing-operator error carries.
+		return nil, fmt.Errorf("%w: %s", ErrTrailingOperator, chain.Operators[len(chain.Operators)-1])
+	default:
+		chain.Commands = append(chain.Commands, finalize(currentCommand))
 	}
 
 	// Validate invariant: operators.size() == commands.size() - 1

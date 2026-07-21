@@ -1,6 +1,7 @@
 package lexer
 
 import (
+	"github.com/stretchr/testify/require"
 	"testing"
 )
 
@@ -55,9 +56,8 @@ func TestTokenize_BasicWhitespaceSplitting(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result, err := Tokenize(tt.input)
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
+			require.Nil(t, err)
+
 			assertTokensEqual(t, tt.expected, result)
 		})
 	}
@@ -74,7 +74,7 @@ func TestTokenize_DoubleQuotes(t *testing.T) {
 			input: `echo "hello world"`,
 			expected: []TokenContext{
 				{Content: "echo", WasSingleQuoted: false},
-				{Content: "hello world", WasSingleQuoted: false},
+				{Content: "hello world", WasQuoted: true},
 			},
 		},
 		{
@@ -82,7 +82,7 @@ func TestTokenize_DoubleQuotes(t *testing.T) {
 			input: `echo "hello    world"`,
 			expected: []TokenContext{
 				{Content: "echo", WasSingleQuoted: false},
-				{Content: "hello    world", WasSingleQuoted: false},
+				{Content: "hello    world", WasQuoted: true},
 			},
 		},
 		{
@@ -90,6 +90,7 @@ func TestTokenize_DoubleQuotes(t *testing.T) {
 			input: `echo ""`,
 			expected: []TokenContext{
 				{Content: "echo", WasSingleQuoted: false},
+				{Content: "", WasQuoted: true},
 			},
 		},
 		{
@@ -97,7 +98,7 @@ func TestTokenize_DoubleQuotes(t *testing.T) {
 			input: `echo "hello""world"`,
 			expected: []TokenContext{
 				{Content: "echo", WasSingleQuoted: false},
-				{Content: "helloworld", WasSingleQuoted: false},
+				{Content: "helloworld", WasQuoted: true},
 			},
 		},
 		{
@@ -105,7 +106,7 @@ func TestTokenize_DoubleQuotes(t *testing.T) {
 			input: `echo "it's fine"`,
 			expected: []TokenContext{
 				{Content: "echo", WasSingleQuoted: false},
-				{Content: "it's fine", WasSingleQuoted: false},
+				{Content: "it's fine", WasQuoted: true},
 			},
 		},
 	}
@@ -113,9 +114,8 @@ func TestTokenize_DoubleQuotes(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result, err := Tokenize(tt.input)
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
+			require.Nil(t, err)
+
 			assertTokensEqual(t, tt.expected, result)
 		})
 	}
@@ -132,7 +132,7 @@ func TestTokenize_SingleQuotes(t *testing.T) {
 			input: "echo 'hello world'",
 			expected: []TokenContext{
 				{Content: "echo", WasSingleQuoted: false},
-				{Content: "hello world", WasSingleQuoted: true},
+				{Content: "hello world", WasSingleQuoted: true, WasQuoted: true},
 			},
 		},
 		{
@@ -140,7 +140,7 @@ func TestTokenize_SingleQuotes(t *testing.T) {
 			input: `echo 'hello $VAR \n world'`,
 			expected: []TokenContext{
 				{Content: "echo", WasSingleQuoted: false},
-				{Content: `hello $VAR \n world`, WasSingleQuoted: true},
+				{Content: `hello $VAR \n world`, WasSingleQuoted: true, WasQuoted: true},
 			},
 		},
 		{
@@ -148,7 +148,7 @@ func TestTokenize_SingleQuotes(t *testing.T) {
 			input: `echo 'say "hello"'`,
 			expected: []TokenContext{
 				{Content: "echo", WasSingleQuoted: false},
-				{Content: `say "hello"`, WasSingleQuoted: true},
+				{Content: `say "hello"`, WasSingleQuoted: true, WasQuoted: true},
 			},
 		},
 		{
@@ -156,7 +156,7 @@ func TestTokenize_SingleQuotes(t *testing.T) {
 			input: `echo 'back\\slash'`,
 			expected: []TokenContext{
 				{Content: "echo", WasSingleQuoted: false},
-				{Content: `back\\slash`, WasSingleQuoted: true},
+				{Content: `back\\slash`, WasSingleQuoted: true, WasQuoted: true},
 			},
 		},
 	}
@@ -164,9 +164,8 @@ func TestTokenize_SingleQuotes(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result, err := Tokenize(tt.input)
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
+			require.Nil(t, err)
+
 			assertTokensEqual(t, tt.expected, result)
 		})
 	}
@@ -239,9 +238,8 @@ func TestTokenize_Escapes(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result, err := Tokenize(tt.input)
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
+			require.Nil(t, err)
+
 			assertTokensEqual(t, tt.expected, result)
 		})
 	}
@@ -258,7 +256,7 @@ func TestTokenize_MixedQuotes(t *testing.T) {
 			input: `echo "it's a \"test\""`,
 			expected: []TokenContext{
 				{Content: "echo", WasSingleQuoted: false},
-				{Content: `it's a "test"`, WasSingleQuoted: false},
+				{Content: `it's a "test"`, WasQuoted: true},
 			},
 		},
 		{
@@ -266,8 +264,8 @@ func TestTokenize_MixedQuotes(t *testing.T) {
 			input: `echo "hello" 'world'`,
 			expected: []TokenContext{
 				{Content: "echo", WasSingleQuoted: false},
-				{Content: "hello", WasSingleQuoted: false},
-				{Content: "world", WasSingleQuoted: true},
+				{Content: "hello", WasQuoted: true},
+				{Content: "world", WasSingleQuoted: true, WasQuoted: true},
 			},
 		},
 		{
@@ -275,7 +273,7 @@ func TestTokenize_MixedQuotes(t *testing.T) {
 			input: `echo "hello"'world'`,
 			expected: []TokenContext{
 				{Content: "echo", WasSingleQuoted: false},
-				{Content: "helloworld", WasSingleQuoted: true},
+				{Content: "helloworld", WasSingleQuoted: true, WasQuoted: true},
 			},
 		},
 		{
@@ -283,7 +281,7 @@ func TestTokenize_MixedQuotes(t *testing.T) {
 			input: `echo hello"world"`,
 			expected: []TokenContext{
 				{Content: "echo", WasSingleQuoted: false},
-				{Content: "helloworld", WasSingleQuoted: false},
+				{Content: "helloworld", WasQuoted: true},
 			},
 		},
 		{
@@ -291,7 +289,7 @@ func TestTokenize_MixedQuotes(t *testing.T) {
 			input: `echo 'single'"double"unquoted`,
 			expected: []TokenContext{
 				{Content: "echo", WasSingleQuoted: false},
-				{Content: "singledoubleunquoted", WasSingleQuoted: true},
+				{Content: "singledoubleunquoted", WasSingleQuoted: true, WasQuoted: true},
 			},
 		},
 	}
@@ -299,9 +297,8 @@ func TestTokenize_MixedQuotes(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result, err := Tokenize(tt.input)
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
+			require.Nil(t, err)
+
 			assertTokensEqual(t, tt.expected, result)
 		})
 	}
@@ -326,8 +323,10 @@ func TestTokenize_EmptyAndEdgeCases(t *testing.T) {
 		{
 			name:  "only quotes with no content",
 			input: `''`,
-			// Empty single-quoted string produces no token since content is empty
-			expected: nil,
+			// A word consisting only of quotes emits an empty token
+			expected: []TokenContext{
+				{Content: "", WasSingleQuoted: true, WasQuoted: true},
+			},
 		},
 		{
 			name:  "backslash at end of input",
@@ -343,9 +342,8 @@ func TestTokenize_EmptyAndEdgeCases(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result, err := Tokenize(tt.input)
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
+			require.Nil(t, err)
+
 			assertTokensEqual(t, tt.expected, result)
 		})
 	}
@@ -382,12 +380,10 @@ func TestTokenize_UnclosedQuotes(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			_, err := Tokenize(tt.input)
-			if err == nil {
-				t.Fatalf("expected error, got nil")
-			}
-			if err.Error() != tt.expectedErr {
-				t.Fatalf("expected error %q, got %q", tt.expectedErr, err.Error())
-			}
+			require.NotNil(t, err)
+
+			require.Equal(t, tt.expectedErr, err.Error())
+
 		})
 	}
 }
@@ -403,7 +399,7 @@ func TestTokenize_EscapesInsideDoubleQuotes(t *testing.T) {
 			input: `echo "say \"hello\""`,
 			expected: []TokenContext{
 				{Content: "echo", WasSingleQuoted: false},
-				{Content: `say "hello"`, WasSingleQuoted: false},
+				{Content: `say "hello"`, WasQuoted: true},
 			},
 		},
 		{
@@ -411,7 +407,7 @@ func TestTokenize_EscapesInsideDoubleQuotes(t *testing.T) {
 			input: `echo "path\\to\\file"`,
 			expected: []TokenContext{
 				{Content: "echo", WasSingleQuoted: false},
-				{Content: `path\to\file`, WasSingleQuoted: false},
+				{Content: `path\to\file`, WasQuoted: true},
 			},
 		},
 		{
@@ -419,7 +415,7 @@ func TestTokenize_EscapesInsideDoubleQuotes(t *testing.T) {
 			input: `echo "cost is \$100"`,
 			expected: []TokenContext{
 				{Content: "echo", WasSingleQuoted: false},
-				{Content: "cost is " + string(EscapeMarker) + "$100", WasSingleQuoted: false},
+				{Content: "cost is " + string(EscapeMarker) + "$100", WasQuoted: true},
 			},
 		},
 	}
@@ -427,9 +423,8 @@ func TestTokenize_EscapesInsideDoubleQuotes(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result, err := Tokenize(tt.input)
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
+			require.Nil(t, err)
+
 			assertTokensEqual(t, tt.expected, result)
 		})
 	}
@@ -448,7 +443,7 @@ func TestTokenize_RealWorldCommands(t *testing.T) {
 				{Content: "git", WasSingleQuoted: false},
 				{Content: "commit", WasSingleQuoted: false},
 				{Content: "-m", WasSingleQuoted: false},
-				{Content: "Fix bug in parser", WasSingleQuoted: false},
+				{Content: "Fix bug in parser", WasQuoted: true},
 			},
 		},
 		{
@@ -457,7 +452,7 @@ func TestTokenize_RealWorldCommands(t *testing.T) {
 			expected: []TokenContext{
 				{Content: "grep", WasSingleQuoted: false},
 				{Content: "-r", WasSingleQuoted: false},
-				{Content: "func main", WasSingleQuoted: true},
+				{Content: "func main", WasSingleQuoted: true, WasQuoted: true},
 				{Content: "./src", WasSingleQuoted: false},
 			},
 		},
@@ -466,7 +461,7 @@ func TestTokenize_RealWorldCommands(t *testing.T) {
 			input: `echo "Hello $USER"`,
 			expected: []TokenContext{
 				{Content: "echo", WasSingleQuoted: false},
-				{Content: "Hello $USER", WasSingleQuoted: false},
+				{Content: "Hello $USER", WasQuoted: true},
 			},
 		},
 		{
@@ -476,7 +471,7 @@ func TestTokenize_RealWorldCommands(t *testing.T) {
 				{Content: "find", WasSingleQuoted: false},
 				{Content: ".", WasSingleQuoted: false},
 				{Content: "-name", WasSingleQuoted: false},
-				{Content: "*.go", WasSingleQuoted: false},
+				{Content: "*.go", WasQuoted: true},
 				{Content: "-type", WasSingleQuoted: false},
 				{Content: "f", WasSingleQuoted: false},
 			},
@@ -486,7 +481,7 @@ func TestTokenize_RealWorldCommands(t *testing.T) {
 			input: `ls "/path/to/my files/"`,
 			expected: []TokenContext{
 				{Content: "ls", WasSingleQuoted: false},
-				{Content: "/path/to/my files/", WasSingleQuoted: false},
+				{Content: "/path/to/my files/", WasQuoted: true},
 			},
 		},
 	}
@@ -494,9 +489,8 @@ func TestTokenize_RealWorldCommands(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result, err := Tokenize(tt.input)
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
+			require.Nil(t, err)
+
 			assertTokensEqual(t, tt.expected, result)
 		})
 	}
@@ -533,9 +527,8 @@ func TestStripEscapeMarkers(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result := StripEscapeMarkers(tt.input)
-			if result != tt.expected {
-				t.Fatalf("expected %q, got %q", tt.expected, result)
-			}
+			require.Equal(t, tt.expected, result)
+
 		})
 	}
 }
@@ -615,7 +608,7 @@ func TestTokenize_CommandSubstitution(t *testing.T) {
 			input: `echo "$(whoami)"`,
 			expected: []TokenContext{
 				{Content: "echo", WasSingleQuoted: false},
-				{Content: "$(whoami)", WasSingleQuoted: false},
+				{Content: "$(whoami)", WasQuoted: true},
 			},
 		},
 		{
@@ -623,7 +616,7 @@ func TestTokenize_CommandSubstitution(t *testing.T) {
 			input: "echo '$(whoami)'",
 			expected: []TokenContext{
 				{Content: "echo", WasSingleQuoted: false},
-				{Content: "$(whoami)", WasSingleQuoted: true},
+				{Content: "$(whoami)", WasSingleQuoted: true, WasQuoted: true},
 			},
 		},
 	}
@@ -631,9 +624,8 @@ func TestTokenize_CommandSubstitution(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			tokens, err := Tokenize(tt.input)
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
+			require.Nil(t, err)
+
 			assertTokensEqual(t, tt.expected, tokens)
 		})
 	}
@@ -641,50 +633,41 @@ func TestTokenize_CommandSubstitution(t *testing.T) {
 
 func TestTokenize_UnclosedCommandSubstitution(t *testing.T) {
 	tests := []struct {
-		name  string
-		input string
+		name        string
+		input       string
+		expectedErr string
 	}{
 		{
-			name:  "unclosed dollar paren",
-			input: "echo $(whoami",
+			name:        "unclosed dollar paren",
+			input:       "echo $(whoami",
+			expectedErr: "unclosed command substitution $(...)",
 		},
 		{
-			name:  "unclosed nested dollar paren",
-			input: "echo $(echo $(whoami)",
+			name:        "unclosed nested dollar paren",
+			input:       "echo $(echo $(whoami)",
+			expectedErr: "unclosed command substitution $(...)",
 		},
 		{
-			name:  "unclosed backtick",
-			input: "echo `whoami",
+			name:        "unclosed backtick",
+			input:       "echo `whoami",
+			expectedErr: "unclosed backtick",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			_, err := Tokenize(tt.input)
-			if err == nil {
-				t.Fatalf("expected error for unclosed command substitution")
-			}
+			require.NotNil(t, err)
+
+			require.Equal(t, tt.expectedErr, err.Error())
 		})
 	}
 }
 
-// assertTokensEqual compares two slices of TokenContext for equality.
+// assertTokensEqual compares two slices of TokenContext for equality,
+// including the WasQuoted and IsOperator flags.
 func assertTokensEqual(t *testing.T, expected, actual []TokenContext) {
 	t.Helper()
 
-	if len(expected) != len(actual) {
-		t.Fatalf("token count mismatch: expected %d, got %d\nexpected: %+v\nactual: %+v",
-			len(expected), len(actual), expected, actual)
-	}
-
-	for i := range expected {
-		if expected[i].Content != actual[i].Content {
-			t.Errorf("token[%d] content mismatch: expected %q, got %q",
-				i, expected[i].Content, actual[i].Content)
-		}
-		if expected[i].WasSingleQuoted != actual[i].WasSingleQuoted {
-			t.Errorf("token[%d] WasSingleQuoted mismatch: expected %v, got %v",
-				i, expected[i].WasSingleQuoted, actual[i].WasSingleQuoted)
-		}
-	}
+	require.Equal(t, expected, actual)
 }

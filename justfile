@@ -17,7 +17,7 @@ build: setup
 # Run all tests (Go unit tests + BATS integration tests)
 test: build
     cd src && go test -v -race -cover ./...
-    bats spec/tests/
+    bats tests/
 
 # Run the shell
 run: build

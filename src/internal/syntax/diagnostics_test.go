@@ -1,6 +1,8 @@
 package syntax
 
 import (
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"strings"
 	"testing"
 )
@@ -12,17 +14,14 @@ func TestFormatDiagnostics_SingleError(t *testing.T) {
 	result := FormatDiagnostics(input, errors)
 
 	// Should contain the input
-	if !strings.Contains(result, input) {
-		t.Errorf("expected output to contain input %q, got:\n%s", input, result)
-	}
+	assert.Contains(t, result, input)
+
 	// Should contain carets
-	if !strings.Contains(result, "^") {
-		t.Errorf("expected output to contain carets, got:\n%s", result)
-	}
+	assert.Contains(t, result, "^")
+
 	// Should contain error message
-	if !strings.Contains(result, "unclosed double quote") {
-		t.Errorf("expected output to contain error message, got:\n%s", result)
-	}
+	assert.Contains(t, result, "unclosed double quote")
+
 }
 
 func TestFormatDiagnostics_MultipleErrors(t *testing.T) {
@@ -35,23 +34,19 @@ func TestFormatDiagnostics_MultipleErrors(t *testing.T) {
 	result := FormatDiagnostics(input, errors)
 
 	// Should contain both error messages
-	if !strings.Contains(result, "unclosed double quote") {
-		t.Errorf("expected output to contain first error message, got:\n%s", result)
-	}
-	if !strings.Contains(result, "unclosed single quote") {
-		t.Errorf("expected output to contain second error message, got:\n%s", result)
-	}
+	assert.Contains(t, result, "unclosed double quote")
+
+	assert.Contains(t, result, "unclosed single quote")
+
 	// Should contain the input
-	if !strings.Contains(result, input) {
-		t.Errorf("expected output to contain input, got:\n%s", result)
-	}
+	assert.Contains(t, result, input)
+
 	// Should contain carets for both errors
 	caretCount := strings.Count(result, "^")
 	// First error spans 9 chars (5-14), second spans 5 chars (18-23)
 	// At minimum we expect multiple carets
-	if caretCount < 2 {
-		t.Errorf("expected multiple carets for multiple errors, got %d carets:\n%s", caretCount, result)
-	}
+	assert.GreaterOrEqual(t, caretCount, 2)
+
 }
 
 func TestFormatDiagnostics_CaretAlignment(t *testing.T) {
@@ -76,10 +71,7 @@ func TestFormatDiagnostics_CaretAlignment(t *testing.T) {
 	}
 
 	// Caret line should be right after input line (or within reasonable proximity)
-	if caretLineIdx <= inputLineIdx || caretLineIdx > inputLineIdx+2 {
-		t.Errorf("caret line should be near input line, inputLine=%d caretLine=%d:\n%s",
-			inputLineIdx, caretLineIdx, result)
-	}
+	assert.False(t, caretLineIdx <= inputLineIdx || caretLineIdx > inputLineIdx+2)
 
 	// Find the caret line content
 	if caretLineIdx < len(lines) {
@@ -87,9 +79,8 @@ func TestFormatDiagnostics_CaretAlignment(t *testing.T) {
 		// The carets should start at position 5 (after "echo ")
 		// Count leading spaces/non-caret chars before first caret
 		firstCaret := strings.Index(caretLine, "^")
-		if firstCaret < 0 {
-			t.Errorf("no caret found in caret line: %q", caretLine)
-		} else if firstCaret != 5 {
+		assert.GreaterOrEqual(t, firstCaret, 0, "no caret found in caret line: %q", caretLine)
+		if firstCaret >= 0 && firstCaret != 5 {
 			// Allow for some flexibility in formatting (e.g., line number prefix)
 			// But the relative position should be correct
 			t.Logf("first caret at position %d (expected around 5): %q", firstCaret, caretLine)
@@ -104,9 +95,8 @@ func TestFormatDiagnostics_EmptyErrors(t *testing.T) {
 	result := FormatDiagnostics(input, errors)
 
 	// Empty errors should return empty string
-	if result != "" {
-		t.Errorf("expected empty string for no errors, got:\n%s", result)
-	}
+	assert.Equal(t, "", result)
+
 }
 
 func TestFormatDiagnostics_NilErrors(t *testing.T) {
@@ -115,9 +105,8 @@ func TestFormatDiagnostics_NilErrors(t *testing.T) {
 	result := FormatDiagnostics(input, nil)
 
 	// Nil errors should return empty string
-	if result != "" {
-		t.Errorf("expected empty string for nil errors, got:\n%s", result)
-	}
+	assert.Equal(t, "", result)
+
 }
 
 func TestFormatDiagnostics_ErrorAtStart(t *testing.T) {
@@ -127,17 +116,13 @@ func TestFormatDiagnostics_ErrorAtStart(t *testing.T) {
 	result := FormatDiagnostics(input, errors)
 
 	// Should contain the input
-	if !strings.Contains(result, input) {
-		t.Errorf("expected output to contain input, got:\n%s", result)
-	}
+	assert.Contains(t, result, input)
+
 	// Should contain carets
-	if !strings.Contains(result, "^") {
-		t.Errorf("expected output to contain carets, got:\n%s", result)
-	}
+	assert.Contains(t, result, "^")
+
 	// Should contain error message
-	if !strings.Contains(result, "unclosed double quote") {
-		t.Errorf("expected output to contain error message, got:\n%s", result)
-	}
+	assert.Contains(t, result, "unclosed double quote")
 
 	// Verify carets start at the beginning
 	lines := strings.Split(result, "\n")
@@ -160,17 +145,14 @@ func TestFormatDiagnostics_ErrorAtEnd(t *testing.T) {
 	result := FormatDiagnostics(input, errors)
 
 	// Should contain the input
-	if !strings.Contains(result, input) {
-		t.Errorf("expected output to contain input, got:\n%s", result)
-	}
+	assert.Contains(t, result, input)
+
 	// Should contain carets
-	if !strings.Contains(result, "^") {
-		t.Errorf("expected output to contain carets, got:\n%s", result)
-	}
+	assert.Contains(t, result, "^")
+
 	// Should contain error message
-	if !strings.Contains(result, "unexpected operator at end") {
-		t.Errorf("expected output to contain error message, got:\n%s", result)
-	}
+	assert.Contains(t, result, "unexpected operator at end")
+
 }
 
 func TestFormatDiagnostics_SingleCharacterError(t *testing.T) {
@@ -180,13 +162,11 @@ func TestFormatDiagnostics_SingleCharacterError(t *testing.T) {
 	result := FormatDiagnostics(input, errors)
 
 	// Should contain at least one caret
-	if !strings.Contains(result, "^") {
-		t.Errorf("expected output to contain at least one caret, got:\n%s", result)
-	}
+	assert.Contains(t, result, "^")
+
 	// Should contain error message
-	if !strings.Contains(result, "unexpected operator") {
-		t.Errorf("expected output to contain error message, got:\n%s", result)
-	}
+	assert.Contains(t, result, "unexpected operator")
+
 }
 
 func TestFormatDiagnostics_MultiLineCarets(t *testing.T) {
@@ -196,15 +176,13 @@ func TestFormatDiagnostics_MultiLineCarets(t *testing.T) {
 	result := FormatDiagnostics(input, errors)
 
 	// Should contain the input
-	if !strings.Contains(result, input) {
-		t.Errorf("expected output to contain input, got:\n%s", result)
-	}
+	assert.Contains(t, result, input)
+
 	// Should contain many carets (spanning the error range)
 	caretCount := strings.Count(result, "^")
 	// The error spans 53 characters, so we expect approximately that many carets
-	if caretCount < 10 {
-		t.Errorf("expected many carets for long error span, got %d:\n%s", caretCount, result)
-	}
+	assert.GreaterOrEqual(t, caretCount, 10)
+
 }
 
 func TestFormatDiagnosticsFromResult_Valid(t *testing.T) {
@@ -219,9 +197,8 @@ func TestFormatDiagnosticsFromResult_Valid(t *testing.T) {
 	output := FormatDiagnosticsFromResult(result)
 
 	// Valid result should return empty string
-	if output != "" {
-		t.Errorf("expected empty string for valid result, got:\n%s", output)
-	}
+	assert.Equal(t, "", output)
+
 }
 
 func TestFormatDiagnosticsFromResult_Invalid(t *testing.T) {
@@ -241,22 +218,19 @@ func TestFormatDiagnosticsFromResult_Invalid(t *testing.T) {
 	output := FormatDiagnosticsFromResult(result)
 
 	// Invalid result should show errors
-	if output == "" {
-		t.Errorf("expected non-empty output for invalid result with errors")
-	}
+	assert.NotEqual(t, "", output)
+
 	// Should contain error message
-	if !strings.Contains(output, "unclosed double quote") {
-		t.Errorf("expected output to contain error message, got:\n%s", output)
-	}
+	assert.Contains(t, output, "unclosed double quote")
+
 }
 
 func TestFormatDiagnosticsFromResult_NilResult(t *testing.T) {
 	output := FormatDiagnosticsFromResult(nil)
 
 	// Nil result should return empty string (or handle gracefully)
-	if output != "" {
-		t.Errorf("expected empty string for nil result, got:\n%s", output)
-	}
+	assert.Equal(t, "", output)
+
 }
 
 func TestFormatDiagnosticsFromResult_MultipleErrors(t *testing.T) {
@@ -276,12 +250,10 @@ func TestFormatDiagnosticsFromResult_MultipleErrors(t *testing.T) {
 	output := FormatDiagnosticsFromResult(result)
 
 	// Should contain both error messages
-	if !strings.Contains(output, "unclosed double quote") {
-		t.Errorf("expected output to contain first error message, got:\n%s", output)
-	}
-	if !strings.Contains(output, "unclosed single quote") {
-		t.Errorf("expected output to contain second error message, got:\n%s", output)
-	}
+	assert.Contains(t, output, "unclosed double quote")
+
+	assert.Contains(t, output, "unclosed single quote")
+
 }
 
 func TestFormatDiagnostics_EmptyInput(t *testing.T) {
@@ -291,9 +263,8 @@ func TestFormatDiagnostics_EmptyInput(t *testing.T) {
 	result := FormatDiagnostics(input, errors)
 
 	// Should still show error message even with empty input
-	if !strings.Contains(result, "empty input error") {
-		t.Errorf("expected output to contain error message for empty input, got:\n%s", result)
-	}
+	assert.Contains(t, result, "empty input error")
+
 }
 
 func TestFormatDiagnostics_ErrorBeyondInput(t *testing.T) {
@@ -305,9 +276,8 @@ func TestFormatDiagnostics_ErrorBeyondInput(t *testing.T) {
 	result := FormatDiagnostics(input, errors)
 
 	// Should still contain error message
-	if !strings.Contains(result, "out of bounds error") {
-		t.Errorf("expected output to contain error message, got:\n%s", result)
-	}
+	assert.Contains(t, result, "out of bounds error")
+
 }
 
 func TestFormatDiagnostics_OverlappingErrors(t *testing.T) {
@@ -321,12 +291,10 @@ func TestFormatDiagnostics_OverlappingErrors(t *testing.T) {
 	result := FormatDiagnostics(input, errors)
 
 	// Both errors should be shown
-	if !strings.Contains(result, "first error") {
-		t.Errorf("expected output to contain first error message, got:\n%s", result)
-	}
-	if !strings.Contains(result, "second error") {
-		t.Errorf("expected output to contain second error message, got:\n%s", result)
-	}
+	assert.Contains(t, result, "first error")
+
+	assert.Contains(t, result, "second error")
+
 }
 
 func TestFormatDiagnostics_UnicodeInput(t *testing.T) {
@@ -336,12 +304,10 @@ func TestFormatDiagnostics_UnicodeInput(t *testing.T) {
 	result := FormatDiagnostics(input, errors)
 
 	// Should handle unicode characters properly
-	if !strings.Contains(result, "hello") {
-		t.Errorf("expected output to contain unicode input, got:\n%s", result)
-	}
-	if !strings.Contains(result, "unclosed double quote") {
-		t.Errorf("expected output to contain error message, got:\n%s", result)
-	}
+	assert.Contains(t, result, "hello")
+
+	assert.Contains(t, result, "unclosed double quote")
+
 }
 
 func TestFormatDiagnostics_SpecialCharacters(t *testing.T) {
@@ -351,9 +317,8 @@ func TestFormatDiagnostics_SpecialCharacters(t *testing.T) {
 	result := FormatDiagnostics(input, errors)
 
 	// Should handle special characters without breaking formatting
-	if !strings.Contains(result, "unclosed double quote") {
-		t.Errorf("expected output to contain error message, got:\n%s", result)
-	}
+	assert.Contains(t, result, "unclosed double quote")
+
 }
 
 func TestFormatDiagnostics_TabsInInput(t *testing.T) {
@@ -363,13 +328,11 @@ func TestFormatDiagnostics_TabsInInput(t *testing.T) {
 	result := FormatDiagnostics(input, errors)
 
 	// Should handle tabs properly
-	if !strings.Contains(result, "unclosed double quote") {
-		t.Errorf("expected output to contain error message, got:\n%s", result)
-	}
+	assert.Contains(t, result, "unclosed double quote")
+
 	// Should contain carets
-	if !strings.Contains(result, "^") {
-		t.Errorf("expected output to contain carets, got:\n%s", result)
-	}
+	assert.Contains(t, result, "^")
+
 }
 
 func TestFormatDiagnostics_ConsecutiveErrors(t *testing.T) {
@@ -382,12 +345,10 @@ func TestFormatDiagnostics_ConsecutiveErrors(t *testing.T) {
 	result := FormatDiagnostics(input, errors)
 
 	// Both consecutive errors should be shown
-	if !strings.Contains(result, "error at a") {
-		t.Errorf("expected output to contain first error message, got:\n%s", result)
-	}
-	if !strings.Contains(result, "error at b") {
-		t.Errorf("expected output to contain second error message, got:\n%s", result)
-	}
+	assert.Contains(t, result, "error at a")
+
+	assert.Contains(t, result, "error at b")
+
 }
 
 func TestFormatDiagnostics_ZeroLengthError(t *testing.T) {
@@ -398,9 +359,8 @@ func TestFormatDiagnostics_ZeroLengthError(t *testing.T) {
 	result := FormatDiagnostics(input, errors)
 
 	// Should still contain error message
-	if !strings.Contains(result, "zero length error") {
-		t.Errorf("expected output to contain error message, got:\n%s", result)
-	}
+	assert.Contains(t, result, "zero length error")
+
 }
 
 func TestFormatDiagnostics_NegativePositions(t *testing.T) {
@@ -411,9 +371,8 @@ func TestFormatDiagnostics_NegativePositions(t *testing.T) {
 	result := FormatDiagnostics(input, errors)
 
 	// Should still contain error message
-	if !strings.Contains(result, "negative start") {
-		t.Errorf("expected output to contain error message, got:\n%s", result)
-	}
+	assert.Contains(t, result, "negative start")
+
 }
 
 func TestFormatDiagnostics_ReversedPositions(t *testing.T) {
@@ -424,9 +383,8 @@ func TestFormatDiagnostics_ReversedPositions(t *testing.T) {
 	result := FormatDiagnostics(input, errors)
 
 	// Should still contain error message
-	if !strings.Contains(result, "reversed positions") {
-		t.Errorf("expected output to contain error message, got:\n%s", result)
-	}
+	assert.Contains(t, result, "reversed positions")
+
 }
 
 func TestFormatDiagnosticsFromResult_EmptyTokensWithErrors(t *testing.T) {
@@ -441,9 +399,8 @@ func TestFormatDiagnosticsFromResult_EmptyTokensWithErrors(t *testing.T) {
 	output := FormatDiagnosticsFromResult(result)
 
 	// Should handle empty tokens with errors
-	if !strings.Contains(output, "some error") {
-		t.Errorf("expected output to contain error message, got:\n%s", output)
-	}
+	assert.Contains(t, output, "some error")
+
 }
 
 func TestFormatDiagnostics_RealWorldExample_UnclosedQuote(t *testing.T) {
@@ -458,12 +415,10 @@ func TestFormatDiagnostics_RealWorldExample_UnclosedQuote(t *testing.T) {
 	result := FormatDiagnostics(input, analysisResult.Errors)
 
 	// Should produce useful diagnostic output
-	if result == "" {
-		t.Errorf("expected non-empty diagnostic for unclosed quote")
-	}
-	if !strings.Contains(result, "^") {
-		t.Errorf("expected carets in diagnostic output, got:\n%s", result)
-	}
+	assert.NotEqual(t, "", result)
+
+	assert.Contains(t, result, "^")
+
 }
 
 func TestFormatDiagnostics_RealWorldExample_TrailingPipe(t *testing.T) {
@@ -477,9 +432,8 @@ func TestFormatDiagnostics_RealWorldExample_TrailingPipe(t *testing.T) {
 	result := FormatDiagnostics(input, analysisResult.Errors)
 
 	// Should produce useful diagnostic output
-	if result == "" {
-		t.Errorf("expected non-empty diagnostic for trailing pipe")
-	}
+	assert.NotEqual(t, "", result)
+
 }
 
 func TestFormatDiagnostics_RealWorldExample_MissingRedirectTarget(t *testing.T) {
@@ -493,9 +447,8 @@ func TestFormatDiagnostics_RealWorldExample_MissingRedirectTarget(t *testing.T) 
 	result := FormatDiagnostics(input, analysisResult.Errors)
 
 	// Should produce useful diagnostic output
-	if result == "" {
-		t.Errorf("expected non-empty diagnostic for missing redirect target")
-	}
+	assert.NotEqual(t, "", result)
+
 }
 
 func TestFormatDiagnosticsFromResult_RealWorldIntegration(t *testing.T) {
@@ -509,9 +462,8 @@ func TestFormatDiagnosticsFromResult_RealWorldIntegration(t *testing.T) {
 	output := FormatDiagnosticsFromResult(analysisResult)
 
 	// Should work with real analysis results
-	if output == "" {
-		t.Errorf("expected non-empty output for real analysis result with errors")
-	}
+	assert.NotEqual(t, "", output)
+
 }
 
 func TestFormatDiagnostics_OutputFormat(t *testing.T) {
@@ -527,10 +479,7 @@ func TestFormatDiagnostics_OutputFormat(t *testing.T) {
 
 	lines := strings.Split(strings.TrimSpace(result), "\n")
 
-	if len(lines) < 2 {
-		t.Errorf("expected at least 2 lines in output (input + error info), got %d:\n%s",
-			len(lines), result)
-	}
+	assert.GreaterOrEqual(t, len(lines), 2)
 
 	// Verify structure: should have input somewhere and carets
 	hasInput := false
@@ -549,15 +498,12 @@ func TestFormatDiagnostics_OutputFormat(t *testing.T) {
 		}
 	}
 
-	if !hasInput {
-		t.Errorf("output missing input line:\n%s", result)
-	}
-	if !hasCarets {
-		t.Errorf("output missing caret line:\n%s", result)
-	}
-	if !hasMessage {
-		t.Errorf("output missing error message:\n%s", result)
-	}
+	assert.True(t, hasInput)
+
+	assert.True(t, hasCarets)
+
+	assert.True(t, hasMessage)
+
 }
 
 func TestFormatDiagnostics_CaretCount(t *testing.T) {
@@ -576,14 +522,11 @@ func TestFormatDiagnostics_CaretCount(t *testing.T) {
 		}
 	}
 
-	if caretLine == "" {
-		t.Fatalf("no caret line found in output:\n%s", result)
-	}
+	require.NotEqual(t, "", caretLine)
 
 	caretCount := strings.Count(caretLine, "^")
 	expectedCarets := 5 // End - Start
 
-	if caretCount != expectedCarets {
-		t.Errorf("expected %d carets, got %d in line %q", expectedCarets, caretCount, caretLine)
-	}
+	assert.Equal(t, expectedCarets, caretCount)
+
 }

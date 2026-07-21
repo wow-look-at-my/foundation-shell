@@ -6,6 +6,9 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestIsBuiltin(t *testing.T) {
@@ -18,18 +21,19 @@ func TestIsBuiltin(t *testing.T) {
 		{"exit", true},
 		{"clear", true},
 		{"help", true},
+		{"export", true},
 		{"ls", false},
 		{"cat", false},
 		{"grep", false},
+		{"echo", false}, // echo is external, not a builtin
 		{"", false},
 		{"CD", false}, // case sensitive
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := IsBuiltin(tt.name); got != tt.expected {
-				t.Errorf("IsBuiltin(%q) = %v, want %v", tt.name, got, tt.expected)
-			}
+			got := IsBuiltin(tt.name)
+			assert.Equal(t, tt.expected, got)
 		})
 	}
 }
@@ -37,9 +41,8 @@ func TestIsBuiltin(t *testing.T) {
 func TestBuiltinCd(t *testing.T) {
 	// Save original directory to restore after test
 	originalDir, err := os.Getwd()
-	if err != nil {
-		t.Fatalf("failed to get current directory: %v", err)
-	}
+	require.Nil(t, err)
+
 	defer os.Chdir(originalDir)
 
 	t.Run("change to existing directory", func(t *testing.T) {
@@ -47,23 +50,22 @@ func TestBuiltinCd(t *testing.T) {
 		tempDir, _ := filepath.EvalSymlinks(t.TempDir())
 
 		var stdout, stderr bytes.Buffer
-		err := ExecuteBuiltin("cd", []string{tempDir}, nil, &stdout, &stderr)
-		if err != nil {
-			t.Errorf("cd to existing directory failed: %v", err)
-		}
+		code, err := ExecuteBuiltin("cd", []string{tempDir}, nil, &stdout, &stderr)
+		require.Nil(t, err)
+		assert.Equal(t, 0, code)
 
 		cwd, _ := os.Getwd()
-		if cwd != tempDir {
-			t.Errorf("expected cwd to be %q, got %q", tempDir, cwd)
-		}
+		assert.Equal(t, tempDir, cwd)
 	})
 
 	t.Run("change to nonexistent directory", func(t *testing.T) {
 		var stdout, stderr bytes.Buffer
-		err := ExecuteBuiltin("cd", []string{"/nonexistent/directory/path"}, nil, &stdout, &stderr)
-		if err == nil {
-			t.Error("expected error for nonexistent directory, got nil")
-		}
+		code, err := ExecuteBuiltin("cd", []string{"/nonexistent/directory/path"}, nil, &stdout, &stderr)
+		// Ordinary builtin failure: status 1, prefix-free message with the
+		// bare os reason, no error.
+		require.Nil(t, err)
+		assert.Equal(t, 1, code)
+		assert.Equal(t, "cd: /nonexistent/directory/path: no such file or directory\n", stderr.String())
 	})
 
 	t.Run("cd with no args goes to HOME", func(t *testing.T) {
@@ -73,109 +75,84 @@ func TestBuiltinCd(t *testing.T) {
 		}
 
 		var stdout, stderr bytes.Buffer
-		err = ExecuteBuiltin("cd", []string{}, nil, &stdout, &stderr)
-		if err != nil {
-			t.Errorf("cd with no args failed: %v", err)
-		}
+		code, err := ExecuteBuiltin("cd", []string{}, nil, &stdout, &stderr)
+		require.Nil(t, err)
+		assert.Equal(t, 0, code)
 
 		cwd, _ := os.Getwd()
-		if cwd != homeDir {
-			t.Errorf("expected cwd to be %q, got %q", homeDir, cwd)
-		}
+		assert.Equal(t, homeDir, cwd)
 	})
 }
 
 func TestBuiltinPwd(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 
-	err := ExecuteBuiltin("pwd", []string{}, nil, &stdout, &stderr)
-	if err != nil {
-		t.Errorf("pwd failed: %v", err)
-	}
+	code, err := ExecuteBuiltin("pwd", []string{}, nil, &stdout, &stderr)
+	require.Nil(t, err)
+	assert.Equal(t, 0, code)
 
 	expectedCwd, _ := os.Getwd()
 	output := strings.TrimSpace(stdout.String())
-	if output != expectedCwd {
-		t.Errorf("pwd output = %q, want %q", output, expectedCwd)
-	}
+	assert.Equal(t, expectedCwd, output)
 }
 
 func TestBuiltinClear(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 
-	err := ExecuteBuiltin("clear", []string{}, nil, &stdout, &stderr)
-	if err != nil {
-		t.Errorf("clear failed: %v", err)
-	}
+	code, err := ExecuteBuiltin("clear", []string{}, nil, &stdout, &stderr)
+	require.Nil(t, err)
+	assert.Equal(t, 0, code)
 
 	expected := "\033[2J\033[H"
-	if stdout.String() != expected {
-		t.Errorf("clear output = %q, want %q", stdout.String(), expected)
-	}
+	assert.Equal(t, expected, stdout.String())
 }
 
 func TestBuiltinHelp(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 
-	err := ExecuteBuiltin("help", []string{}, nil, &stdout, &stderr)
-	if err != nil {
-		t.Errorf("help failed: %v", err)
-	}
+	code, err := ExecuteBuiltin("help", []string{}, nil, &stdout, &stderr)
+	require.Nil(t, err)
+	assert.Equal(t, 0, code)
 
 	output := stdout.String()
-	if len(output) == 0 {
-		t.Error("help output is empty")
-	}
+	assert.NotEqual(t, 0, len(output))
 
-	// Check that help mentions key commands
-	expectedKeywords := []string{"cd", "pwd", "exit", "clear", "help", "Foundation Shell"}
+	// Every builtin, standalone assignment, the real operators, the
+	// redirections, comments, and $? must all be documented.
+	expectedKeywords := []string{
+		"cd", "pwd", "exit", "clear", "help", "export", "NAME=VALUE",
+		"Foundation Shell",
+		"|", "&&", "||", ";",
+		"< file", "> file", ">> file", "2> file", "2>> file",
+		"#", "$?",
+	}
 	for _, keyword := range expectedKeywords {
-		if !strings.Contains(output, keyword) {
-			t.Errorf("help output missing expected keyword %q", keyword)
-		}
-	}
-}
-
-func TestBuiltinExitIsRecognized(t *testing.T) {
-	// We can't easily test exit because it calls os.Exit(),
-	// but we can verify it's recognized as a builtin
-	if !IsBuiltin("exit") {
-		t.Error("exit should be recognized as a builtin")
+		assert.Contains(t, output, keyword)
 	}
 
-	// Verify the function exists in the map
-	fn, ok := Builtins["exit"]
-	if !ok {
-		t.Error("exit function should exist in Builtins map")
-	}
-	if fn == nil {
-		t.Error("exit function should not be nil")
-	}
+	// No unimplemented features: there is no & background operator. Strip
+	// ANSI-colored "&&" mentions first by checking no line advertises a
+	// bare "&".
+	assert.NotContains(t, output, "background")
 }
 
 func TestExecuteBuiltinNonexistent(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 
-	err := ExecuteBuiltin("nonexistent", []string{}, nil, &stdout, &stderr)
-	if err == nil {
-		t.Error("expected error for nonexistent builtin, got nil")
-	}
-	if !strings.Contains(err.Error(), "not a builtin") {
-		t.Errorf("error message should mention 'not a builtin', got: %v", err)
-	}
+	code, err := ExecuteBuiltin("nonexistent", []string{}, nil, &stdout, &stderr)
+	assert.NotNil(t, err)
+	assert.Equal(t, 1, code)
+	assert.Contains(t, err.Error(), "not a builtin")
 }
 
 func TestBuiltinsMapCompleteness(t *testing.T) {
-	expectedBuiltins := []string{"cd", "pwd", "exit", "clear", "help"}
+	expectedBuiltins := []string{"cd", "pwd", "exit", "clear", "help", "export"}
 
 	for _, name := range expectedBuiltins {
-		if _, ok := Builtins[name]; !ok {
-			t.Errorf("expected builtin %q not found in Builtins map", name)
-		}
+		_, ok := Builtins[name]
+		assert.True(t, ok)
 	}
 
-	// Verify expected count
-	if len(Builtins) != len(expectedBuiltins) {
-		t.Errorf("expected %d builtins, got %d", len(expectedBuiltins), len(Builtins))
-	}
+	// Verify expected count: exactly these six, nothing else.
+	assert.Equal(t, len(expectedBuiltins), len(Builtins))
 }

@@ -1,11 +1,13 @@
-// Package expander provides shell-style expansion for tilde and environment variables.
+// Package expander provides shell-style expansion for tilde, environment
+// variables, and command substitution.
 package expander
 
 import (
-	"errors"
 	"os"
+	"strconv"
 	"strings"
-	"unicode"
+
+	"foundation-shell/internal/lexer"
 )
 
 // SubshellExecutor is an interface for executing subshell commands.
@@ -46,10 +48,16 @@ func ExpandTilde(token string) string {
 }
 
 // ExpandEnvironment expands environment variables in a token.
-// Supports both $VAR and ${VAR} syntax.
+// Supports both $VAR and ${VAR} syntax; $? expands to 0.
 // Escaped dollars (marked with \x01$) are converted to literal $ without expansion.
 // Non-existent variables expand to empty string.
 func ExpandEnvironment(token string) string {
+	return expandVariables(token, nil)
+}
+
+// expandVariables is ExpandEnvironment with an injectable exit-status
+// source for $?: nil means 0.
+func expandVariables(token string, lastStatus func() int) string {
 	if !strings.Contains(token, "$") {
 		return token
 	}
@@ -82,6 +90,18 @@ func ExpandEnvironment(token string) string {
 		}
 
 		next := token[i+1]
+
+		// $? expands to the exit status of the most recent command. Other
+		// special parameters ($$, $!, $1, ...) stay literal.
+		if next == '?' {
+			status := 0
+			if lastStatus != nil {
+				status = lastStatus()
+			}
+			result.WriteString(strconv.Itoa(status))
+			i += 2
+			continue
+		}
 
 		// Handle ${VAR} syntax
 		if next == '{' {
@@ -136,10 +156,12 @@ func isVarStartChar(c byte) bool {
 	return c == '_' || (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')
 }
 
-// isVarChar returns true if c can be part of a variable name (alphanumeric or underscore).
+// isVarChar returns true if c can be part of a variable name: ASCII
+// [A-Za-z0-9_] bytes only. Treating raw bytes with unicode.IsLetter would
+// pull UTF-8 lead/continuation bytes (>= 0x80) into the name byte by byte,
+// so a multibyte sequence like é must instead end the name.
 func isVarChar(c byte) bool {
-	r := rune(c)
-	return c == '_' || unicode.IsLetter(r) || unicode.IsDigit(r)
+	return c == '_' || (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9')
 }
 
 // Expand performs full expansion on a token.
@@ -159,149 +181,56 @@ func Expand(token string, wasSingleQuoted bool) string {
 	return result
 }
 
-// ExpandCommandSubstitution expands $(...) and `...` command substitutions in a token.
-// It processes innermost substitutions first to handle nesting.
-// Trailing newlines are trimmed from command output (standard shell behavior).
-func ExpandCommandSubstitution(token string, executor SubshellExecutor) (string, error) {
-	if executor == nil {
-		return "", errors.New("executor cannot be nil")
+// Options configures ExpandToken.
+type Options struct {
+	// Executor runs command-substitution bodies. When nil, substitution
+	// spans are left verbatim (no execution and no expansion of body text),
+	// matching Parse without an executor.
+	Executor SubshellExecutor
+	// LastStatus reports the exit status of the most recent command for $?
+	// expansion. When nil, $? expands to 0.
+	LastStatus func() int
+}
+
+// ExpandToken expands a value token's content in a single left-to-right
+// pass. The literal text between substitution spans is variable-expanded;
+// each TOP-LEVEL command-substitution span ($(...) or `...`, located with
+// the lexer's own quote-aware scan) is executed via opts.Executor and its
+// output -- with trailing newlines trimmed -- is spliced in verbatim.
+//
+// Spliced output and substitution bodies are never re-scanned: a
+// substitution appearing in a command's OUTPUT stays literal text, and
+// nesting inside a body is handled recursively when the executor re-enters
+// the parser with the body. Escape-marked $ and ` characters (from \$ and
+// \`) never start a span and are left for StripEscapeMarkers.
+func ExpandToken(content string, opts Options) (string, error) {
+	spans, err := lexer.FindSubstitutionSpans(content)
+	if err != nil {
+		return "", err
+	}
+	if len(spans) == 0 {
+		return expandVariables(content, opts.LastStatus), nil
 	}
 
-	result := token
-
-	// Keep expanding until no more substitutions are found.
-	// This naturally handles nesting by processing innermost first.
-	for {
-		// Try to find an innermost $(...) or `...` substitution
-		dollarStart, dollarEnd, dollarCmd := findInnermostDollarParen(result)
-		backtickStart, backtickEnd, backtickCmd := findInnermostBacktick(result)
-
-		// If no substitutions found, we're done
-		if dollarStart == -1 && backtickStart == -1 {
-			break
-		}
-
-		// Determine which substitution to process (prefer the one that appears first,
-		// or if they're at the same position, prefer $(...) syntax)
-		var start, end int
-		var cmd string
-
-		if dollarStart == -1 {
-			start, end, cmd = backtickStart, backtickEnd, backtickCmd
-		} else if backtickStart == -1 {
-			start, end, cmd = dollarStart, dollarEnd, dollarCmd
-		} else if dollarStart <= backtickStart {
-			start, end, cmd = dollarStart, dollarEnd, dollarCmd
+	runes := []rune(content)
+	var result strings.Builder
+	prev := 0
+	for _, span := range spans {
+		result.WriteString(expandVariables(string(runes[prev:span.Start]), opts.LastStatus))
+		if opts.Executor == nil {
+			// No executor: the span stays verbatim, body text untouched.
+			result.WriteString(string(runes[span.Start:span.End]))
 		} else {
-			start, end, cmd = backtickStart, backtickEnd, backtickCmd
-		}
-
-		// Execute the command
-		output, _, err := executor.Execute(cmd)
-		if err != nil {
-			return "", err
-		}
-
-		// Trim trailing newlines (standard shell behavior)
-		output = strings.TrimRight(output, "\n")
-
-		// Replace the substitution with the output
-		result = result[:start] + output + result[end:]
-	}
-
-	return result, nil
-}
-
-// findInnermostDollarParen finds the innermost $(...) substitution.
-// Returns the start index (at $), end index (after closing paren), and the command inside.
-// Returns -1, -1, "" if no substitution is found.
-func findInnermostDollarParen(s string) (start, end int, cmd string) {
-	// Find all $( positions and track parenthesis depth to find innermost
-	bestStart := -1
-	bestEnd := -1
-	bestCmd := ""
-
-	i := 0
-	for i < len(s)-1 {
-		if s[i] == '$' && s[i+1] == '(' {
-			// Found a $( - now find its matching )
-			parenStart := i + 2
-			matchEnd := findMatchingParen(s, parenStart)
-			if matchEnd != -1 {
-				innerCmd := s[parenStart:matchEnd]
-				// Check if this command contains no further $( - making it innermost
-				if !strings.Contains(innerCmd, "$(") {
-					// This is an innermost substitution
-					bestStart = i
-					bestEnd = matchEnd + 1
-					bestCmd = innerCmd
-					break
-				}
+			output, _, err := opts.Executor.Execute(span.Body)
+			if err != nil {
+				return "", err
 			}
-			i++
-		} else {
-			i++
+			// Trim trailing newlines (standard shell behavior). The output
+			// is spliced verbatim and scanning continues AFTER it.
+			result.WriteString(strings.TrimRight(output, "\n"))
 		}
+		prev = span.End
 	}
-
-	return bestStart, bestEnd, bestCmd
-}
-
-// findMatchingParen finds the closing parenthesis matching an opening paren.
-// startIdx should be the index right after the opening paren.
-// Returns the index of the closing paren, or -1 if not found.
-func findMatchingParen(s string, startIdx int) int {
-	depth := 1
-	for i := startIdx; i < len(s); i++ {
-		switch s[i] {
-		case '(':
-			depth++
-		case ')':
-			depth--
-			if depth == 0 {
-				return i
-			}
-		}
-	}
-	return -1
-}
-
-// findInnermostBacktick finds the innermost `...` substitution.
-// Returns the start index (at first backtick), end index (after closing backtick), and the command inside.
-// Returns -1, -1, "" if no substitution is found.
-func findInnermostBacktick(s string) (start, end int, cmd string) {
-	// For backticks, we need to find pairs. Nested backticks are tricky in real shells,
-	// but we'll implement a simple version: find the first backtick, then find its pair.
-	// For nested backticks like `echo `date``, we process innermost first.
-
-	backticks := []int{}
-	for i := 0; i < len(s); i++ {
-		if s[i] == '`' {
-			backticks = append(backticks, i)
-		}
-	}
-
-	// Need at least 2 backticks for a substitution
-	if len(backticks) < 2 {
-		return -1, -1, ""
-	}
-
-	// For innermost-first processing with backticks:
-	// If we have `echo `date``, we want to find the innermost pair first.
-	// We'll use a simple heuristic: find the shortest span between consecutive backticks
-	// that doesn't contain other backticks.
-
-	for i := 0; i < len(backticks)-1; i++ {
-		startPos := backticks[i]
-		endPos := backticks[i+1]
-		innerCmd := s[startPos+1 : endPos]
-
-		// Check if this span contains no backticks - making it innermost
-		if !strings.Contains(innerCmd, "`") {
-			return startPos, endPos + 1, innerCmd
-		}
-	}
-
-	// Fallback: use first and second backtick
-	return backticks[0], backticks[1] + 1, s[backticks[0]+1 : backticks[1]]
+	result.WriteString(expandVariables(string(runes[prev:]), opts.LastStatus))
+	return result.String(), nil
 }

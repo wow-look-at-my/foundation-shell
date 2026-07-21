@@ -4,50 +4,74 @@ on:
   push:
   workflow_dispatch:
 
+# go-toolchain's autorelease (on by default) publishes branch builds to
+# buildhost; it verifies up front that the workflow grants id-token: write
+# (OIDC for buildhost auth) and actions: read (artifact download) and fails
+# the build if either is missing.
+permissions:
+  id-token: write
+  contents: read
+  actions: read
+
 jobs:
-  build-test-benchmark:
-    runs-on: self-hosted
-
-    defaults:
-      run:
-        working-directory: go
-
+  go:
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      # The Go module lives in src/, not the repo root. go-toolchain's matrix
+      # command reads go.mod from its working directory (no module
+      # auto-discovery on this path), builds into <working-directory>/build/,
+      # and the action uploads that same directory as the artifact.
+      - uses: wow-look-at-my/go-toolchain@v1
+        with:
+          working-directory: src
 
+  bats:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install just
+        run: curl -fsSL https://github.com/casey/just/releases/download/1.56.0/just-1.56.0-x86_64-unknown-linux-musl.tar.gz | sudo tar -xz -C /usr/local/bin just
+      - name: Install bats
+        run: sudo apt-get update && sudo apt-get install -y bats
+      - run: just build
+      - run: bats tests/
+
+  benchmark:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version-file: go/go.mod
-
-      - name: Build
+          go-version-file: src/go.mod
+      - name: Build shell binaries
+        working-directory: src
         run: |
-          mkdir -p build
-          go build -o build/fsh-repl ./cmd/fsh-repl
-          go build -o build/fsh ./cmd/fsh
-          go build -o build/fsh-exec ./cmd/fsh-exec
-          go build -o build/bench ./cmd/bench
-
-      - name: Test
-        run: go test -v -race ./...
-
+          mkdir -p ../build
+          go build -o ../build/fsh-repl ./cmd/fsh-repl
+          go build -o ../build/fsh ./cmd/fsh
+          go build -o ../build/fsh-exec ./cmd/fsh-exec
+      - name: Build bench tool
+        working-directory: go/cmd/bench
+        run: |
+          go mod init bench
+          go build -o ../../../build/bench .
       - name: Install benchmark dependencies
         run: |
-          command -v zsh || brew install zsh
-          command -v hyperfine || brew install hyperfine
-
+          sudo apt-get update
+          sudo apt-get install -y zsh hyperfine
       - name: Run benchmarks
         run: ./build/bench -fsh ./build/fsh-exec -warmup 5 -runs 20 | tee benchmark-results.md
-
       - name: Write benchmark results to summary
         run: cat benchmark-results.md >> $GITHUB_STEP_SUMMARY
-
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: build-artifacts
+          name: benchmark-results
           path: |
-            go/build/fsh-repl
-            go/build/fsh
-            go/build/fsh-exec
-            go/benchmark-results.md
+            build/fsh-repl
+            build/fsh
+            build/fsh-exec
+            build/bench
+            benchmark-results.md

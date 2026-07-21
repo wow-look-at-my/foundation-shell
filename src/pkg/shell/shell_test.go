@@ -3,6 +3,8 @@ package shell
 import (
 	"bytes"
 	"context"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -39,32 +41,21 @@ func assertDiagnostic(t *testing.T, output, inputLine, expectedMessage string) {
 			break
 		}
 	}
-	if inputLineIdx == -1 {
-		t.Errorf("diagnostic output missing input line %q\ngot:\n%s", inputLine, output)
-		return
-	}
+	assert.NotEqual(t, -1, inputLineIdx)
 
 	// Next line should be caret markers
-	if inputLineIdx+1 >= len(lines) {
-		t.Errorf("diagnostic output missing caret line after input\ngot:\n%s", output)
-		return
-	}
+	assert.Less(t, inputLineIdx+1, len(lines))
+
 	caretLine := lines[inputLineIdx+1]
-	if !regexp.MustCompile(`^\s*\^+$`).MatchString(caretLine) {
-		t.Errorf("diagnostic caret line should be spaces and ^ only, got %q\ngot:\n%s", caretLine, output)
-		return
-	}
+	assert.True(t, regexp.MustCompile(`^\s*\^+$`).MatchString(caretLine))
 
 	// Next line should be "error: <message>"
-	if inputLineIdx+2 >= len(lines) {
-		t.Errorf("diagnostic output missing error message line\ngot:\n%s", output)
-		return
-	}
+	assert.Less(t, inputLineIdx+2, len(lines))
+
 	errorLine := lines[inputLineIdx+2]
 	expectedPrefix := "error: " + expectedMessage
-	if errorLine != expectedPrefix {
-		t.Errorf("diagnostic error message mismatch\nexpected: %q\ngot: %q", expectedPrefix, errorLine)
-	}
+	assert.Equal(t, expectedPrefix, errorLine)
+
 }
 
 func TestRun_SimpleCommand(t *testing.T) {
@@ -77,17 +68,12 @@ func TestRun_SimpleCommand(t *testing.T) {
 
 	exitCode := sh.Run(ctx)
 
-	if exitCode != 0 {
-		t.Errorf("expected exit code 0, got %d", exitCode)
-	}
+	assert.Equal(t, 0, exitCode)
 
-	if !strings.Contains(stdout.String(), "hello") {
-		t.Errorf("expected output to contain 'hello', got %q", stdout.String())
-	}
+	assert.Contains(t, stdout.String(), "hello")
 
-	if stderr.Len() > 0 {
-		t.Errorf("expected no stderr, got %q", stderr.String())
-	}
+	assert.LessOrEqual(t, stderr.Len(), 0)
+
 }
 
 func TestRun_Pipeline(t *testing.T) {
@@ -100,19 +86,19 @@ func TestRun_Pipeline(t *testing.T) {
 
 	exitCode := sh.Run(ctx)
 
-	if exitCode != 0 {
-		t.Errorf("expected exit code 0, got %d", exitCode)
-	}
+	assert.Equal(t, 0, exitCode)
 
 	output := strings.TrimSpace(stdout.String())
-	if output != "HELLO WORLD" {
-		t.Errorf("expected 'HELLO WORLD', got %q", output)
-	}
+	assert.Equal(t, "HELLO WORLD", output)
+
 }
 
-func TestRun_ParseErrorGraceful(t *testing.T) {
-	// Input with parse error followed by valid command
-	stdin := strings.NewReader("|\necho recovered\n")
+func TestRun_ParseErrorRejectsWholeInput(t *testing.T) {
+	// Non-interactive mode parses ALL of stdin as ONE input: a parse error
+	// anywhere rejects the whole input — nothing executes, the diagnostic
+	// goes to stderr, and the status is 1 (execution.md §Non-Interactive
+	// Mode). This replaces the old line-by-line recovery semantics.
+	stdin := strings.NewReader("echo before\n| bad\necho after\n")
 	stdout := &bytes.Buffer{}
 	stderr := &bytes.Buffer{}
 
@@ -121,18 +107,14 @@ func TestRun_ParseErrorGraceful(t *testing.T) {
 
 	exitCode := sh.Run(ctx)
 
-	// Should continue after parse error
-	if !strings.Contains(stdout.String(), "recovered") {
-		t.Errorf("expected output to contain 'recovered', got %q", stdout.String())
-	}
+	// NOTHING executes — not even the valid commands before/after the bad
+	// line.
+	assert.Empty(t, stdout.String())
 
-	// Should report parse error to stderr with exact diagnostic format
-	assertDiagnostic(t, stderr.String(), "|", "unexpected operator at end")
+	// The diagnostic identifies the offending construct.
+	assert.Contains(t, stderr.String(), "error:")
 
-	// Last command succeeded, so exit code should be 0
-	if exitCode != 0 {
-		t.Errorf("expected exit code 0 after recovery, got %d", exitCode)
-	}
+	assert.Equal(t, 1, exitCode)
 }
 
 func TestRunCommand_SingleCommand(t *testing.T) {
@@ -144,13 +126,10 @@ func TestRunCommand_SingleCommand(t *testing.T) {
 
 	exitCode := sh.RunCommand(ctx, "echo test")
 
-	if exitCode != 0 {
-		t.Errorf("expected exit code 0, got %d", exitCode)
-	}
+	assert.Equal(t, 0, exitCode)
 
-	if !strings.Contains(stdout.String(), "test") {
-		t.Errorf("expected output to contain 'test', got %q", stdout.String())
-	}
+	assert.Contains(t, stdout.String(), "test")
+
 }
 
 func TestRunCommand_EmptyCommand(t *testing.T) {
@@ -162,9 +141,8 @@ func TestRunCommand_EmptyCommand(t *testing.T) {
 
 	exitCode := sh.RunCommand(ctx, "")
 
-	if exitCode != 0 {
-		t.Errorf("expected exit code 0 for empty command, got %d", exitCode)
-	}
+	assert.Equal(t, 0, exitCode)
+
 }
 
 func TestRunCommand_FailedCommand(t *testing.T) {
@@ -176,9 +154,8 @@ func TestRunCommand_FailedCommand(t *testing.T) {
 
 	exitCode := sh.RunCommand(ctx, "false")
 
-	if exitCode == 0 {
-		t.Errorf("expected non-zero exit code, got %d", exitCode)
-	}
+	assert.NotEqual(t, 0, exitCode)
+
 }
 
 func TestRunScript(t *testing.T) {
@@ -187,9 +164,7 @@ func TestRunScript(t *testing.T) {
 	scriptPath := filepath.Join(tmpDir, "test.sh")
 
 	scriptContent := "echo line1\necho line2\n"
-	if err := os.WriteFile(scriptPath, []byte(scriptContent), 0644); err != nil {
-		t.Fatalf("failed to create script file: %v", err)
-	}
+	require.NoError(t, os.WriteFile(scriptPath, []byte(scriptContent), 0644))
 
 	stdout := &bytes.Buffer{}
 	stderr := &bytes.Buffer{}
@@ -199,17 +174,13 @@ func TestRunScript(t *testing.T) {
 
 	exitCode := sh.RunScript(ctx, scriptPath)
 
-	if exitCode != 0 {
-		t.Errorf("expected exit code 0, got %d", exitCode)
-	}
+	assert.Equal(t, 0, exitCode)
 
 	output := stdout.String()
-	if !strings.Contains(output, "line1") {
-		t.Errorf("expected output to contain 'line1', got %q", output)
-	}
-	if !strings.Contains(output, "line2") {
-		t.Errorf("expected output to contain 'line2', got %q", output)
-	}
+	assert.Contains(t, output, "line1")
+
+	assert.Contains(t, output, "line2")
+
 }
 
 func TestRunScript_NonexistentFile(t *testing.T) {
@@ -221,13 +192,10 @@ func TestRunScript_NonexistentFile(t *testing.T) {
 
 	exitCode := sh.RunScript(ctx, "/nonexistent/path/to/script.sh")
 
-	if exitCode != 1 {
-		t.Errorf("expected exit code 1 for nonexistent file, got %d", exitCode)
-	}
+	assert.Equal(t, 1, exitCode)
 
-	if !strings.Contains(stderr.String(), "cannot open script") {
-		t.Errorf("expected error message about opening script, got %q", stderr.String())
-	}
+	assert.Contains(t, stderr.String(), "cannot open script")
+
 }
 
 func TestExitCodePropagation(t *testing.T) {
@@ -239,25 +207,18 @@ func TestExitCodePropagation(t *testing.T) {
 
 	// Run a failing command
 	exitCode := sh.RunCommand(ctx, "false")
-	if exitCode == 0 {
-		t.Errorf("expected non-zero exit code from 'false', got %d", exitCode)
-	}
+	assert.NotEqual(t, 0, exitCode)
 
 	// Check that lastExitCode was updated
-	if sh.lastExitCode == 0 {
-		t.Errorf("expected lastExitCode to be non-zero")
-	}
+	assert.NotEqual(t, 0, sh.lastExitCode)
 
 	// Run a successful command
 	exitCode = sh.RunCommand(ctx, "true")
-	if exitCode != 0 {
-		t.Errorf("expected exit code 0 from 'true', got %d", exitCode)
-	}
+	assert.Equal(t, 0, exitCode)
 
 	// Check that lastExitCode was updated
-	if sh.lastExitCode != 0 {
-		t.Errorf("expected lastExitCode to be 0, got %d", sh.lastExitCode)
-	}
+	assert.Equal(t, 0, sh.lastExitCode)
+
 }
 
 func TestEmptyInputHandling(t *testing.T) {
@@ -271,13 +232,10 @@ func TestEmptyInputHandling(t *testing.T) {
 
 	exitCode := sh.Run(ctx)
 
-	if exitCode != 0 {
-		t.Errorf("expected exit code 0, got %d", exitCode)
-	}
+	assert.Equal(t, 0, exitCode)
 
-	if !strings.Contains(stdout.String(), "done") {
-		t.Errorf("expected output to contain 'done', got %q", stdout.String())
-	}
+	assert.Contains(t, stdout.String(), "done")
+
 }
 
 func TestEOFHandling(t *testing.T) {
@@ -292,13 +250,10 @@ func TestEOFHandling(t *testing.T) {
 	exitCode := sh.Run(ctx)
 
 	// Should exit gracefully with code 0
-	if exitCode != 0 {
-		t.Errorf("expected exit code 0 on EOF, got %d", exitCode)
-	}
+	assert.Equal(t, 0, exitCode)
 
-	if stderr.Len() > 0 {
-		t.Errorf("expected no stderr on EOF, got %q", stderr.String())
-	}
+	assert.LessOrEqual(t, stderr.Len(), 0)
+
 }
 
 func TestInteractiveMode_WelcomeMessage(t *testing.T) {
@@ -311,18 +266,16 @@ func TestInteractiveMode_WelcomeMessage(t *testing.T) {
 
 	sh.Run(ctx)
 
-	if !strings.Contains(stdout.String(), "Welcome to Foundation Shell") {
-		t.Errorf("expected welcome message in interactive mode, got %q", stdout.String())
-	}
+	assert.Contains(t, stdout.String(), "Welcome to Foundation Shell")
+
 }
 
 func TestInteractiveMode_Prompt(t *testing.T) {
 	// Note: readline requires io.ReadCloser for stdin, so we use os.Pipe
 	// to create a proper stdin that readline can use
 	r, w, err := os.Pipe()
-	if err != nil {
-		t.Fatalf("failed to create pipe: %v", err)
-	}
+	require.Nil(t, err)
+
 	defer r.Close()
 
 	stdout := &bytes.Buffer{}
@@ -341,56 +294,45 @@ func TestInteractiveMode_Prompt(t *testing.T) {
 
 	output := stdout.String()
 	// Should contain welcome message and command output
-	if !strings.Contains(output, "Welcome to Foundation Shell") {
-		t.Errorf("expected welcome message in output, got %q", output)
-	}
-	if !strings.Contains(output, "test") {
-		t.Errorf("expected 'test' in output, got %q", output)
-	}
+	assert.Contains(t, output, "Welcome to Foundation Shell")
+
+	assert.Contains(t, output, "test")
+
 }
 
 func TestGetPrompt_SuccessColor(t *testing.T) {
 	sh := &Shell{lastExitCode: 0}
 	prompt := sh.getPrompt()
 
-	if !strings.Contains(prompt, promptSuccess) {
-		t.Errorf("expected success styling in prompt, got %q", prompt)
-	}
-	if !strings.Contains(prompt, "$ ") {
-		t.Errorf("expected '$ ' in prompt, got %q", prompt)
-	}
+	assert.Contains(t, prompt, promptSuccess)
+
+	assert.Contains(t, prompt, "$ ")
+
 }
 
 func TestGetPrompt_FailureColor(t *testing.T) {
 	sh := &Shell{lastExitCode: 1}
 	prompt := sh.getPrompt()
 
-	if !strings.Contains(prompt, promptFailure) {
-		t.Errorf("expected failure styling in prompt, got %q", prompt)
-	}
-	if !strings.Contains(prompt, "$ ") {
-		t.Errorf("expected '$ ' in prompt, got %q", prompt)
-	}
+	assert.Contains(t, prompt, promptFailure)
+
+	assert.Contains(t, prompt, "$ ")
+
 }
 
 func TestNew(t *testing.T) {
 	sh := New(true)
 
-	if sh.stdin != os.Stdin {
-		t.Error("expected stdin to be os.Stdin")
-	}
-	if sh.stdout != os.Stdout {
-		t.Error("expected stdout to be os.Stdout")
-	}
-	if sh.stderr != os.Stderr {
-		t.Error("expected stderr to be os.Stderr")
-	}
-	if !sh.isInteractive {
-		t.Error("expected isInteractive to be true")
-	}
-	if sh.lastExitCode != 0 {
-		t.Errorf("expected lastExitCode to be 0, got %d", sh.lastExitCode)
-	}
+	assert.Equal(t, os.Stdin, sh.stdin)
+
+	assert.Equal(t, os.Stdout, sh.stdout)
+
+	assert.Equal(t, os.Stderr, sh.stderr)
+
+	assert.True(t, sh.isInteractive)
+
+	assert.Equal(t, 0, sh.lastExitCode)
+
 }
 
 func TestNewWithIO(t *testing.T) {
@@ -400,26 +342,21 @@ func TestNewWithIO(t *testing.T) {
 
 	sh := NewWithIO(stdin, stdout, stderr, false)
 
-	if sh.stdin != stdin {
-		t.Error("expected stdin to match")
-	}
-	if sh.stdout != stdout {
-		t.Error("expected stdout to match")
-	}
-	if sh.stderr != stderr {
-		t.Error("expected stderr to match")
-	}
-	if sh.isInteractive {
-		t.Error("expected isInteractive to be false")
-	}
+	assert.Equal(t, stdin, sh.stdin)
+
+	assert.Equal(t, stdout, sh.stdout)
+
+	assert.Equal(t, stderr, sh.stderr)
+
+	assert.False(t, sh.isInteractive)
+
 }
 
 func TestIsTerminal(t *testing.T) {
 	// With a buffer (not a terminal)
 	sh := NewWithIO(strings.NewReader(""), &bytes.Buffer{}, &bytes.Buffer{}, false)
-	if sh.IsTerminal() {
-		t.Error("expected IsTerminal to return false for non-file stdin")
-	}
+	assert.False(t, sh.IsTerminal())
+
 }
 
 func TestContextCancellation(t *testing.T) {
@@ -468,20 +405,15 @@ func TestMultipleCommands(t *testing.T) {
 
 	exitCode := sh.Run(ctx)
 
-	if exitCode != 0 {
-		t.Errorf("expected exit code 0, got %d", exitCode)
-	}
+	assert.Equal(t, 0, exitCode)
 
 	output := stdout.String()
-	if !strings.Contains(output, "first") {
-		t.Errorf("expected output to contain 'first', got %q", output)
-	}
-	if !strings.Contains(output, "second") {
-		t.Errorf("expected output to contain 'second', got %q", output)
-	}
-	if !strings.Contains(output, "third") {
-		t.Errorf("expected output to contain 'third', got %q", output)
-	}
+	assert.Contains(t, output, "first")
+
+	assert.Contains(t, output, "second")
+
+	assert.Contains(t, output, "third")
+
 }
 
 func TestRunCommand_ParseError(t *testing.T) {
@@ -493,12 +425,10 @@ func TestRunCommand_ParseError(t *testing.T) {
 
 	exitCode := sh.RunCommand(ctx, "|")
 
-	if exitCode != 1 {
-		t.Errorf("expected exit code 1 for parse error, got %d", exitCode)
-	}
+	assert.Equal(t, 1, exitCode)
 
 	// Should report parse error to stderr with exact diagnostic format
-	assertDiagnostic(t, stderr.String(), "|", "unexpected operator at end")
+	assertDiagnostic(t, stderr.String(), "|", "unexpected operator at start: |")
 }
 
 func TestCommandSubstitution(t *testing.T) {
@@ -545,14 +475,11 @@ func TestCommandSubstitution(t *testing.T) {
 
 			exitCode := sh.Run(ctx)
 
-			if exitCode != 0 {
-				t.Errorf("expected exit code 0, got %d, stderr: %s", exitCode, stderr.String())
-			}
+			assert.Equal(t, 0, exitCode)
 
 			output := stdout.String()
-			if !strings.Contains(output, tt.contains) {
-				t.Errorf("expected output to contain %q, got %q", tt.contains, output)
-			}
+			assert.Contains(t, output, tt.contains)
+
 		})
 	}
 }
@@ -598,13 +525,11 @@ func TestLogicalOperators(t *testing.T) {
 
 			output := stdout.String()
 			if tt.expected == "" {
-				if strings.Contains(output, "should_not_appear") {
-					t.Errorf("expected output to NOT contain 'should_not_appear', got %q", output)
-				}
+				assert.NotContains(t, output, "should_not_appear")
+
 			} else {
-				if !strings.Contains(output, tt.expected) {
-					t.Errorf("expected output to contain %q, got %q", tt.expected, output)
-				}
+				assert.Contains(t, output, tt.expected)
+
 			}
 		})
 	}

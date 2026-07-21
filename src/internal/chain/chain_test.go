@@ -9,6 +9,7 @@ import (
 
 	"foundation-shell/internal/token"
 	"foundation-shell/pkg/parser"
+	"github.com/stretchr/testify/assert"
 )
 
 // executeWithCapture runs Execute but captures stdout
@@ -39,22 +40,17 @@ func TestEmptyChain(t *testing.T) {
 
 	// nil chain
 	exitCode, err := Execute(ctx, nil)
-	if err != nil {
-		t.Errorf("Execute(nil) error = %v, want nil", err)
-	}
-	if exitCode != 0 {
-		t.Errorf("Execute(nil) exitCode = %d, want 0", exitCode)
-	}
+	assert.Nil(t, err)
+
+	assert.Equal(t, 0, exitCode)
 
 	// empty commands
 	chain := &parser.Chain{Commands: []*parser.CommandSpec{}}
 	exitCode, err = Execute(ctx, chain)
-	if err != nil {
-		t.Errorf("Execute(empty) error = %v, want nil", err)
-	}
-	if exitCode != 0 {
-		t.Errorf("Execute(empty) exitCode = %d, want 0", exitCode)
-	}
+	assert.Nil(t, err)
+
+	assert.Equal(t, 0, exitCode)
+
 }
 
 func TestSingleCommand(t *testing.T) {
@@ -66,15 +62,12 @@ func TestSingleCommand(t *testing.T) {
 	}
 
 	exitCode, stdout, err := executeWithCapture(ctx, chain)
-	if err != nil {
-		t.Errorf("Execute error = %v, want nil", err)
-	}
-	if exitCode != 0 {
-		t.Errorf("exitCode = %d, want 0", exitCode)
-	}
-	if stdout != "hello\n" {
-		t.Errorf("stdout = %q, want %q", stdout, "hello\n")
-	}
+	assert.Nil(t, err)
+
+	assert.Equal(t, 0, exitCode)
+
+	assert.Equal(t, "hello\n", stdout)
+
 }
 
 func TestPipelineEchoCat(t *testing.T) {
@@ -88,15 +81,12 @@ func TestPipelineEchoCat(t *testing.T) {
 	}
 
 	exitCode, stdout, err := executeWithCapture(ctx, chain)
-	if err != nil {
-		t.Errorf("Execute error = %v, want nil", err)
-	}
-	if exitCode != 0 {
-		t.Errorf("exitCode = %d, want 0", exitCode)
-	}
-	if stdout != "hello\n" {
-		t.Errorf("stdout = %q, want %q", stdout, "hello\n")
-	}
+	assert.Nil(t, err)
+
+	assert.Equal(t, 0, exitCode)
+
+	assert.Equal(t, "hello\n", stdout)
+
 }
 
 func TestPipelineEchoGrep(t *testing.T) {
@@ -110,15 +100,12 @@ func TestPipelineEchoGrep(t *testing.T) {
 	}
 
 	exitCode, stdout, err := executeWithCapture(ctx, chain)
-	if err != nil {
-		t.Errorf("Execute error = %v, want nil", err)
-	}
-	if exitCode != 0 {
-		t.Errorf("exitCode = %d, want 0", exitCode)
-	}
-	if stdout != "b\n" {
-		t.Errorf("stdout = %q, want %q", stdout, "b\n")
-	}
+	assert.Nil(t, err)
+
+	assert.Equal(t, 0, exitCode)
+
+	assert.Equal(t, "b\n", stdout)
+
 }
 
 func TestLongPipeline(t *testing.T) {
@@ -134,15 +121,12 @@ func TestLongPipeline(t *testing.T) {
 	}
 
 	exitCode, stdout, err := executeWithCapture(ctx, chain)
-	if err != nil {
-		t.Errorf("Execute error = %v, want nil", err)
-	}
-	if exitCode != 0 {
-		t.Errorf("exitCode = %d, want 0", exitCode)
-	}
-	if stdout != "test\n" {
-		t.Errorf("stdout = %q, want %q", stdout, "test\n")
-	}
+	assert.Nil(t, err)
+
+	assert.Equal(t, 0, exitCode)
+
+	assert.Equal(t, "test\n", stdout)
+
 }
 
 func TestAndOperatorSuccess(t *testing.T) {
@@ -156,15 +140,12 @@ func TestAndOperatorSuccess(t *testing.T) {
 	}
 
 	exitCode, stdout, err := executeWithCapture(ctx, chain)
-	if err != nil {
-		t.Errorf("Execute error = %v, want nil", err)
-	}
-	if exitCode != 0 {
-		t.Errorf("exitCode = %d, want 0", exitCode)
-	}
-	if stdout != "yes\n" {
-		t.Errorf("stdout = %q, want %q", stdout, "yes\n")
-	}
+	assert.Nil(t, err)
+
+	assert.Equal(t, 0, exitCode)
+
+	assert.Equal(t, "yes\n", stdout)
+
 }
 
 func TestAndOperatorShortCircuit(t *testing.T) {
@@ -178,15 +159,12 @@ func TestAndOperatorShortCircuit(t *testing.T) {
 	}
 
 	exitCode, stdout, err := executeWithCapture(ctx, chain)
-	if err != nil {
-		t.Errorf("Execute error = %v, want nil", err)
-	}
-	if exitCode != 1 {
-		t.Errorf("exitCode = %d, want 1", exitCode)
-	}
-	if stdout != "" {
-		t.Errorf("stdout = %q, want empty", stdout)
-	}
+	assert.Nil(t, err)
+
+	assert.Equal(t, 1, exitCode)
+
+	assert.Equal(t, "", stdout)
+
 }
 
 func TestOrOperatorSuccess(t *testing.T) {
@@ -200,15 +178,12 @@ func TestOrOperatorSuccess(t *testing.T) {
 	}
 
 	exitCode, stdout, err := executeWithCapture(ctx, chain)
-	if err != nil {
-		t.Errorf("Execute error = %v, want nil", err)
-	}
-	if exitCode != 0 {
-		t.Errorf("exitCode = %d, want 0", exitCode)
-	}
-	if stdout != "yes\n" {
-		t.Errorf("stdout = %q, want %q", stdout, "yes\n")
-	}
+	assert.Nil(t, err)
+
+	assert.Equal(t, 0, exitCode)
+
+	assert.Equal(t, "yes\n", stdout)
+
 }
 
 func TestOrOperatorShortCircuit(t *testing.T) {
@@ -222,15 +197,12 @@ func TestOrOperatorShortCircuit(t *testing.T) {
 	}
 
 	exitCode, stdout, err := executeWithCapture(ctx, chain)
-	if err != nil {
-		t.Errorf("Execute error = %v, want nil", err)
-	}
-	if exitCode != 0 {
-		t.Errorf("exitCode = %d, want 0", exitCode)
-	}
-	if stdout != "" {
-		t.Errorf("stdout = %q, want empty", stdout)
-	}
+	assert.Nil(t, err)
+
+	assert.Equal(t, 0, exitCode)
+
+	assert.Equal(t, "", stdout)
+
 }
 
 func TestMixedOperators(t *testing.T) {
@@ -246,15 +218,12 @@ func TestMixedOperators(t *testing.T) {
 	}
 
 	exitCode, stdout, err := executeWithCapture(ctx, chain)
-	if err != nil {
-		t.Errorf("Execute error = %v, want nil", err)
-	}
-	if exitCode != 0 {
-		t.Errorf("exitCode = %d, want 0", exitCode)
-	}
-	if stdout != "one\ntwo\n" {
-		t.Errorf("stdout = %q, want %q", stdout, "one\ntwo\n")
-	}
+	assert.Nil(t, err)
+
+	assert.Equal(t, 0, exitCode)
+
+	assert.Equal(t, "one\ntwo\n", stdout)
+
 }
 
 func TestPipelineWithAnd(t *testing.T) {
@@ -270,15 +239,11 @@ func TestPipelineWithAnd(t *testing.T) {
 	}
 
 	exitCode, stdout, err := executeWithCapture(ctx, chain)
-	if err != nil {
-		t.Errorf("Execute error = %v, want nil", err)
-	}
-	if exitCode != 0 {
-		t.Errorf("exitCode = %d, want 0", exitCode)
-	}
-	// Output should be "test\n" from grep followed by "found\n" from echo
-	if stdout != "test\nfound\n" {
-		t.Errorf("stdout = %q, want %q", stdout, "test\nfound\n")
-	}
-}
+	assert.Nil(t, err)
 
+	assert.Equal(t, 0, exitCode)
+
+	// Output should be "test\n" from grep followed by "found\n" from echo
+	assert.Equal(t, "test\nfound\n", stdout)
+
+}

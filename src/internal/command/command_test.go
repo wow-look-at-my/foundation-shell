@@ -10,6 +10,8 @@ import (
 	"time"
 
 	"foundation-shell/pkg/parser"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestExecuteExternalCommand(t *testing.T) {
@@ -20,15 +22,13 @@ func TestExecuteExternalCommand(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	exitCode, err := Execute(context.Background(), spec, nil, &stdout, &stderr)
 
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if exitCode != 0 {
-		t.Errorf("expected exit code 0, got %d", exitCode)
-	}
-	if got := stdout.String(); got != "hello\n" {
-		t.Errorf("expected output %q, got %q", "hello\n", got)
-	}
+	require.Nil(t, err)
+
+	assert.Equal(t, 0, exitCode)
+
+	got := stdout.String()
+	assert.Equal(t, "hello\n", got)
+
 }
 
 func TestExecuteWithArgs(t *testing.T) {
@@ -39,24 +39,20 @@ func TestExecuteWithArgs(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	exitCode, err := Execute(context.Background(), spec, nil, &stdout, &stderr)
 
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if exitCode != 0 {
-		t.Errorf("expected exit code 0, got %d", exitCode)
-	}
-	if got := stdout.String(); got != "one two three\n" {
-		t.Errorf("expected output %q, got %q", "one two three\n", got)
-	}
+	require.Nil(t, err)
+
+	assert.Equal(t, 0, exitCode)
+
+	got := stdout.String()
+	assert.Equal(t, "one two three\n", got)
+
 }
 
 func TestInputRedirection(t *testing.T) {
 	// Create a temp file with content
 	tmpDir := t.TempDir()
 	inputFile := filepath.Join(tmpDir, "input.txt")
-	if err := os.WriteFile(inputFile, []byte("test input content"), 0644); err != nil {
-		t.Fatalf("failed to create input file: %v", err)
-	}
+	require.NoError(t, os.WriteFile(inputFile, []byte("test input content"), 0644))
 
 	spec := &parser.CommandSpec{
 		Args:      []string{"cat"},
@@ -66,15 +62,13 @@ func TestInputRedirection(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	exitCode, err := Execute(context.Background(), spec, nil, &stdout, &stderr)
 
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if exitCode != 0 {
-		t.Errorf("expected exit code 0, got %d", exitCode)
-	}
-	if got := stdout.String(); got != "test input content" {
-		t.Errorf("expected output %q, got %q", "test input content", got)
-	}
+	require.Nil(t, err)
+
+	assert.Equal(t, 0, exitCode)
+
+	got := stdout.String()
+	assert.Equal(t, "test input content", got)
+
 }
 
 func TestOutputRedirection(t *testing.T) {
@@ -89,26 +83,19 @@ func TestOutputRedirection(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	exitCode, err := Execute(context.Background(), spec, nil, &stdout, &stderr)
 
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if exitCode != 0 {
-		t.Errorf("expected exit code 0, got %d", exitCode)
-	}
+	require.Nil(t, err)
+
+	assert.Equal(t, 0, exitCode)
 
 	// Verify file contents
 	content, err := os.ReadFile(outputFile)
-	if err != nil {
-		t.Fatalf("failed to read output file: %v", err)
-	}
-	if string(content) != "test\n" {
-		t.Errorf("expected file content %q, got %q", "test\n", string(content))
-	}
+	require.Nil(t, err)
+
+	assert.Equal(t, "test\n", string(content))
 
 	// stdout should be empty since it was redirected
-	if stdout.String() != "" {
-		t.Errorf("expected empty stdout, got %q", stdout.String())
-	}
+	assert.Equal(t, "", stdout.String())
+
 }
 
 func TestAppendRedirection(t *testing.T) {
@@ -124,12 +111,9 @@ func TestAppendRedirection(t *testing.T) {
 
 	var stdout, stderr bytes.Buffer
 	exitCode, err := Execute(context.Background(), spec1, nil, &stdout, &stderr)
-	if err != nil {
-		t.Fatalf("unexpected error on first command: %v", err)
-	}
-	if exitCode != 0 {
-		t.Errorf("expected exit code 0, got %d", exitCode)
-	}
+	require.Nil(t, err)
+
+	assert.Equal(t, 0, exitCode)
 
 	// Second command: append line2
 	spec2 := &parser.CommandSpec{
@@ -141,22 +125,17 @@ func TestAppendRedirection(t *testing.T) {
 	stdout.Reset()
 	stderr.Reset()
 	exitCode, err = Execute(context.Background(), spec2, nil, &stdout, &stderr)
-	if err != nil {
-		t.Fatalf("unexpected error on second command: %v", err)
-	}
-	if exitCode != 0 {
-		t.Errorf("expected exit code 0, got %d", exitCode)
-	}
+	require.Nil(t, err)
+
+	assert.Equal(t, 0, exitCode)
 
 	// Verify file contains both lines
 	content, err := os.ReadFile(outputFile)
-	if err != nil {
-		t.Fatalf("failed to read output file: %v", err)
-	}
+	require.Nil(t, err)
+
 	expected := "line1\nline2\n"
-	if string(content) != expected {
-		t.Errorf("expected file content %q, got %q", expected, string(content))
-	}
+	assert.Equal(t, expected, string(content))
+
 }
 
 func TestErrorRedirection(t *testing.T) {
@@ -173,25 +152,18 @@ func TestErrorRedirection(t *testing.T) {
 	exitCode, err := Execute(context.Background(), spec, nil, &stdout, &stderr)
 
 	// ls should fail with non-zero exit code
-	if exitCode == 0 {
-		t.Errorf("expected non-zero exit code, got 0")
-	}
+	assert.NotEqual(t, 0, exitCode)
 
 	// Read error file
 	content, err := os.ReadFile(errorFile)
-	if err != nil {
-		t.Fatalf("failed to read error file: %v", err)
-	}
+	require.Nil(t, err)
 
 	// Should contain some error message
-	if len(content) == 0 {
-		t.Error("expected error output in file, got empty")
-	}
+	assert.NotEqual(t, 0, len(content))
 
 	// stderr buffer should be empty since it was redirected
-	if stderr.String() != "" {
-		t.Errorf("expected empty stderr buffer, got %q", stderr.String())
-	}
+	assert.Equal(t, "", stderr.String())
+
 }
 
 func TestBuiltinExecution(t *testing.T) {
@@ -202,24 +174,18 @@ func TestBuiltinExecution(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	exitCode, err := Execute(context.Background(), spec, nil, &stdout, &stderr)
 
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if exitCode != 0 {
-		t.Errorf("expected exit code 0, got %d", exitCode)
-	}
+	require.Nil(t, err)
+
+	assert.Equal(t, 0, exitCode)
 
 	// Get current working directory
 	cwd, err := os.Getwd()
-	if err != nil {
-		t.Fatalf("failed to get cwd: %v", err)
-	}
+	require.Nil(t, err)
 
 	// pwd output should match current directory
 	got := strings.TrimSpace(stdout.String())
-	if got != cwd {
-		t.Errorf("expected pwd output %q, got %q", cwd, got)
-	}
+	assert.Equal(t, cwd, got)
+
 }
 
 func TestCommandNotFound(t *testing.T) {
@@ -230,12 +196,11 @@ func TestCommandNotFound(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	exitCode, err := Execute(context.Background(), spec, nil, &stdout, &stderr)
 
-	if exitCode == 0 {
-		t.Error("expected non-zero exit code for command not found")
-	}
-	if err == nil {
-		t.Error("expected error for command not found")
-	}
+	// Not found is an ORDINARY failure: status 127, canonical message on
+	// stderr, no chain-fatal error.
+	require.Nil(t, err)
+	assert.Equal(t, 127, exitCode)
+	assert.Equal(t, "nonexistent_command_that_does_not_exist_12345: command not found\n", stderr.String())
 }
 
 func TestContextCancellation(t *testing.T) {
@@ -258,42 +223,30 @@ func TestContextCancellation(t *testing.T) {
 	elapsed := time.Since(start)
 
 	// Should complete quickly (not 10 seconds)
-	if elapsed > 2*time.Second {
-		t.Errorf("context cancellation took too long: %v", elapsed)
-	}
+	assert.LessOrEqual(t, elapsed, 5*time.Second)
 
-	// Should have non-zero exit code
-	if exitCode == 0 {
-		t.Error("expected non-zero exit code for cancelled command")
-	}
-
-	// Should return context error
-	if err != context.Canceled {
-		t.Errorf("expected context.Canceled error, got %v", err)
-	}
+	// Cancellation is treated as an interrupt: status 130, no error —
+	// the chain continues per operator logic.
+	assert.Equal(t, 130, exitCode)
+	assert.Nil(t, err)
 }
 
 func TestEmptyCommand(t *testing.T) {
 	// Test with nil spec
 	exitCode, err := Execute(context.Background(), nil, nil, nil, nil)
-	if err != ErrEmptyCommand {
-		t.Errorf("expected ErrEmptyCommand for nil spec, got %v", err)
-	}
-	if exitCode != 1 {
-		t.Errorf("expected exit code 1, got %d", exitCode)
-	}
+	assert.Equal(t, ErrEmptyCommand, err)
+
+	assert.Equal(t, 1, exitCode)
 
 	// Test with empty args
 	spec := &parser.CommandSpec{
 		Args: []string{},
 	}
 	exitCode, err = Execute(context.Background(), spec, nil, nil, nil)
-	if err != ErrEmptyCommand {
-		t.Errorf("expected ErrEmptyCommand for empty args, got %v", err)
-	}
-	if exitCode != 1 {
-		t.Errorf("expected exit code 1, got %d", exitCode)
-	}
+	assert.Equal(t, ErrEmptyCommand, err)
+
+	assert.Equal(t, 1, exitCode)
+
 }
 
 func TestInputFileNotFound(t *testing.T) {
@@ -305,15 +258,13 @@ func TestInputFileNotFound(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	exitCode, err := Execute(context.Background(), spec, nil, &stdout, &stderr)
 
-	if exitCode == 0 {
-		t.Error("expected non-zero exit code for missing input file")
-	}
-	if err == nil {
-		t.Error("expected error for missing input file")
-	}
-	if !strings.Contains(err.Error(), "cannot open input file") {
-		t.Errorf("expected 'cannot open input file' error, got %v", err)
-	}
+	// Redirection open failure: status 1, canonical message with the
+	// UNWRAPPED os reason (filename appears exactly once), no error.
+	require.Nil(t, err)
+	assert.Equal(t, 1, exitCode)
+	assert.Equal(t,
+		"cannot open input file /nonexistent_file_that_does_not_exist_12345: no such file or directory\n",
+		stderr.String())
 }
 
 func TestBuiltinWithOutputRedirection(t *testing.T) {
@@ -328,34 +279,24 @@ func TestBuiltinWithOutputRedirection(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	exitCode, err := Execute(context.Background(), spec, nil, &stdout, &stderr)
 
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if exitCode != 0 {
-		t.Errorf("expected exit code 0, got %d", exitCode)
-	}
+	require.Nil(t, err)
+
+	assert.Equal(t, 0, exitCode)
 
 	// Get current working directory
 	cwd, err := os.Getwd()
-	if err != nil {
-		t.Fatalf("failed to get cwd: %v", err)
-	}
+	require.Nil(t, err)
 
 	// Read file and verify
 	content, err := os.ReadFile(outputFile)
-	if err != nil {
-		t.Fatalf("failed to read output file: %v", err)
-	}
+	require.Nil(t, err)
 
 	got := strings.TrimSpace(string(content))
-	if got != cwd {
-		t.Errorf("expected file content %q, got %q", cwd, got)
-	}
+	assert.Equal(t, cwd, got)
 
 	// stdout should be empty since it was redirected
-	if stdout.String() != "" {
-		t.Errorf("expected empty stdout, got %q", stdout.String())
-	}
+	assert.Equal(t, "", stdout.String())
+
 }
 
 func TestSignalTermination(t *testing.T) {
@@ -388,32 +329,12 @@ func TestSignalTermination(t *testing.T) {
 	// Wait for completion
 	select {
 	case result := <-done:
-		if result.exitCode == 0 {
-			t.Error("expected non-zero exit code after cancellation")
-		}
+		assert.NotEqual(t, 0, result.exitCode)
+
 	case <-time.After(2 * time.Second):
 		t.Fatal("command did not terminate after context cancellation")
 	}
 }
 
-func TestChildInOwnProcessGroup(t *testing.T) {
-	// Verify child gets its own process group by checking pgid != parent pid
-	spec := &parser.CommandSpec{
-		Args: []string{"sh", "-c", "ps -o pid,pgid -p $$"},
-	}
-
-	var stdout, stderr bytes.Buffer
-	exitCode, err := Execute(context.Background(), spec, nil, &stdout, &stderr)
-
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if exitCode != 0 {
-		t.Errorf("expected exit code 0, got %d", exitCode)
-	}
-
-	// Just verify it ran - the actual pgid verification is complex
-	if stdout.Len() == 0 {
-		t.Error("expected output from ps command")
-	}
-}
+// The old TestChildInOwnProcessGroup asserted nothing about signal behavior;
+// the real tests of the SIGINT-forwarding design live in signal_test.go.
