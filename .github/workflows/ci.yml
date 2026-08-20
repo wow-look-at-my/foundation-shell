@@ -9,8 +9,9 @@ on:
 # the build if either is missing.
 permissions:
   id-token: write
-  contents: read
+  contents: write
   actions: read
+  checks: read
 
 jobs:
   go:
