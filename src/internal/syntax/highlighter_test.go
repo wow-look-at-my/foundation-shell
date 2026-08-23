@@ -22,18 +22,6 @@ func containsANSICode(output, token, ansiCode string) bool {
 	return matched
 }
 
-// getTokenColor extracts the ANSI color code applied to a token in the output.
-func getTokenColor(output, token string) string {
-	// Find the ANSI code immediately before the token
-	pattern := `(\x1b\[[0-9;]*m)` + regexp.QuoteMeta(token)
-	re := regexp.MustCompile(pattern)
-	matches := re.FindStringSubmatch(output)
-	if len(matches) >= 2 {
-		return matches[1]
-	}
-	return ""
-}
-
 func TestHighlight_BasicCommand(t *testing.T) {
 	h := NewHighlighter(DefaultTheme)
 	output := h.Highlight("echo hello")

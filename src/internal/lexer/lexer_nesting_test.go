@@ -133,7 +133,7 @@ func TestTokenize_NestingPOSIXCompatible(t *testing.T) {
 			input: `echo 'don'\''t'`,
 			expected: []TokenContext{
 				{Content: "echo"},
-				{Content: "don't", WasSingleQuoted: true, WasQuoted: true},
+				{Content: "don't", WasSingleQuoted: true, WasQuoted: true, WasEscaped: true},
 			},
 		},
 		{

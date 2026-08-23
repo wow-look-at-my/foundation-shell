@@ -9,6 +9,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"text/template"
 )
 
 // BuiltinFunc is the signature for builtin command functions.
@@ -166,37 +167,50 @@ func builtinExport(args []string, stdin io.Reader, stdout, stderr io.Writer) (in
 	return status, nil
 }
 
+// helpColors carries the ANSI codes the help document interpolates.
+// H is a section header, C is a command name, R resets the style.
+type helpColors struct{ H, C, R string }
+
+// helpTemplate renders the whole help document in one pass. The document is
+// data, so it lives in a template instead of a run of Fprintf calls.
+var helpTemplate = template.Must(template.New("help").Parse(
+	`{{.H}}Foundation Shell - Available Commands:{{.R}}
+{{.C}}  cd [dir]{{.R}}      - Change directory (no arg: go to home)
+{{.C}}  pwd{{.R}}           - Print working directory
+{{.C}}  exit [code]{{.R}}   - Exit the shell (default: last command's status)
+{{.C}}  clear{{.R}}         - Clear the screen
+{{.C}}  help{{.R}}          - Display this help message
+{{.C}}  export [N=V]{{.R}}  - Set environment variables (no args: print environment)
+{{.C}}  NAME=VALUE{{.R}}    - Standalone assignment: set an environment variable
+
+{{.H}}Operators:{{.R}}
+{{.C}}  |{{.R}}             - Pipe output of one command to another
+{{.C}}  &&{{.R}}            - Run next command only if the previous succeeds
+{{.C}}  ||{{.R}}            - Run next command only if the previous fails
+{{.C}}  ;{{.R}}             - Run commands in sequence unconditionally
+
+{{.H}}Redirections:{{.R}}
+{{.C}}  < file{{.R}}        - Redirect input from file
+{{.C}}  > file{{.R}}        - Redirect output to file
+{{.C}}  >> file{{.R}}       - Append output to file
+{{.C}}  2> file{{.R}}       - Redirect error output to file
+{{.C}}  2>> file{{.R}}      - Append error output to file
+
+{{.H}}Other:{{.R}}
+{{.C}}  # comment{{.R}}     - Rest of the line is ignored
+{{.C}}  $?{{.R}}            - Exit status of the previous command
+`))
+
 // builtinHelp displays help information about available commands.
 func builtinHelp(args []string, stdin io.Reader, stdout, stderr io.Writer) (int, error) {
-	const headerColor = "\033[1;34m" // Bold blue
-	const cmdColor = "\033[1;32m"    // Bold green
-	const reset = "\033[0m"
-
-	fmt.Fprintf(stdout, "%sFoundation Shell - Available Commands:%s\n", headerColor, reset)
-	fmt.Fprintf(stdout, "%s  cd [dir]%s      - Change directory (no arg: go to home)\n", cmdColor, reset)
-	fmt.Fprintf(stdout, "%s  pwd%s           - Print working directory\n", cmdColor, reset)
-	fmt.Fprintf(stdout, "%s  exit [code]%s   - Exit the shell (default: last command's status)\n", cmdColor, reset)
-	fmt.Fprintf(stdout, "%s  clear%s         - Clear the screen\n", cmdColor, reset)
-	fmt.Fprintf(stdout, "%s  help%s          - Display this help message\n", cmdColor, reset)
-	fmt.Fprintf(stdout, "%s  export [N=V]%s  - Set environment variables (no args: print environment)\n", cmdColor, reset)
-	fmt.Fprintf(stdout, "%s  NAME=VALUE%s    - Standalone assignment: set an environment variable\n", cmdColor, reset)
-	fmt.Fprintln(stdout)
-	fmt.Fprintf(stdout, "%sOperators:%s\n", headerColor, reset)
-	fmt.Fprintf(stdout, "%s  |%s             - Pipe output of one command to another\n", cmdColor, reset)
-	fmt.Fprintf(stdout, "%s  &&%s            - Run next command only if the previous succeeds\n", cmdColor, reset)
-	fmt.Fprintf(stdout, "%s  ||%s            - Run next command only if the previous fails\n", cmdColor, reset)
-	fmt.Fprintf(stdout, "%s  ;%s             - Run commands in sequence unconditionally\n", cmdColor, reset)
-	fmt.Fprintln(stdout)
-	fmt.Fprintf(stdout, "%sRedirections:%s\n", headerColor, reset)
-	fmt.Fprintf(stdout, "%s  < file%s        - Redirect input from file\n", cmdColor, reset)
-	fmt.Fprintf(stdout, "%s  > file%s        - Redirect output to file\n", cmdColor, reset)
-	fmt.Fprintf(stdout, "%s  >> file%s       - Append output to file\n", cmdColor, reset)
-	fmt.Fprintf(stdout, "%s  2> file%s       - Redirect error output to file\n", cmdColor, reset)
-	fmt.Fprintf(stdout, "%s  2>> file%s      - Append error output to file\n", cmdColor, reset)
-	fmt.Fprintln(stdout)
-	fmt.Fprintf(stdout, "%sOther:%s\n", headerColor, reset)
-	fmt.Fprintf(stdout, "%s  # comment%s     - Rest of the line is ignored\n", cmdColor, reset)
-	fmt.Fprintf(stdout, "%s  $?%s            - Exit status of the previous command\n", cmdColor, reset)
-
+	colors := helpColors{
+		H: "\033[1;34m", // Bold blue
+		C: "\033[1;32m", // Bold green
+		R: "\033[0m",
+	}
+	if err := helpTemplate.Execute(stdout, colors); err != nil {
+		// Early-exit pipeline consumer: silent (see builtinPwd).
+		return 1, nil
+	}
 	return 0, nil
 }

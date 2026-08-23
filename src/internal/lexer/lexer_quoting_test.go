@@ -165,7 +165,7 @@ func TestTokenize_EscapedBacktick(t *testing.T) {
 			input: `echo \` + "`" + `whoami\` + "`",
 			expected: []TokenContext{
 				{Content: "echo"},
-				{Content: m + "`whoami" + m + "`"},
+				{Content: m + "`whoami" + m + "`", WasEscaped: true},
 			},
 		},
 		{
@@ -173,7 +173,7 @@ func TestTokenize_EscapedBacktick(t *testing.T) {
 			input: `echo "foo \` + "`" + ` bar"`,
 			expected: []TokenContext{
 				{Content: "echo"},
-				{Content: "foo " + m + "` bar", WasQuoted: true},
+				{Content: "foo " + m + "` bar", WasQuoted: true, WasEscaped: true},
 			},
 		},
 	}
