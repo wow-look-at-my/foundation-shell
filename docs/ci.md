@@ -50,11 +50,24 @@ published before the default changed; it never opted into cosmo.
 
 Turning cosmo back on means replacing readline first.
 
-**Why the job installs bubblewrap.** go-toolchain runs `src/dats/*.dats` — the
-conformance suite — after every build, and dats sandboxes each command. Its
-`auto` backend prefers bubblewrap and falls back to docker, which would run the
-commands inside an image that has neither the built binaries nor the coreutils
-the suites call. The runner image ships no bubblewrap, so the job installs it.
+**Why the job installs bubblewrap, flips a sysctl, and then runs `bwrap`.**
+go-toolchain runs `src/dats/*.dats` — the conformance suite — after every
+build, and dats sandboxes every command. Its `auto` backend wants bubblewrap
+and falls back to docker, which cannot run these suites: under docker the
+command runs inside the image, and the first attempt reported
+`bash: line 1: build/fsh-exec: No such file or directory` for all 186 tests.
+The suites also call host tools (`seq`, `yes`, `which`, `printenv`) that a
+`debian:stable-slim` image does not owe anyone.
+
+Installing the package is not enough. The runner image is Ubuntu 24.04, where
+`kernel.apparmor_restrict_unprivileged_userns=1` denies bwrap the user
+namespace it needs — dats' own docs call this out, and the fallback to docker
+is what it looks like from the outside. The step sets that sysctl to 0.
+
+The `|| true` on the sysctl is not a swallowed failure: the line after it runs
+`bwrap` for real, so the step fails loudly when bubblewrap still cannot build a
+sandbox, whatever the reason. Without that line the job would keep going and
+surface as 186 unrelated assertion failures.
 
 There is no separate conformance job: the suites are part of the same build,
 and a suite failure fails it.
