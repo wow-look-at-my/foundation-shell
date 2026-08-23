@@ -13,7 +13,7 @@ tests:
 	# re-scanned -- data read from a file is printed verbatim, NOT
 	# executed. This is a security property.
 	- desc: a $(...) payload read from a file stays literal
-	  cmd: "build/fsh-exec 'echo $(cat {inputs.payload.txt})'"
+	  cmd: "\"$GO_TOOLCHAIN_DATS_BUILD_DIR/fsh-exec\" 'echo $(cat {inputs.payload.txt})'"
 	  inputs:
 		files:
 			payload.txt: |
@@ -24,7 +24,7 @@ tests:
 
 	# expansion.md Single-Pass Expansion: backtick payloads too.
 	- desc: a backtick payload read from a file stays literal
-	  cmd: "build/fsh-exec 'echo $(cat {inputs.payload.txt})'"
+	  cmd: "\"$GO_TOOLCHAIN_DATS_BUILD_DIR/fsh-exec\" 'echo $(cat {inputs.payload.txt})'"
 	  inputs:
 		files:
 			payload.txt: |
@@ -36,7 +36,7 @@ tests:
 	# lexer.md 7.2 / expansion.md Recursive Execution: quotes in the body
 	# are honored by the recursive parse -- the two spaces survive.
 	- desc: double quotes inside a body preserve spacing
-	  cmd: "build/fsh-exec 'echo $(echo \"a  b\")'"
+	  cmd: "\"$GO_TOOLCHAIN_DATS_BUILD_DIR/fsh-exec\" 'echo $(echo \"a  b\")'"
 	  outputs:
 		stdout:
 			0: "^\\Qa  b\\E$"
@@ -44,13 +44,13 @@ tests:
 	# lexer.md 7.1 rule 4: a quoted ) is body content, not the closing
 	# delimiter.
 	- desc: a single-quoted close-paren does not close the substitution
-	  cmd: "build/fsh-exec \"echo \\$(echo ')')\""
+	  cmd: "\"$GO_TOOLCHAIN_DATS_BUILD_DIR/fsh-exec\" \"echo \\$(echo ')')\""
 	  outputs:
 		stdout:
 			0: "^\\Q)\\E$"
 
 	- desc: a double-quoted close-paren does not close the substitution
-	  cmd: "build/fsh-exec 'echo $(echo \")\")'"
+	  cmd: "\"$GO_TOOLCHAIN_DATS_BUILD_DIR/fsh-exec\" 'echo $(echo \")\")'"
 	  outputs:
 		stdout:
 			0: "^\\Q)\\E$"
@@ -58,7 +58,7 @@ tests:
 	# quoting.md 6.3: nested backticks NEST by the quote rule and execute
 	# recursively -- no escaping needed (a deliberate POSIX divergence).
 	- desc: nested backticks execute recursively
-	  cmd: "build/fsh-exec 'echo `echo `echo hi``'"
+	  cmd: "\"$GO_TOOLCHAIN_DATS_BUILD_DIR/fsh-exec\" 'echo `echo `echo hi``'"
 	  outputs:
 		stdout:
 			0: "^hi$"
@@ -66,7 +66,7 @@ tests:
 	# expansion.md Recursive Execution: single quotes INSIDE the body
 	# suppress expansion within it.
 	- desc: single quotes inside a body suppress nested substitution
-	  cmd: "build/fsh-exec \"echo \\$(echo '\\$(pwd)')\""
+	  cmd: "\"$GO_TOOLCHAIN_DATS_BUILD_DIR/fsh-exec\" \"echo \\$(echo '\\$(pwd)')\""
 	  outputs:
 		stdout:
 			0: "^\\Q$(pwd)\\E$"
@@ -75,7 +75,7 @@ tests:
 	# prints to stderr, the substitution yields the captured stdout (empty
 	# here), and the line CONTINUES -- status comes from the outer command.
 	- desc: a failing substitution yields empty output and the line continues
-	  cmd: "build/fsh-exec 'echo $(nosuchcmd_fsh_test)'"
+	  cmd: "\"$GO_TOOLCHAIN_DATS_BUILD_DIR/fsh-exec\" 'echo $(nosuchcmd_fsh_test)'"
 	  outputs:
 		stdout:
 			0: "^$"
@@ -85,7 +85,7 @@ tests:
 	# expansion.md Failure Semantics: the substituted command's exit status
 	# is DISCARDED -- it never aborts or fails the surrounding line.
 	- desc: the substitution exit status is discarded
-	  cmd: "build/fsh-exec \"echo x\\$(sh -c 'exit 3')y\""
+	  cmd: "\"$GO_TOOLCHAIN_DATS_BUILD_DIR/fsh-exec\" \"echo x\\$(sh -c 'exit 3')y\""
 	  outputs:
 		stdout:
 			0: "^xy$"
@@ -93,7 +93,7 @@ tests:
 	# execution.md exit: exit inside a substitution stops only the
 	# substitution's own sequence; the shell survives and both echos run.
 	- desc: exit inside a substitution does not stop the shell
-	  cmd: "build/fsh-exec 'echo before $(exit 7) ; echo after'"
+	  cmd: "\"$GO_TOOLCHAIN_DATS_BUILD_DIR/fsh-exec\" 'echo before $(exit 7) ; echo after'"
 	  outputs:
 		stdout:
 			0: "^\\Qbefore \\E$"
@@ -102,7 +102,7 @@ tests:
 	# expansion.md Output Handling: trailing newlines are trimmed, and
 	# interior newlines are preserved.
 	- desc: trailing newlines are trimmed and interior newlines are kept
-	  cmd: "build/fsh-exec 'echo x$(printf \"a\\nb\\n\\n\")y'"
+	  cmd: "\"$GO_TOOLCHAIN_DATS_BUILD_DIR/fsh-exec\" 'echo x$(printf \"a\\nb\\n\\n\")y'"
 	  outputs:
 		stdout:
 			0: "^xa$"
@@ -111,7 +111,7 @@ tests:
 	# expansion.md Quoting and Expansion: double quotes do not suppress
 	# command substitution.
 	- desc: substitution runs inside double quotes
-	  cmd: "build/fsh-exec 'echo \"count: $(echo 5)\"'"
+	  cmd: "\"$GO_TOOLCHAIN_DATS_BUILD_DIR/fsh-exec\" 'echo \"count: $(echo 5)\"'"
 	  outputs:
 		stdout:
 			0: "^\\Qcount: 5\\E$"
@@ -119,7 +119,7 @@ tests:
 	# expansion.md Failure Semantics: a body that fails to PARSE fails the
 	# whole line as a parse error -- nothing executes.
 	- desc: a substitution body parse error rejects the whole line
-	  cmd: "build/fsh-exec 'echo $(echo |) ; echo after'"
+	  cmd: "\"$GO_TOOLCHAIN_DATS_BUILD_DIR/fsh-exec\" 'echo $(echo |) ; echo after'"
 	  exit: 1
 	  outputs:
 		!stdout:

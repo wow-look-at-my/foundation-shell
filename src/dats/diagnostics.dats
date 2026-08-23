@@ -15,7 +15,7 @@ tests:
 	# line, the caret line, and "error: <message>". The unclosed token
 	# spans positions 5..11, so six carets start at column 5.
 	- desc: an unclosed single quote produces exactly the three-line caret block
-	  cmd: "build/fsh-exec \"echo 'hello\" 2> {outputs.err.txt}"
+	  cmd: "\"$GO_TOOLCHAIN_DATS_BUILD_DIR/fsh-exec\" \"echo 'hello\" 2> {outputs.err.txt}"
 	  exit: 1
 	  outputs:
 		!stdout:
@@ -27,7 +27,7 @@ tests:
 
 	# diagnostics.md 8.4: the double-quote variant.
 	- desc: unclosed double quote caret block
-	  cmd: "build/fsh-exec 'echo \"hello'"
+	  cmd: "\"$GO_TOOLCHAIN_DATS_BUILD_DIR/fsh-exec\" 'echo \"hello'"
 	  exit: 1
 	  outputs:
 		stderr:
@@ -40,7 +40,7 @@ tests:
 	# containing an unclosed quote reports the quote first (innermost),
 	# then the substitution.
 	- desc: a two-error input produces two blank-line-separated blocks
-	  cmd: "build/fsh-exec -c 'echo $(foo \"bar' 2> {outputs.err.txt}"
+	  cmd: "\"$GO_TOOLCHAIN_DATS_BUILD_DIR/fsh-exec\" -c 'echo $(foo \"bar' 2> {outputs.err.txt}"
 	  exit: 1
 	  outputs:
 		!stdout:
@@ -53,7 +53,7 @@ tests:
 	# diagnostics.md 8.1: a trailing pipe gets one caret under the
 	# operator, and the message carries no operator suffix.
 	- desc: trailing pipe caret block
-	  cmd: "build/fsh-exec 'echo hello |'"
+	  cmd: "\"$GO_TOOLCHAIN_DATS_BUILD_DIR/fsh-exec\" 'echo hello |'"
 	  exit: 1
 	  outputs:
 		stderr:
@@ -63,7 +63,7 @@ tests:
 
 	# diagnostics.md 8.1: a two-character trailing operator gets two carets.
 	- desc: a trailing && caret block spans the operator
-	  cmd: "build/fsh-exec 'echo hello &&'"
+	  cmd: "\"$GO_TOOLCHAIN_DATS_BUILD_DIR/fsh-exec\" 'echo hello &&'"
 	  exit: 1
 	  outputs:
 		stderr:
@@ -73,7 +73,7 @@ tests:
 	# diagnostics.md 8.2: a missing redirection target points at the
 	# operator.
 	- desc: missing redirection target caret block
-	  cmd: "build/fsh-exec 'echo >'"
+	  cmd: "\"$GO_TOOLCHAIN_DATS_BUILD_DIR/fsh-exec\" 'echo >'"
 	  exit: 1
 	  outputs:
 		stderr:
@@ -84,7 +84,7 @@ tests:
 	# diagnostics.md 5.1: leading-operator detection is REQUIRED of the
 	# analyzer, with the operator in the message.
 	- desc: leading operator caret block
-	  cmd: "build/fsh-exec '| foo'"
+	  cmd: "\"$GO_TOOLCHAIN_DATS_BUILD_DIR/fsh-exec\" '| foo'"
 	  exit: 1
 	  outputs:
 		stderr:
@@ -95,7 +95,7 @@ tests:
 	# diagnostics.md 6.4: for multi-line input the block shows the LINE
 	# containing the error, with carets relative to that line's start.
 	- desc: multi-line input reports the offending line
-	  cmd: build/fsh
+	  cmd: "\"$GO_TOOLCHAIN_DATS_BUILD_DIR/fsh\""
 	  exit: 1
 	  inputs:
 		stdin: |
@@ -110,7 +110,7 @@ tests:
 	# diagnostics.md 5.1 note / quoting.md 5.5: an EVEN quote count can be
 	# unclosed -- the canonical strings carry no count-based suffix.
 	- desc: an even quote count still reports unclosed, with no suffix
-	  cmd: "build/fsh-exec \"echo 'a 'b\""
+	  cmd: "\"$GO_TOOLCHAIN_DATS_BUILD_DIR/fsh-exec\" \"echo 'a 'b\""
 	  exit: 1
 	  outputs:
 		stderr:

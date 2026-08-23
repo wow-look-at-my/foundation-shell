@@ -49,7 +49,7 @@ reads it. Initialize it with `git submodule update --init` (or clone with
     - `lexer.Scan` is the ONLY tokenizer. `Project` is the execution view, `Validate` the one implementation of the structural rules, and `syntax.Analyze` classifies the same scan for highlighting — it does not tokenize
   - `pkg/` - Public packages (parser, shell)
   - `dats/` - Conformance suite, one `.dats` file per spec area
-- `docs/conformance-suite.md` - dats suite conventions: read-only cwd, exact-block assertions, the heredoc guard
+- `docs/conformance-suite.md` - dats suite conventions: `$GO_TOOLCHAIN_DATS_BUILD_DIR`, read-only cwd, exact-block assertions, the heredoc guard
 - `docs/ci.md` - CI job: why `working-directory: src`, why it installs bubblewrap, what each permission is for, the one-line comment limit in workflow YAML
 - `spec/` - The spec repo as a pinned git submodule (optional; see Specification)
 - `src/build/` - Build output (`just build` runs go-toolchain, which writes it)
