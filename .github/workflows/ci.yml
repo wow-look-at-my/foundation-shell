@@ -4,28 +4,33 @@ on:
   push:
   workflow_dispatch:
 
-# go-toolchain's autorelease (on by default) publishes branch builds to
-# buildhost; it verifies up front that the workflow grants id-token: write
-# (OIDC for buildhost auth) and actions: read (artifact download) and fails
-# the build if either is missing.
+# Every permission below is load-bearing; see docs/ci.md.
 permissions:
   id-token: write
   contents: write
   actions: read
   checks: read
+  deployments: write
+  artifact-metadata: write
 
 jobs:
   go:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      # The Go module lives in src/, not the repo root. go-toolchain's matrix
-      # command reads go.mod from its working directory (no module
-      # auto-discovery on this path), builds into <working-directory>/build/,
-      # and the action uploads that same directory as the artifact.
+      # The last line proves bwrap works; docker cannot run these suites.
+      - name: Install bubblewrap and prove it can build a sandbox
+        run: |
+          sudo apt-get update && sudo apt-get install -y bubblewrap
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true
+          bwrap --ro-bind / / --dev /dev --tmpfs /tmp true
+      # The Go module lives in src/, not the repo root; see docs/ci.md.
       - uses: wow-look-at-my/go-toolchain@v1
         with:
           working-directory: src
+          # Native per-platform binaries, not a cosmo fat APE; see docs/ci.md.
+          os: linux,darwin,windows
+          arch: amd64,arm64
 
   bats:
     runs-on: ubuntu-latest

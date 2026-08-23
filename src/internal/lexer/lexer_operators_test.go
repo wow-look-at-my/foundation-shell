@@ -130,7 +130,7 @@ func TestTokenize_StderrRedirectionRecognition(t *testing.T) {
 		{
 			name:     "escaped 2 is not a stderr redirect",
 			input:    `echo \2>f`,
-			expected: []TokenContext{word("echo"), word("2"), op(">"), word("f")},
+			expected: []TokenContext{word("echo"), {Content: "2", WasEscaped: true}, op(">"), word("f")},
 		},
 		{
 			name:     "standalone 2 separated by space stays an argument",
@@ -176,7 +176,7 @@ func TestTokenize_QuotedOperatorsAreLiteral(t *testing.T) {
 		{
 			name:     "escaped pipe",
 			input:    `echo \|`,
-			expected: []TokenContext{word("echo"), word("|")},
+			expected: []TokenContext{word("echo"), {Content: "|", WasEscaped: true}},
 		},
 		{
 			name:  "single-quoted semicolon",
