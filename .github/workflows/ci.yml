@@ -9,6 +9,8 @@ permissions:
   contents: write
   actions: read
   checks: read
+  deployments: write
+  artifact-metadata: write
 
 jobs:
   go:

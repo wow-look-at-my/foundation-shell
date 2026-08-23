@@ -25,9 +25,13 @@ that the workflow grants:
 | `contents: write` | the dependency-graph snapshot go-toolchain submits; GitHub rejects it with HTTP 403 under `contents: read` |
 | `actions: read` | artifact download, and the embedded no-all-builds guard's job scan |
 | `checks: read` | the same guard's check-run scan |
+| `deployments: write` | the GitHub Deployment autorelease registers for each publish |
+| `artifact-metadata: write` | recording the upload on the org's linked-artifacts page |
 
-Autorelease fails the build if `id-token: write` or `actions: read` is
-missing, rather than skipping quietly.
+Every one of these is a hard failure when missing, not a skipped step.
+Registering the Deployment and recording the artifact are both part of
+publishing and have no opt-out; the only way to avoid needing the last two is
+`autorelease: 'false'`.
 
 A job-level `permissions:` block REPLACES the workflow-level one, so a job
 that declares its own must list all of these again.
