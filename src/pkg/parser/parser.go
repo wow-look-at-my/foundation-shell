@@ -40,6 +40,15 @@ var (
 	// reader hunting for a filename that was never the point. The message is
 	// canonical: the spec pins the exact string.
 	ErrHeredocUnsupported = errors.New("here-documents are not supported")
+	// ErrAssignmentThenUse is returned when one input assigns a variable and
+	// a LATER command in the same input expands it. The whole input is
+	// expanded in ONE pass before anything runs (expansion.md §Special
+	// Parameters), so that expansion reads the value from BEFORE the input —
+	// normally empty. Without this guard `OUT=$(cmd); echo $OUT` yields an
+	// empty string and says nothing, while `printenv OUT` in the same input
+	// prints the real value. The message is canonical: the spec pins the
+	// exact string.
+	ErrAssignmentThenUse = errors.New("variable is assigned and used in the same input")
 	// ErrTrailingOperator is returned when the input ends with an operator.
 	ErrTrailingOperator = errors.New("unexpected operator at end")
 	// ErrConsecutiveOperators is returned when two chain operators appear consecutively.
@@ -250,6 +259,9 @@ func ParseWithOptions(input string, opts Options) (*Chain, error) {
 	}
 
 	// Step 3: Validate syntax and build chain
+	if err := checkAssignmentThenUse(classified); err != nil {
+		return nil, err
+	}
 	return buildChain(classified)
 }
 

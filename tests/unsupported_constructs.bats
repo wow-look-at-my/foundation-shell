@@ -4,9 +4,9 @@
 # implement. Each one must FAIL LOUDLY at parse time instead of being
 # absorbed as ordinary words, which is what makes them safe to type.
 #
-# Spec: foundation-shell-spec src/lexer.md (§3.3.2 lone &),
-# src/redirection.md (§9.5 fd duplication, §9.6 here-documents,
-# §9.7 background execution).
+# Spec: foundation-shell-spec src/parser.md (§Background Execution Is
+# Guarded), src/lexer.md (§3.3.2 lone & lexes as a word),
+# src/redirection.md (§9.5 fd duplication, §9.6 here-documents).
 
 bats_require_minimum_version 1.5.0
 
@@ -93,6 +93,50 @@ setup() {
     run "$FSH" -c 'true && echo ok'
     [ "$status" -eq 0 ]
     [ "$output" = "ok" ]
+}
+
+# The whole input expands in one pass before anything runs, so a variable
+# assigned in it still holds its pre-input value everywhere in it. Left
+# alone this printed an empty line and reported SUCCESS, which is the one
+# failure here that corrupts a result instead of stopping the caller.
+@test "capture-then-use is rejected instead of yielding empty" {
+    run --separate-stderr "$FSH" -c 'OUT=$(echo captured); echo $OUT'
+    [ "$status" -eq 1 ]
+    [ -z "$output" ]
+    [ "$stderr" = "parse error: variable is assigned and used in the same input: OUT" ]
+}
+
+@test "export then use in the same input is rejected" {
+    run --separate-stderr "$FSH" -c 'export X=hi; echo $X'
+    [ "$status" -eq 1 ]
+    [[ "$stderr" == *"variable is assigned and used in the same input: X"* ]]
+}
+
+# The assignment itself is real: it mutates the shell's environment, and a
+# child reading that environment sees it. Only expansion in the same input
+# is stale, so these two must keep working.
+@test "assignment is still visible to a child that reads the environment" {
+    run "$FSH" -c 'FSH_ENVCHECK=hi; printenv FSH_ENVCHECK'
+    [ "$status" -eq 0 ]
+    [ "$output" = "hi" ]
+}
+
+@test "single-quoted reference is data and still resolves in the child" {
+    run "$FSH" -c "FSH_CHILD=hi; sh -c 'echo \$FSH_CHILD'"
+    [ "$status" -eq 0 ]
+    [ "$output" = "hi" ]
+}
+
+@test "an assignment with no later expansion is fine" {
+    run "$FSH" -c 'FSH_UNUSED=hi; echo done'
+    [ "$status" -eq 0 ]
+    [ "$output" = "done" ]
+}
+
+@test "expanding a variable nobody assigned here is fine" {
+    run "$FSH" -c 'FSH_A=1; echo [$FSH_B]'
+    [ "$status" -eq 0 ]
+    [ "$output" = "[]" ]
 }
 
 @test "single < input redirection is unaffected" {
