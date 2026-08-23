@@ -46,5 +46,6 @@ reads it. Initialize it with `git submodule update --init` (or clone with
   - `internal/` - Internal packages (lexer, expander, chain, command, syntax, token)
   - `pkg/` - Public packages (parser, shell)
 - `tests/` - BATS conformance tests
+- `docs/ci.md` - CI jobs: why `working-directory: src`, what each permission is for, the one-line comment limit in workflow YAML
 - `spec/` - The spec repo as a pinned git submodule (optional; see Specification)
 - `build/` - Build output (`just build`; go-toolchain builds into `src/build/`)

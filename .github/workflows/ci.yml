@@ -3,10 +3,7 @@ name: CI
 on:
   push:
 
-# go-toolchain's autorelease (on by default) publishes branch builds to
-# buildhost; it verifies up front that the workflow grants id-token: write
-# (OIDC for buildhost auth) and actions: read (artifact download) and fails
-# the build if either is missing.
+# Every permission below is load-bearing; see docs/ci.md.
 permissions:
   id-token: write
   contents: write
@@ -18,10 +15,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      # The Go module lives in src/, not the repo root. go-toolchain's matrix
-      # command reads go.mod from its working directory (no module
-      # auto-discovery on this path), builds into <working-directory>/build/,
-      # and the action uploads that same directory as the artifact.
+      # The Go module lives in src/, not the repo root; see docs/ci.md.
       - uses: wow-look-at-my/go-toolchain@v1
         with:
           working-directory: src
