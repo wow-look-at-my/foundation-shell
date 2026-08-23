@@ -1,0 +1,30 @@
+# Shell Benchmarks
+
+Comparing **fsh** against other shells.
+
+| Shell | Available |
+|-------|-----------|
+{{- range .Shells}}
+| {{.}} | ✓ |
+{{- end}}
+
+{{range .Categories}}
+## {{.Name}} Benchmarks
+
+{{range .Benchmarks}}
+### {{.Name}}
+
+{{.Description}}
+
+| Shell | Mean | ± | Min | Max | vs fsh |
+|-------|------|---|-----|-----|--------|
+{{- $fshMean := getFshMean .Results}}
+{{- range .Results}}
+| {{.Shell}} | {{formatDuration .Mean}} | {{formatDuration .Stddev}} | {{formatDuration .Min}} | {{formatDuration .Max}} | {{if eq .Shell "fsh"}}baseline{{else}}{{printf "%.2fx" (ratio .Mean $fshMean)}}{{end}} |
+{{- end}}
+
+{{end}}
+{{end}}
+---
+
+*Generated on {{.Timestamp}}*
