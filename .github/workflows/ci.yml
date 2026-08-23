@@ -21,6 +21,9 @@ jobs:
       - uses: wow-look-at-my/go-toolchain@v1
         with:
           working-directory: src
+          # Native per-platform binaries, not a cosmo fat APE; see docs/ci.md.
+          os: linux,darwin,windows
+          arch: amd64,arm64
 
   bats:
     runs-on: ubuntu-latest

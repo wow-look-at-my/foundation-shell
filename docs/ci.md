@@ -36,6 +36,20 @@ publishing and have no opt-out; the only way to avoid needing the last two is
 A job-level `permissions:` block REPLACES the workflow-level one, so a job
 that declares its own must list all of these again.
 
+**Why `os` and `arch` are set explicitly.** go-toolchain's matrix defaults to
+ONE Cosmopolitan fat APE covering `--cosmo-platforms`. This shell cannot be
+built that way: it depends on `github.com/chzyer/readline`, whose terminal
+handling lives entirely in files gated on a real GOOS. Under Cosmopolitan's
+GOOS none of them are selected, and the build dies on `undefined: State`,
+`undefined: GetScreenWidth`, `undefined: SuspendMe` and the rest.
+
+Naming either `os` or `arch` switches the matrix back to the cartesian
+product of native per-platform binaries, which readline compiles for cleanly
+— all 18 (3 commands x 3 OSes x 2 arches) build. That is also what this repo
+published before the default changed; it never opted into cosmo.
+
+Turning cosmo back on means replacing readline first.
+
 ## `bats` — conformance suite
 
 Installs `just` and `bats`, runs `just build`, then `bats tests/`.
