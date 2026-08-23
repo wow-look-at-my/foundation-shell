@@ -109,6 +109,31 @@ type classifiedToken struct {
 // first '=' is the value (possibly empty, possibly containing more '=').
 var assignmentPattern = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*=`)
 
+// problemError renders one structural problem from lexer.Validate as this
+// package's error. The rules live there, shared with the syntax analyzer;
+// only the wording differs. These messages name the offending operator
+// because a parse error has no caret to point with (diagnostics.md §5.2).
+func problemError(p lexer.Problem) error {
+	switch p.Kind {
+	case lexer.ProblemOperatorAtStart:
+		return fmt.Errorf("%w: %s", ErrOperatorAtStart, p.Text)
+	case lexer.ProblemTrailingOperator:
+		return fmt.Errorf("%w: %s", ErrTrailingOperator, p.Text)
+	case lexer.ProblemConsecutiveOperators:
+		return fmt.Errorf("%w: %s followed by %s", ErrConsecutiveOperators, p.Text, p.Other)
+	case lexer.ProblemMissingRedirectionTarget:
+		if p.Other == "" {
+			return fmt.Errorf("%w: %s", ErrMissingRedirectionTarget, p.Text)
+		}
+		return fmt.Errorf("%w: %s followed by operator %s", ErrMissingRedirectionTarget, p.Text, p.Other)
+	case lexer.ProblemBackgroundUnsupported:
+		return ErrBackgroundUnsupported
+	case lexer.ProblemHeredocUnsupported:
+		return ErrHeredocUnsupported
+	}
+	return fmt.Errorf("internal error: unknown problem kind %d", p.Kind)
+}
+
 // parseOperator checks if a string is an operator and returns its token type.
 // Returns (tokenType, true) if it's an operator, (0, false) otherwise.
 func parseOperator(s string) (token.TokenType, bool) {
@@ -177,12 +202,19 @@ func ParseWithExecutor(input string, executor expander.SubshellExecutor) (*Chain
 // control over expansion: command substitution via opts.Executor and $?
 // expansion via opts.LastStatus.
 func ParseWithOptions(input string, opts Options) (*Chain, error) {
-	// Step 1: Tokenize input
-	tokenContexts, err := lexer.Tokenize(input)
-	if err != nil {
-		return nil, fmt.Errorf("tokenization error: %w", err)
+	// Step 1: Scan the input ONCE, then read both views of it. Scan is the
+	// only tokenizer; Validate is the only implementation of the structural
+	// rules, shared with the syntax analyzer so a caret diagnostic and a
+	// parse error can never disagree about what is legal.
+	scan := lexer.Scan(input)
+	if len(scan.Unclosed) > 0 {
+		return nil, fmt.Errorf("tokenization error: %w", errors.New(scan.Unclosed[0].Message))
+	}
+	if problems := lexer.Validate(scan.Tokens); len(problems) > 0 {
+		return nil, problemError(problems[0])
 	}
 
+	tokenContexts := lexer.Project(scan)
 	if len(tokenContexts) == 0 {
 		return nil, ErrEmptyInput
 	}
@@ -226,13 +258,14 @@ func ParseWithOptions(input string, opts Options) (*Chain, error) {
 			// Single pass: variables (incl. $?) expand in the literal text,
 			// top-level substitution spans execute recursively via the
 			// executor, and their output is spliced without re-scanning.
-			expandedValue, err = expander.ExpandToken(expandedValue, expander.Options{
+			expanded, expandErr := expander.ExpandToken(expandedValue, expander.Options{
 				Executor:   opts.Executor,
 				LastStatus: opts.LastStatus,
 			})
-			if err != nil {
-				return nil, fmt.Errorf("command substitution error: %w", err)
+			if expandErr != nil {
+				return nil, fmt.Errorf("command substitution error: %w", expandErr)
 			}
+			expandedValue = expanded
 		}
 		// Strip escape markers UNCONDITIONALLY, single-quoted tokens
 		// included: a mixed word like 'a'\$b has WasSingleQuoted set (no
@@ -266,15 +299,15 @@ func ParseWithOptions(input string, opts Options) (*Chain, error) {
 }
 
 // buildChain builds a command chain from classified tokens.
+//
+// lexer.Validate has already run, so the operator SEQUENCE is known good:
+// no leading or trailing chain operator, no consecutive pair, and every
+// redirection has a following word. What is left here needs the expanded
+// values, which Validate never sees: an empty command, a target that
+// expanded to nothing, and the fd-duplication guard on the written word.
 func buildChain(tokens []classifiedToken) (*Chain, error) {
 	if len(tokens) == 0 {
 		return nil, ErrEmptyInput
-	}
-
-	// Check for chain operator at start (|, &&, ||)
-	// Redirection operators at start are valid: `< input.txt cat`
-	if isChainOperator(tokens[0].tokenType) {
-		return nil, fmt.Errorf("%w: %s", ErrOperatorAtStart, tokens[0].value)
 	}
 
 	chain := &Chain{
@@ -316,25 +349,15 @@ func buildChain(tokens []classifiedToken) (*Chain, error) {
 			// Add current command to chain
 			chain.Commands = append(chain.Commands, finalize(currentCommand))
 
-			// Check if there's anything after this operator. A single
-			// trailing semicolon is valid and simply consumed (the lexer
-			// also emits one for a trailing newline); any other trailing
-			// operator is an error.
+			// A trailing semicolon is valid and simply consumed (the lexer
+			// also emits one for a trailing newline). Any OTHER trailing
+			// operator was already rejected by Validate.
 			if i+1 >= len(tokens) {
-				if tok.tokenType == token.Semicolon {
-					trailingSemicolonConsumed = true
-					continue // loop ends; no operator is recorded
-				}
-				return nil, fmt.Errorf("%w: %s", ErrTrailingOperator, tok.value)
+				trailingSemicolonConsumed = true
+				continue // loop ends; no operator is recorded
 			}
 
 			chain.Operators = append(chain.Operators, tok.tokenType)
-
-			// Check for consecutive chain operators
-			nextTok := tokens[i+1]
-			if isChainOperator(nextTok.tokenType) {
-				return nil, fmt.Errorf("%w: %s followed by %s", ErrConsecutiveOperators, tok.value, nextTok.value)
-			}
 
 			// Start a new command
 			currentCommand = &CommandSpec{
@@ -345,23 +368,9 @@ func buildChain(tokens []classifiedToken) (*Chain, error) {
 		}
 
 		if isRedirectionOperator(tok.tokenType) {
-			// Redirection needs a target
-			if i+1 >= len(tokens) {
-				return nil, fmt.Errorf("%w: %s", ErrMissingRedirectionTarget, tok.value)
-			}
-
+			// Validate guaranteed a following word, so the index is safe and
+			// the token is not an operator.
 			nextTok := tokens[i+1]
-
-			// `<<EOF` and `<<<word` lex as two or three `<` operators. Name
-			// the real problem instead of reporting a missing filename.
-			if tok.tokenType == token.RedirectStdIn && nextTok.tokenType == token.RedirectStdIn {
-				return nil, ErrHeredocUnsupported
-			}
-
-			// Target must be a value, not an operator
-			if nextTok.tokenType.IsOperator() {
-				return nil, fmt.Errorf("%w: %s followed by operator %s", ErrMissingRedirectionTarget, tok.value, nextTok.value)
-			}
 
 			// A syntactically present redirection must have a non-empty
 			// target after expansion: `> $UNSET` is an error, not a
@@ -402,16 +411,6 @@ func buildChain(tokens []classifiedToken) (*Chain, error) {
 			// Skip the target token
 			i++
 			continue
-		}
-
-		// A lone unquoted `&` is the background operator in other shells.
-		// Here it is an ordinary word, so it would silently become an
-		// argument and swallow the rest of the line. Reject it, for the same
-		// reason the fd-duplication guard above rejects `2>&1`. The check
-		// uses the PRE-expansion word: a quoted '&' sets wasQuoted, `\&` sets
-		// wasEscaped, and `a&b` is a longer word — all three stay legal.
-		if !tok.wasQuoted && !tok.wasEscaped && tok.rawValue == "&" {
-			return nil, ErrBackgroundUnsupported
 		}
 
 		// Value token - add to current command's args

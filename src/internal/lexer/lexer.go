@@ -93,7 +93,14 @@ func Tokenize(input string) ([]TokenContext, error) {
 	if len(result.Unclosed) > 0 {
 		return nil, errors.New(result.Unclosed[0].Message)
 	}
+	return Project(result), nil
+}
 
+// Project reduces a scan to the execution view: whitespace and comments
+// dropped, and an unquoted newline turned into the ; separator it stands
+// for. A caller that also wants Validate's problems scans once and calls
+// both, instead of scanning twice.
+func Project(result *ScanResult) []TokenContext {
 	var tokens []TokenContext
 	pendingNewline := false
 
@@ -125,7 +132,7 @@ func Tokenize(input string) ([]TokenContext, error) {
 		})
 	}
 
-	return tokens, nil
+	return tokens
 }
 
 // StripEscapeMarkers removes escape markers from a string, used after

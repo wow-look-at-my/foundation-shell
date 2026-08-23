@@ -2,7 +2,6 @@
 package syntax
 
 import (
-	"fmt"
 	"strings"
 
 	"foundation-shell/internal/lexer"
@@ -144,7 +143,13 @@ func Analyze(input string) *AnalysisResult {
 		})
 	}
 
-	errors = append(errors, checkStructure(tokens)...)
+	for _, p := range lexer.Validate(scan.Tokens) {
+		errors = append(errors, SyntaxError{
+			Start:   p.Start,
+			End:     p.End,
+			Message: describeProblem(p),
+		})
+	}
 
 	return &AnalysisResult{
 		Tokens: tokens,
@@ -220,130 +225,27 @@ func isVariableWord(value string) bool {
 	return c == '_' || ('a' <= c && c <= 'z') || ('A' <= c && c <= 'Z')
 }
 
-// checkStructure reports leading-operator, background-&, here-document,
-// consecutive-operator, missing-redirection-target and trailing-operator
-// errors, matching the parser's messages. Whitespace and comment tokens are
-// not significant: `echo hello | ` and `echo | # done` are still
-// trailing-pipe errors.
-func checkStructure(tokens []AnalyzedToken) []SyntaxError {
-	var errs []SyntaxError
-
-	// Indexes of the significant (non-whitespace, non-comment) tokens.
-	var sig []int
-	for i := range tokens {
-		if tokens[i].Type == TypeWhitespace || tokens[i].Type == TypeComment {
-			continue
+// describeProblem renders one structural problem for a caret diagnostic.
+// The rules live in lexer.Validate, shared with the parser; only the wording
+// differs. These messages omit the offending operator where the caret
+// already points at it (diagnostics.md §5.1).
+func describeProblem(p lexer.Problem) string {
+	switch p.Kind {
+	case lexer.ProblemOperatorAtStart:
+		return "unexpected operator at start: " + p.Text
+	case lexer.ProblemTrailingOperator:
+		return "unexpected operator at end"
+	case lexer.ProblemConsecutiveOperators:
+		return "consecutive operators: " + p.Text + " followed by " + p.Other
+	case lexer.ProblemMissingRedirectionTarget:
+		if p.Other == "" {
+			return "missing redirection target"
 		}
-		sig = append(sig, i)
+		return "missing redirection target: " + p.Text + " followed by operator " + p.Other
+	case lexer.ProblemBackgroundUnsupported:
+		return "background execution is not supported"
+	case lexer.ProblemHeredocUnsupported:
+		return "here-documents are not supported"
 	}
-	if len(sig) == 0 {
-		// Only whitespace/comments: nothing to check.
-		return nil
-	}
-
-	// A leading chain operator (|, &&, ||, ;) is an error, matching the
-	// parser. Redirections may legally start a command (< in.txt cat).
-	first := tokens[sig[0]]
-	if first.Type == TypeOperator {
-		errs = append(errs, SyntaxError{
-			Start:   first.Start,
-			End:     first.End,
-			Message: "unexpected operator at start: " + first.Value,
-		})
-		if len(sig) == 1 {
-			// A lone operator is fully described by the error above.
-			return errs
-		}
-	}
-
-	// A lone unquoted `&` is an ordinary word here, not a background
-	// operator, so it would be absorbed into argv along with everything
-	// after it. Flag it where it is written; the parser rejects it with the
-	// same message. A redirection target is excluded: `> &` is the
-	// fd-duplication guard's case, and that message names it better.
-	for _, k := range sig {
-		tok := tokens[k]
-		if tok.Value != "&" || tok.Type == TypeRedirectionTarget {
-			continue
-		}
-		errs = append(errs, SyntaxError{
-			Start:   tok.Start,
-			End:     tok.End,
-			Message: "background execution is not supported",
-		})
-	}
-
-	// Consecutive operators, matching the parser. A newline between
-	// commands is an implicit ; (the lexer materializes one unless the
-	// previous token is a CHAIN operator, which continues the line), so a
-	// chain operator that starts a new line after a word is "consecutive"
-	// with that implicit ;. A redirection followed by any operator — or by
-	// a newline, which the lexer turns into a ; (redirections do NOT
-	// continue across lines) — has no target, again matching the parser.
-	//
-	// Index of the second `<` in a heredoc pair already reported, so `<<<`
-	// yields one error instead of one per adjacent pair.
-	heredocTail := -1
-	for k := 1; k < len(sig); k++ {
-		prev, cur := tokens[sig[k-1]], tokens[sig[k]]
-		msg := ""
-		at := cur
-		switch {
-		case prev.Type == TypeRedirection && newlineBetween(tokens, sig[k-1], sig[k]):
-			// `echo hi ><newline>out.txt`: the lexer emits > ; out.txt, so the
-			// parser sees the separator as the redirection target. The
-			// caret points at the dangling redirection operator.
-			msg = "missing redirection target: " + prev.Value + " followed by operator ;"
-			at = prev
-		case cur.Type == TypeOperator && prev.Type == TypeOperator:
-			msg = fmt.Sprintf("consecutive operators: %s followed by %s", prev.Value, cur.Value)
-		case cur.Type == TypeOperator && newlineBetween(tokens, sig[k-1], sig[k]):
-			msg = "consecutive operators: ; followed by " + cur.Value
-		case prev.Value == "<" && cur.Value == "<":
-			// `<<EOF` / `<<<word` lex as consecutive `<`. The caret points at
-			// the first one, where the construct starts.
-			if sig[k-1] == heredocTail {
-				// `<<<` is three `<`, so it forms two adjacent pairs. The
-				// first pair already reported this construct.
-				continue
-			}
-			msg = "here-documents are not supported"
-			at = prev
-			heredocTail = sig[k]
-		case prev.Type == TypeRedirection && (cur.Type == TypeOperator || cur.Type == TypeRedirection):
-			msg = fmt.Sprintf("missing redirection target: %s followed by operator %s", prev.Value, cur.Value)
-		}
-		if msg != "" {
-			errs = append(errs, SyntaxError{Start: at.Start, End: at.End, Message: msg})
-		}
-	}
-
-	last := tokens[sig[len(sig)-1]]
-	if last.Type == TypeOperator && last.Value != ";" {
-		errs = append(errs, SyntaxError{
-			Start:   last.Start,
-			End:     last.End,
-			Message: "unexpected operator at end",
-		})
-	}
-	if last.Type == TypeRedirection {
-		errs = append(errs, SyntaxError{
-			Start:   last.Start,
-			End:     last.End,
-			Message: "missing redirection target",
-		})
-	}
-
-	return errs
-}
-
-// newlineBetween reports whether any whitespace token strictly between
-// token indexes i and j contains a newline.
-func newlineBetween(tokens []AnalyzedToken, i, j int) bool {
-	for k := i + 1; k < j; k++ {
-		if tokens[k].Type == TypeWhitespace && strings.ContainsRune(tokens[k].Value, '\n') {
-			return true
-		}
-	}
-	return false
+	return "invalid syntax"
 }
