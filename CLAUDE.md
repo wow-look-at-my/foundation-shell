@@ -44,6 +44,7 @@ reads it. Initialize it with `git submodule update --init` (or clone with
   - `cmd/fsh-exec/` - One-shot executor. Two forms: `fsh-exec echo hi` (argv joined with spaces into one command line) and `fsh-exec -c 'echo hi'` (the argument after `-c` IS the command line; `-c` without an argument is a usage error, exit 2)
   - `cmd/fsh-repl/` - REPL-only mode
   - `internal/` - Internal packages (lexer, expander, chain, command, syntax, token)
+    - `lexer.Scan` is the ONLY tokenizer. `Project` is the execution view, `Validate` the one implementation of the structural rules, and `syntax.Analyze` classifies the same scan for highlighting — it does not tokenize
   - `pkg/` - Public packages (parser, shell)
 - `tests/` - BATS conformance tests
 - `docs/ci.md` - CI jobs: why `working-directory: src`, what each permission is for, the one-line comment limit in workflow YAML
