@@ -1,8 +1,8 @@
 # CI
 
-`.github/workflows/ci.yml` runs two jobs on every push.
+`.github/workflows/ci.yml` runs one job on every push.
 
-## `go` — build, vet, test, coverage
+## `go` — build, vet, test, coverage, conformance
 
 Runs `wow-look-at-my/go-toolchain@v1` with `working-directory: src`.
 
@@ -50,13 +50,14 @@ published before the default changed; it never opted into cosmo.
 
 Turning cosmo back on means replacing readline first.
 
-## `bats` — conformance suite
+**Why the job installs bubblewrap.** go-toolchain runs `src/dats/*.dats` — the
+conformance suite — after every build, and dats sandboxes each command. Its
+`auto` backend prefers bubblewrap and falls back to docker, which would run the
+commands inside an image that has neither the built binaries nor the coreutils
+the suites call. The runner image ships no bubblewrap, so the job installs it.
 
-Installs `just` and `bats`, runs `just build`, then `bats tests/`.
-
-`just` is installed from a pinned release rather than from apt: the justfile
-uses the `[working-directory: '...']` attribute, which needs just 1.38 or
-newer, and the apt package is older than that on the runner image.
+There is no separate conformance job: the suites are part of the same build,
+and a suite failure fails it.
 
 ## Comment walls fail the build
 

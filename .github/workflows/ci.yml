@@ -17,6 +17,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      # go-toolchain sandboxes every dats command; see docs/ci.md.
+      - name: Install bubblewrap
+        run: sudo apt-get update && sudo apt-get install -y bubblewrap
       # The Go module lives in src/, not the repo root; see docs/ci.md.
       - uses: wow-look-at-my/go-toolchain@v1
         with:
@@ -24,14 +27,3 @@ jobs:
           # Native per-platform binaries, not a cosmo fat APE; see docs/ci.md.
           os: linux,darwin,windows
           arch: amd64,arm64
-
-  bats:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Install just
-        run: curl -fsSL https://github.com/casey/just/releases/download/1.56.0/just-1.56.0-x86_64-unknown-linux-musl.tar.gz | sudo tar -xz -C /usr/local/bin just
-      - name: Install bats
-        run: sudo apt-get update && sudo apt-get install -y bats
-      - run: just build
-      - run: bats tests/
