@@ -23,6 +23,11 @@ type TokenContext struct {
 	// bodies do NOT set it: they belong to the body, which is re-parsed
 	// when the substitution executes.
 	WasQuoted bool
+	// WasEscaped is true when any part of the word carried a backslash
+	// escape. Only \$ and \` leave a marker in Content, so a guard that
+	// reads Content alone cannot tell `\&` from a bare `&`. The 2>/2>>
+	// recognition uses the same flag to keep `\2>f` out of the operator.
+	WasEscaped bool
 	// IsOperator is true only for operator tokens produced by the lexer's
 	// operator recognition (|, ||, &&, ;, <, >, >>, 2>, 2>>).
 	IsOperator bool
@@ -178,6 +183,7 @@ func Tokenize(input string) ([]TokenContext, error) {
 				Content:         current.String(),
 				WasSingleQuoted: wasSingleQuoted,
 				WasQuoted:       wasQuoted,
+				WasEscaped:      wordHadEscape,
 			})
 			current.Reset()
 		}

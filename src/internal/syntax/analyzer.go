@@ -213,6 +213,23 @@ func (a *analyzer) checkStructure() {
 		}
 	}
 
+	// A lone unquoted `&` is an ordinary word here, not a background
+	// operator, so it would be absorbed into argv along with everything
+	// after it. Flag it where it is written; the parser rejects it with the
+	// same message. A redirection target is excluded: `> &` is the
+	// fd-duplication guard's case, and that message names it better.
+	for _, k := range sig {
+		tok := a.tokens[k]
+		if tok.Value != "&" || tok.Type == TypeRedirectionTarget {
+			continue
+		}
+		a.errors = append(a.errors, SyntaxError{
+			Start:   tok.Start,
+			End:     tok.End,
+			Message: "background execution is not supported",
+		})
+	}
+
 	// Consecutive operators, matching the parser. A newline between
 	// commands is an implicit ; (the lexer materializes one unless the
 	// previous token is a CHAIN operator, which continues the line), so a
@@ -220,6 +237,9 @@ func (a *analyzer) checkStructure() {
 	// with that implicit ;. A redirection followed by any operator — or by
 	// a newline, which the lexer turns into a ; (redirections do NOT
 	// continue across lines) — has no target, again matching the parser.
+	// Index of the second `<` in a heredoc pair already reported, so `<<<`
+	// yields one error instead of one per adjacent pair.
+	heredocTail := -1
 	for k := 1; k < len(sig); k++ {
 		prev, cur := a.tokens[sig[k-1]], a.tokens[sig[k]]
 		msg := ""
@@ -235,6 +255,17 @@ func (a *analyzer) checkStructure() {
 			msg = fmt.Sprintf("consecutive operators: %s followed by %s", prev.Value, cur.Value)
 		case cur.Type == TypeOperator && a.newlineBetween(sig[k-1], sig[k]):
 			msg = "consecutive operators: ; followed by " + cur.Value
+		case prev.Value == "<" && cur.Value == "<":
+			// `<<EOF` / `<<<word` lex as consecutive `<`. The caret points at
+			// the first one, where the construct starts.
+			if sig[k-1] == heredocTail {
+				// `<<<` is three `<`, so it forms two adjacent pairs. The
+				// first pair already reported this construct.
+				continue
+			}
+			msg = "here-documents are not supported"
+			at = prev
+			heredocTail = sig[k]
 		case prev.Type == TypeRedirection && (cur.Type == TypeOperator || cur.Type == TypeRedirection):
 			msg = fmt.Sprintf("missing redirection target: %s followed by operator %s", prev.Value, cur.Value)
 		}

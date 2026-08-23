@@ -27,6 +27,19 @@ var (
 	// target starts with & (e.g. `2>&1`, which lexes as `2>` + `&1`). The
 	// message is canonical: the spec pins the exact string.
 	ErrFdDuplicationUnsupported = errors.New("file descriptor duplication is not supported")
+	// ErrBackgroundUnsupported is returned when a lone unquoted & appears as
+	// a word (`cmd &`, `cmd & other`). This shell has no background jobs, so
+	// the & lexes as an ordinary word (lexer.md §3.3.2). Without this guard
+	// the & and EVERY word after it become arguments to the command, which
+	// then runs in the foreground: `server &` blocks forever instead of
+	// returning, and `cmd_a & cmd_b` never runs cmd_b. The message is
+	// canonical: the spec pins the exact string.
+	ErrBackgroundUnsupported = errors.New("background execution is not supported")
+	// ErrHeredocUnsupported is returned for `<<` and `<<<`, which lex as
+	// consecutive `<` operators. The generic missing-target message sends a
+	// reader hunting for a filename that was never the point. The message is
+	// canonical: the spec pins the exact string.
+	ErrHeredocUnsupported = errors.New("here-documents are not supported")
 	// ErrTrailingOperator is returned when the input ends with an operator.
 	ErrTrailingOperator = errors.New("unexpected operator at end")
 	// ErrConsecutiveOperators is returned when two chain operators appear consecutively.
@@ -76,6 +89,10 @@ type classifiedToken struct {
 	// single-quoted part anywhere disqualifies the word from standalone
 	// assignment recognition.
 	wasSingleQuoted bool
+	// wasEscaped is true when any part of the original word carried a
+	// backslash escape. The background guard needs it: `\&` and `&` reach
+	// the parser with identical content.
+	wasEscaped bool
 }
 
 // assignmentPattern matches an expanded word that forms a standalone
@@ -228,6 +245,7 @@ func ParseWithOptions(input string, opts Options) (*Chain, error) {
 			rawValue:        tc.Content,
 			wasQuoted:       tc.WasQuoted,
 			wasSingleQuoted: tc.WasSingleQuoted,
+			wasEscaped:      tc.WasEscaped,
 		})
 	}
 
@@ -321,6 +339,13 @@ func buildChain(tokens []classifiedToken) (*Chain, error) {
 			}
 
 			nextTok := tokens[i+1]
+
+			// `<<EOF` and `<<<word` lex as two or three `<` operators. Name
+			// the real problem instead of reporting a missing filename.
+			if tok.tokenType == token.RedirectStdIn && nextTok.tokenType == token.RedirectStdIn {
+				return nil, ErrHeredocUnsupported
+			}
+
 			// Target must be a value, not an operator
 			if nextTok.tokenType.IsOperator() {
 				return nil, fmt.Errorf("%w: %s followed by operator %s", ErrMissingRedirectionTarget, tok.value, nextTok.value)
@@ -365,6 +390,16 @@ func buildChain(tokens []classifiedToken) (*Chain, error) {
 			// Skip the target token
 			i++
 			continue
+		}
+
+		// A lone unquoted `&` is the background operator in other shells.
+		// Here it is an ordinary word, so it would silently become an
+		// argument and swallow the rest of the line. Reject it, for the same
+		// reason the fd-duplication guard above rejects `2>&1`. The check
+		// uses the PRE-expansion word: a quoted '&' sets wasQuoted, `\&` sets
+		// wasEscaped, and `a&b` is a longer word — all three stay legal.
+		if !tok.wasQuoted && !tok.wasEscaped && tok.rawValue == "&" {
+			return nil, ErrBackgroundUnsupported
 		}
 
 		// Value token - add to current command's args

@@ -182,7 +182,7 @@ func TestTokenize_Escapes(t *testing.T) {
 			input: `echo hello\ world`,
 			expected: []TokenContext{
 				{Content: "echo", WasSingleQuoted: false},
-				{Content: "hello world", WasSingleQuoted: false},
+				{Content: "hello world", WasSingleQuoted: false, WasEscaped: true},
 			},
 		},
 		{
@@ -190,7 +190,7 @@ func TestTokenize_Escapes(t *testing.T) {
 			input: `echo hello\\world`,
 			expected: []TokenContext{
 				{Content: "echo", WasSingleQuoted: false},
-				{Content: `hello\world`, WasSingleQuoted: false},
+				{Content: `hello\world`, WasSingleQuoted: false, WasEscaped: true},
 			},
 		},
 		{
@@ -198,7 +198,7 @@ func TestTokenize_Escapes(t *testing.T) {
 			input: `echo \$HOME`,
 			expected: []TokenContext{
 				{Content: "echo", WasSingleQuoted: false},
-				{Content: string(EscapeMarker) + "$HOME", WasSingleQuoted: false},
+				{Content: string(EscapeMarker) + "$HOME", WasSingleQuoted: false, WasEscaped: true},
 			},
 		},
 		{
@@ -206,7 +206,7 @@ func TestTokenize_Escapes(t *testing.T) {
 			input: `echo \"hello\"`,
 			expected: []TokenContext{
 				{Content: "echo", WasSingleQuoted: false},
-				{Content: `"hello"`, WasSingleQuoted: false},
+				{Content: `"hello"`, WasSingleQuoted: false, WasEscaped: true},
 			},
 		},
 		{
@@ -214,7 +214,7 @@ func TestTokenize_Escapes(t *testing.T) {
 			input: `echo \'hello\'`,
 			expected: []TokenContext{
 				{Content: "echo", WasSingleQuoted: false},
-				{Content: `'hello'`, WasSingleQuoted: false},
+				{Content: `'hello'`, WasSingleQuoted: false, WasEscaped: true},
 			},
 		},
 		{
@@ -222,7 +222,7 @@ func TestTokenize_Escapes(t *testing.T) {
 			input: `echo hello\nworld`,
 			expected: []TokenContext{
 				{Content: "echo", WasSingleQuoted: false},
-				{Content: "hello\nworld", WasSingleQuoted: false},
+				{Content: "hello\nworld", WasSingleQuoted: false, WasEscaped: true},
 			},
 		},
 		{
@@ -230,7 +230,7 @@ func TestTokenize_Escapes(t *testing.T) {
 			input: `echo hello\tworld`,
 			expected: []TokenContext{
 				{Content: "echo", WasSingleQuoted: false},
-				{Content: "hello\tworld", WasSingleQuoted: false},
+				{Content: "hello\tworld", WasSingleQuoted: false, WasEscaped: true},
 			},
 		},
 	}
@@ -256,7 +256,7 @@ func TestTokenize_MixedQuotes(t *testing.T) {
 			input: `echo "it's a \"test\""`,
 			expected: []TokenContext{
 				{Content: "echo", WasSingleQuoted: false},
-				{Content: `it's a "test"`, WasQuoted: true},
+				{Content: `it's a "test"`, WasQuoted: true, WasEscaped: true},
 			},
 		},
 		{
@@ -399,7 +399,7 @@ func TestTokenize_EscapesInsideDoubleQuotes(t *testing.T) {
 			input: `echo "say \"hello\""`,
 			expected: []TokenContext{
 				{Content: "echo", WasSingleQuoted: false},
-				{Content: `say "hello"`, WasQuoted: true},
+				{Content: `say "hello"`, WasQuoted: true, WasEscaped: true},
 			},
 		},
 		{
@@ -407,7 +407,7 @@ func TestTokenize_EscapesInsideDoubleQuotes(t *testing.T) {
 			input: `echo "path\\to\\file"`,
 			expected: []TokenContext{
 				{Content: "echo", WasSingleQuoted: false},
-				{Content: `path\to\file`, WasQuoted: true},
+				{Content: `path\to\file`, WasQuoted: true, WasEscaped: true},
 			},
 		},
 		{
@@ -415,7 +415,7 @@ func TestTokenize_EscapesInsideDoubleQuotes(t *testing.T) {
 			input: `echo "cost is \$100"`,
 			expected: []TokenContext{
 				{Content: "echo", WasSingleQuoted: false},
-				{Content: "cost is " + string(EscapeMarker) + "$100", WasQuoted: true},
+				{Content: "cost is " + string(EscapeMarker) + "$100", WasQuoted: true, WasEscaped: true},
 			},
 		},
 	}
